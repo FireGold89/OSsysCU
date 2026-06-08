@@ -318,11 +318,19 @@ def system_status():
 
 @app.route('/api/system/restore-db', methods=['POST'])
 def restore_database():
-    """上傳本機 qs_system.db 還原（需設定環境變數 RESTORE_TOKEN）"""
+    """上傳本機 qs_system.db 還原（空庫可免 token；有資料時需 RESTORE_TOKEN）"""
     expected = os.environ.get('RESTORE_TOKEN', '').strip()
     token = (request.headers.get('X-Restore-Token') or request.form.get('token') or '').strip()
-    if not expected or token != expected:
-        return resp(error='未授權（請在 Zeabur Variables 設定 RESTORE_TOKEN）', status=403)
+    conn = db.get_conn()
+    empty_db = conn.execute('SELECT COUNT(*) FROM payment_records').fetchone()[0] == 0
+    empty_db = empty_db and conn.execute('SELECT COUNT(*) FROM projects').fetchone()[0] == 0
+    conn.close()
+
+    if expected:
+        if token != expected:
+            return resp(error='未授權', status=403)
+    elif not empty_db:
+        return resp(error='請在 Zeabur Variables 設定 RESTORE_TOKEN', status=403)
 
     if 'file' not in request.files:
         return resp(error='請上傳 qs_system.db 文件', status=400)
