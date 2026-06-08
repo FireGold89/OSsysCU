@@ -614,6 +614,11 @@
         <label class="form-label">備注</label>
         <textarea class="form-input" id="fRemark" rows="2"></textarea>
       </div>
+      <input type="hidden" id="fPdfPath">
+      <div class="form-group" id="fPdfGroup" style="display:none">
+        <label class="form-label">原發票文件</label>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="Payments.viewModalPdf()">📄 查看原 PDF</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="Payments.closeModal()">取消</button>

@@ -1,5 +1,10 @@
 /* ─── main.js — 核心應用邏輯 ───────────────────────────── */
-const API = 'http://localhost:5000/api';
+const API = `${window.location.origin}/api`;
+
+function uploadUrl(filename) {
+  if (!filename) return null;
+  return `${window.location.origin}/api/uploads/${encodeURIComponent(filename)}`;
+}
 
 // ─── 工具函數 ──────────────────────────────────────────────
 function fmt(num, decimals = 0) {

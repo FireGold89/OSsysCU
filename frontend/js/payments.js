@@ -54,6 +54,7 @@ const Payments = {
           <td>${oaBadge}</td>
           <td onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px">
+              ${r.pdf_path ? `<button class="btn btn-icon btn-secondary btn-sm" title="查看原PDF" onclick="Payments.viewPdf(${JSON.stringify(r.pdf_path)})">📄</button>` : ''}
               <button class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="Payments.openEdit(${r.id})">✏️</button>
               <button class="btn btn-icon btn-danger btn-sm" title="刪除" onclick="Payments.delete(${r.id})">🗑️</button>
             </div>
@@ -129,9 +130,31 @@ const Payments = {
     document.getElementById('fRemAmt').value = (ca - pa).toFixed(2);
   },
 
+  viewPdf(pdfPath) {
+    const url = uploadUrl(pdfPath);
+    if (!url) {
+      toast('此記錄沒有 PDF', 'warning');
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+  },
+
+  viewModalPdf() {
+    this.viewPdf(document.getElementById('fPdfPath').value);
+  },
+
+  _setPdfUi(pdfPath) {
+    const group = document.getElementById('fPdfGroup');
+    const pathEl = document.getElementById('fPdfPath');
+    if (!group || !pathEl) return;
+    pathEl.value = pdfPath || '';
+    group.style.display = pdfPath ? 'block' : 'none';
+  },
+
   openAdd() {
     document.getElementById('payModalTitle').textContent = '新增付款記錄';
     document.getElementById('payModalId').value = '';
+    this._setPdfUi(null);
     const fields = ['fSeqNo','fInvDate','fInvNo','fQuotNo','fCompanyEn','fCompanyZh','fDesc','fOaRef','fOaNo','fMcIpNo','fBcToSub','fSubIpNo','fRemark'];
     fields.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
     ['fContractAmt','fPaidAmt','fRemAmt'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
@@ -163,6 +186,7 @@ const Payments = {
     document.getElementById('fBcToSub').value = r.bc_to_sub || '';
     document.getElementById('fSubIpNo').value = r.sub_ip_no || '';
     document.getElementById('fRemark').value = r.remark || '';
+    this._setPdfUi(r.pdf_path || null);
     document.getElementById('payModal').classList.add('open');
   },
 
