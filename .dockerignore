@@ -1,0 +1,11 @@
+_tmp_yescan/
+__pycache__/
+*.py[cod]
+*.db
+uploads/
+.git/
+.gitignore
+*.xlsx
+啟動系統.bat
+.env
+.env.*

@@ -1,0 +1,244 @@
+/* ─── payments.js — 付款記錄管理 ──────────────────────── */
+const Payments = {
+  data: [],
+  filtered: [],
+
+  async load() {
+    const p = App.currentProject;
+    if (!p) { this.renderEmpty(); return; }
+
+    const filters = {
+      sc_no: document.getElementById('payFilterSc').value || undefined,
+      search: document.getElementById('paySearch').value || undefined,
+    };
+    const params = new URLSearchParams();
+    if (filters.sc_no) params.append('sc_no', filters.sc_no);
+    if (filters.search) params.append('search', filters.search);
+
+    this.data = await api('GET', `/projects/${p.id}/payments?${params}`) || [];
+    this.filtered = [...this.data];
+    this.render();
+  },
+
+  render() {
+    const tbody = document.getElementById('payTableBody');
+    const count = document.getElementById('payCount');
+    const totalPaidEl = document.getElementById('payTotalPaid');
+
+    count.textContent = `${this.filtered.length} 條`;
+    const totalPaid = this.filtered.reduce((s, r) => s + (parseFloat(r.paid_amount) || 0), 0);
+    totalPaidEl.textContent = fmt(totalPaid);
+
+    if (this.filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-icon">💰</div><div class="empty-title">暫無付款記錄</div><div class="empty-sub">點擊「新增記錄」或上傳PDF自動識別</div></div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = this.filtered.map(r => {
+      const remClass = parseFloat(r.remainder_amount) > 0 ? 'negative' : '';
+      const paidClass = parseFloat(r.paid_amount) > 0 ? 'positive' : '';
+      const oaBadge = r.oa_ref === 'OK' ? '<span class="badge badge-success">OK</span>' :
+                      r.oa_ref === '-'  ? '<span class="badge badge-muted">—</span>' :
+                      r.oa_ref          ? `<span class="badge badge-warning">${r.oa_ref}</span>` : '—';
+      return `
+        <tr onclick="Payments.openEdit(${r.id})">
+          <td class="td-muted" style="font-size:11px">${r.seq_no || r.id}</td>
+          <td class="td-muted">${fmtDate(r.invoice_date)}</td>
+          <td><span class="sc-no-chip">${r.sc_no || '—'}</span></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.company_name_en || ''}">${r.company_name_en || r.company_name_zh || '—'}</td>
+          <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description || ''}">${r.description || '—'}</td>
+          <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
+          <td class="td-amount">${fmt(r.contract_amount)}</td>
+          <td class="td-amount ${paidClass}">${fmt(r.paid_amount)}</td>
+          <td class="td-amount ${remClass}">${fmt(r.remainder_amount)}</td>
+          <td>${oaBadge}</td>
+          <td onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="Payments.openEdit(${r.id})">✏️</button>
+              <button class="btn btn-icon btn-danger btn-sm" title="刪除" onclick="Payments.delete(${r.id})">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  renderEmpty() {
+    document.getElementById('payTableBody').innerHTML = `
+      <tr><td colspan="11"><div class="empty-state" style="padding:48px">
+        <div class="empty-icon">📁</div>
+        <div class="empty-title">請先選擇項目</div>
+      </div></td></tr>`;
+    document.getElementById('payCount').textContent = '0 條';
+    document.getElementById('payTotalPaid').textContent = 'HK$0';
+  },
+
+  search(val) {
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this.load(), 400);
+  },
+
+  filterBySc(val) {
+    this.load();
+  },
+
+  populateScFilter() {
+    const sel = document.getElementById('payFilterSc');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部分判商</option>';
+    (App.scList || []).forEach(sc => {
+      const opt = document.createElement('option');
+      opt.value = sc.sc_no;
+      opt.textContent = `${sc.sc_no} — ${sc.company_name_en || sc.company_name_zh || ''}`.substring(0, 40);
+      sel.appendChild(opt);
+    });
+    sel.value = cur;
+
+    // 同步付款表單的SC選擇
+    this.populateScSelect();
+  },
+
+  populateScSelect() {
+    const sel = document.getElementById('fScNo');
+    const cur = sel?.value;
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— 選擇分判商 —</option>';
+    (App.scList || []).forEach(sc => {
+      const opt = document.createElement('option');
+      opt.value = sc.sc_no;
+      opt.textContent = `${sc.sc_no} — ${sc.company_name_en || sc.company_name_zh || ''}`.substring(0, 45);
+      sel.appendChild(opt);
+    });
+    if (cur) sel.value = cur;
+  },
+
+  onScChange(scNo) {
+    const sc = App.scList.find(s => s.sc_no === scNo);
+    if (sc) {
+      document.getElementById('fCompanyEn').value = sc.company_name_en || '';
+      document.getElementById('fCompanyZh').value = sc.company_name_zh || '';
+      document.getElementById('fDesc').value = sc.description || '';
+      document.getElementById('fContractAmt').value = sc.contract_amount || 0;
+      this.calcRemainder();
+    }
+  },
+
+  calcRemainder() {
+    const ca = parseFloat(document.getElementById('fContractAmt').value) || 0;
+    const pa = parseFloat(document.getElementById('fPaidAmt').value) || 0;
+    document.getElementById('fRemAmt').value = (ca - pa).toFixed(2);
+  },
+
+  openAdd() {
+    document.getElementById('payModalTitle').textContent = '新增付款記錄';
+    document.getElementById('payModalId').value = '';
+    const fields = ['fSeqNo','fInvDate','fInvNo','fQuotNo','fCompanyEn','fCompanyZh','fDesc','fOaRef','fOaNo','fMcIpNo','fBcToSub','fSubIpNo','fRemark'];
+    fields.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    ['fContractAmt','fPaidAmt','fRemAmt'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    document.getElementById('fScNo').value = '';
+    this.populateScSelect();
+    document.getElementById('payModal').classList.add('open');
+  },
+
+  async openEdit(id) {
+    const r = await api('GET', `/payments/${id}`);
+    if (!r) return;
+    document.getElementById('payModalTitle').textContent = '編輯付款記錄';
+    document.getElementById('payModalId').value = r.id;
+    this.populateScSelect();
+    document.getElementById('fSeqNo').value = r.seq_no || '';
+    document.getElementById('fInvDate').value = r.invoice_date || '';
+    document.getElementById('fInvNo').value = r.invoice_no || '';
+    document.getElementById('fQuotNo').value = r.quotation_no || '';
+    document.getElementById('fScNo').value = r.sc_no || '';
+    document.getElementById('fCompanyEn').value = r.company_name_en || '';
+    document.getElementById('fCompanyZh').value = r.company_name_zh || '';
+    document.getElementById('fDesc').value = r.description || '';
+    document.getElementById('fContractAmt').value = r.contract_amount || '';
+    document.getElementById('fPaidAmt').value = r.paid_amount || '';
+    document.getElementById('fRemAmt').value = r.remainder_amount || '';
+    document.getElementById('fOaRef').value = r.oa_ref || '';
+    document.getElementById('fOaNo').value = r.oa_no || '';
+    document.getElementById('fMcIpNo').value = r.mc_ip_no || '';
+    document.getElementById('fBcToSub').value = r.bc_to_sub || '';
+    document.getElementById('fSubIpNo').value = r.sub_ip_no || '';
+    document.getElementById('fRemark').value = r.remark || '';
+    document.getElementById('payModal').classList.add('open');
+  },
+
+  closeModal() {
+    document.getElementById('payModal').classList.remove('open');
+  },
+
+  async saveModal() {
+    const id = document.getElementById('payModalId').value;
+    const scNo = document.getElementById('fScNo').value;
+    const sc = App.scList.find(s => s.sc_no === scNo);
+    const data = {
+      project_id: App.currentProject?.id,
+      sc_id: sc?.id || null,
+      seq_no: document.getElementById('fSeqNo').value || null,
+      invoice_date: document.getElementById('fInvDate').value || null,
+      invoice_no: document.getElementById('fInvNo').value || null,
+      quotation_no: document.getElementById('fQuotNo').value || null,
+      sc_no: scNo || null,
+      company_name_en: document.getElementById('fCompanyEn').value || null,
+      company_name_zh: document.getElementById('fCompanyZh').value || null,
+      description: document.getElementById('fDesc').value || null,
+      contract_amount: parseFloat(document.getElementById('fContractAmt').value) || 0,
+      paid_amount: parseFloat(document.getElementById('fPaidAmt').value) || 0,
+      remainder_amount: parseFloat(document.getElementById('fRemAmt').value) || 0,
+      oa_ref: document.getElementById('fOaRef').value || null,
+      oa_no: document.getElementById('fOaNo').value || null,
+      mc_ip_no: document.getElementById('fMcIpNo').value || null,
+      bc_to_sub: document.getElementById('fBcToSub').value || null,
+      sub_ip_no: document.getElementById('fSubIpNo').value || null,
+      remark: document.getElementById('fRemark').value || null,
+      pdf_path: null,
+      ocr_status: null,
+    };
+
+    if (!data.project_id) { toast('請先選擇項目', 'warning'); return; }
+
+    try {
+      if (id) {
+        await api('PUT', `/payments/${id}`, data);
+        toast('記錄已更新', 'success');
+      } else {
+        await api('POST', '/payments', data);
+        toast('記錄已新增', 'success');
+      }
+      this.closeModal();
+      await this.load();
+      await Dashboard.load();
+    } catch (e) {}
+  },
+
+  async delete(id) {
+    if (!confirm('確認刪除此付款記錄？')) return;
+    await api('DELETE', `/payments/${id}`);
+    toast('已刪除', 'success');
+    await this.load();
+    await Dashboard.load();
+  },
+
+  exportCsv() {
+    if (!this.filtered.length) { toast('沒有資料可匯出', 'warning'); return; }
+    const headers = ['序號','發票日期','分判商編號','公司名稱(英)','公司名稱(中)','描述','發票號','合約金額','已付金額','餘額','OA參考','OA編號','MC IP No.','Sub-IP No.','備注'];
+    const rows = this.filtered.map(r => [
+      r.seq_no, r.invoice_date, r.sc_no, r.company_name_en, r.company_name_zh,
+      r.description, r.invoice_no, r.contract_amount, r.paid_amount, r.remainder_amount,
+      r.oa_ref, r.oa_no, r.mc_ip_no, r.sub_ip_no, r.remark
+    ]);
+    downloadCsv([headers, ...rows], `payments_${App.currentProject?.project_code}_${new Date().toISOString().slice(0,10)}.csv`);
+  }
+};
+
+function downloadCsv(rows, filename) {
+  const content = rows.map(r => r.map(c => `"${(c ?? '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}

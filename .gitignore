@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.db
+uploads/
+.env
+.env.*
+_tmp_yescan/
