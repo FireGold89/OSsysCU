@@ -293,6 +293,66 @@ def project_summary(project_id):
     return resp(summary)
 
 
+# ─── System API ───────────────────────────────────────────────────────────
+@app.route('/api/system/status', methods=['GET'])
+def system_status():
+    from config import DATA_DIR, DB_PATH, UPLOAD_DIR
+    projects = db.get_all_projects()
+    upload_count = 0
+    if os.path.isdir(UPLOAD_DIR):
+        upload_count = len([f for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))])
+    conn = db.get_conn()
+    payment_count = conn.execute('SELECT COUNT(*) FROM payment_records').fetchone()[0]
+    conn.close()
+    return resp({
+        'data_dir': DATA_DIR,
+        'db_path': DB_PATH,
+        'db_exists': os.path.exists(DB_PATH),
+        'db_size_bytes': os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0,
+        'project_count': len(projects),
+        'payment_count': payment_count,
+        'upload_count': upload_count,
+        'volume_mounted': DATA_DIR == '/data',
+    })
+
+
+@app.route('/api/system/restore-db', methods=['POST'])
+def restore_database():
+    """上傳本機 qs_system.db 還原（需設定環境變數 RESTORE_TOKEN）"""
+    expected = os.environ.get('RESTORE_TOKEN', '').strip()
+    token = (request.headers.get('X-Restore-Token') or request.form.get('token') or '').strip()
+    if not expected or token != expected:
+        return resp(error='未授權（請在 Zeabur Variables 設定 RESTORE_TOKEN）', status=403)
+
+    if 'file' not in request.files:
+        return resp(error='請上傳 qs_system.db 文件', status=400)
+    file = request.files['file']
+    if not file.filename:
+        return resp(error='沒有文件', status=400)
+
+    from config import DB_PATH
+    tmp_path = DB_PATH + '.restore_tmp'
+    file.save(tmp_path)
+    try:
+        import sqlite3
+        conn = sqlite3.connect(tmp_path)
+        conn.execute('SELECT 1 FROM projects LIMIT 1')
+        conn.close()
+        if os.path.exists(DB_PATH):
+            os.replace(DB_PATH, DB_PATH + '.bak')
+        os.replace(tmp_path, DB_PATH)
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return resp(error=f'無效的資料庫文件: {e}', status=400)
+
+    projects = db.get_all_projects()
+    return resp({
+        'message': '資料庫已還原',
+        'project_count': len(projects),
+    })
+
+
 # ─── Excel Import API ───────────────────────────────────────────────────
 @app.route('/api/import/excel', methods=['POST'])
 def import_excel_api():
