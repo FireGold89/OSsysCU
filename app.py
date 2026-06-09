@@ -151,6 +151,12 @@ def create_subcontractor():
     data.setdefault('quotation_date', None)
     data.setdefault('oa_date', None)
     data.setdefault('is_excluded', 0)
+    data.setdefault('contract_sum', data.get('contract_amount') or 0)
+    data.setdefault('vo_amount', 0)
+    if data.get('contract_sum') is not None or data.get('vo_amount') is not None:
+        data['contract_amount'] = float(data.get('contract_sum') or 0) + float(data.get('vo_amount') or 0)
+    from sc_ref import derive_parent_sc_no
+    data.setdefault('parent_sc_no', derive_parent_sc_no(data.get('sc_no')))
     sc_id = db.upsert_subcontractor(data)
     return resp({'id': sc_id}, status=201)
 
@@ -174,6 +180,7 @@ def delete_subcontractor(sc_id):
 def get_payments(project_id):
     filters = {
         'sc_no': request.args.get('sc_no'),
+        'sc_group': request.args.get('sc_group'),
         'search': request.args.get('search'),
     }
     return resp(db.get_payments(project_id, filters))

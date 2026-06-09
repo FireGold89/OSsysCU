@@ -161,50 +161,102 @@ const SC = {
     this.render();
   },
 
+  _groupItems(items) {
+    const result = [];
+    let i = 0;
+    while (i < items.length) {
+      const parent = items[i].parent_sc_no || items[i].sc_no;
+      const groupItems = [];
+      while (i < items.length && (items[i].parent_sc_no || items[i].sc_no) === parent) {
+        groupItems.push(items[i++]);
+      }
+      const isGroup = groupItems.length > 1 && groupItems.some(x => x.sc_no !== parent);
+      result.push({ parent, items: groupItems, isGroup });
+    }
+    return result;
+  },
+
+  _renderGroupHeader(g) {
+    const totalRev = g.items.reduce((s, x) => s + (parseFloat(x.contract_amount) || 0), 0);
+    const totalPaid = g.items.reduce((s, x) => s + (parseFloat(x.total_paid) || 0), 0);
+    const company = g.items[0].company_name_en || g.items[0].company_name_zh || '';
+    return `
+      <tr class="sc-group-header">
+        <td colspan="2">
+          ${fmtRefNo(g.parent)}
+          <span class="badge badge-muted" style="margin-left:6px">${g.items.length} 項</span>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px">${company}</div>
+        </td>
+        <td class="td-muted" style="font-size:11px">小計</td>
+        <td class="td-amount">${fmt(totalRev)}</td>
+        <td class="td-amount positive">${fmt(totalPaid)}</td>
+        <td colspan="3"></td>
+      </tr>`;
+  },
+
+  _renderRow(s, isChild) {
+    const oaBadge = s.oa_status === 'OK' ? '<span class="badge badge-success">OK</span>' :
+                    s.oa_status === '-'  ? '<span class="badge badge-muted">—</span>' :
+                    s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
+    const oaDateStr = (s.oa_date || s.quotation_date) ? fmtDate(s.oa_date || s.quotation_date) : '';
+    const voHint = (parseFloat(s.vo_amount) || 0) !== 0
+      ? `<div style="font-size:10px;color:var(--text-muted)">H ${fmt(s.contract_sum)} + VO ${fmt(s.vo_amount)}</div>` : '';
+    const scNoEsc = (s.sc_no || '').replace(/'/g, "\\'");
+    return `
+      <tr class="row-clickable${isChild ? ' sc-group-child' : ''}" onclick="SC.showPayments(${s.id})" title="點擊查看付款記錄">
+        <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">Excluded (C)</span>' : ''}</td>
+        <td>
+          <div style="font-weight:600">${s.company_name_en || '—'}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${s.company_name_zh || ''}</div>
+        </td>
+        <td class="td-muted">${s.description || '—'}</td>
+        <td class="td-amount">${fmt(s.contract_amount)}${voHint}</td>
+        <td class="td-amount positive">${fmt(s.total_paid)}</td>
+        <td style="font-size:11px;color:var(--text-secondary)">${s.quotation_no || '—'}</td>
+        <td>
+          <div>${oaBadge}</div>
+          ${oaDateStr ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">${oaDateStr}</div>` : ''}
+        </td>
+        <td onclick="event.stopPropagation()">
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-icon btn-secondary btn-sm" onclick="SC.openEdit(${s.id})">✏️</button>
+            <button class="btn btn-icon btn-danger btn-sm" onclick="SC.delete(${s.id}, '${scNoEsc}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+  },
+
   render() {
     const tbody = document.getElementById('scTableBody');
     if (this.filtered.length === 0) {
       tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:48px"><div class="empty-icon">🏢</div><div class="empty-title">暫無合同項目</div></div></td></tr>`;
       return;
     }
-    tbody.innerHTML = this.filtered.map(s => {
-      const paid = s.total_paid || 0;
-      const ca = s.contract_amount || 0;
-      const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(0) : 0;
-      const oaBadge = s.oa_status === 'OK' ? '<span class="badge badge-success">OK</span>' :
-                      s.oa_status === '-'  ? '<span class="badge badge-muted">—</span>' :
-                      s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
-      const oaDateStr = (s.oa_date || s.quotation_date) ? fmtDate(s.oa_date || s.quotation_date) : '';
-      return `
-        <tr class="row-clickable" onclick="SC.showPayments(${s.id})" title="點擊查看付款記錄">
-          <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">Excluded (C)</span>' : ''}</td>
-          <td>
-            <div style="font-weight:600">${s.company_name_en || '—'}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${s.company_name_zh || ''}</div>
-          </td>
-          <td class="td-muted">${s.description || '—'}</td>
-          <td class="td-amount">${fmt(s.contract_amount)}</td>
-          <td class="td-amount positive">${fmt(s.total_paid)}</td>
-          <td style="font-size:11px;color:var(--text-secondary)">${s.quotation_no || '—'}</td>
-          <td>
-            <div>${oaBadge}</div>
-            ${oaDateStr ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">${oaDateStr}</div>` : ''}
-          </td>
-          <td onclick="event.stopPropagation()">
-            <div style="display:flex;gap:4px">
-              <button class="btn btn-icon btn-secondary btn-sm" onclick="SC.openEdit(${s.id})">✏️</button>
-              <button class="btn btn-icon btn-danger btn-sm" onclick="SC.delete(${s.id}, '${s.sc_no}')">🗑️</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+    const html = [];
+    for (const g of this._groupItems(this.filtered)) {
+      if (g.isGroup) html.push(this._renderGroupHeader(g));
+      g.items.forEach(s => html.push(this._renderRow(s, g.isGroup)));
+    }
+    tbody.innerHTML = html.join('');
+  },
+
+  calcRevised() {
+    const h = parseFloat(document.getElementById('scContractSum').value) || 0;
+    const v = parseFloat(document.getElementById('scVoAmt').value) || 0;
+    document.getElementById('scAmt').value = (h + v).toFixed(2);
+    const paidStr = document.getElementById('scPaidAmt').value;
+    if (paidStr) {
+      const paid = parseFloat(paidStr.replace(/[^0-9.-]/g, '')) || 0;
+      document.getElementById('scRemainAmt').value = fmt(h + v - paid);
+    }
   },
 
   openAdd() {
     document.getElementById('scModalTitle').textContent = '新增合同項目';
     document.getElementById('scModalId').value = '';
     ['scNo','scQuotNo','scCompanyEn','scCompanyZh','scDesc','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('scContractSum').value = '';
+    document.getElementById('scVoAmt').value = '';
     document.getElementById('scAmt').value = '';
     document.getElementById('scOaDate').value = '';
     document.getElementById('scExcluded').checked = false;
@@ -230,6 +282,8 @@ const SC = {
     document.getElementById('scCompanyEn').value = s.company_name_en || '';
     document.getElementById('scCompanyZh').value = s.company_name_zh || '';
     document.getElementById('scDesc').value = s.description || '';
+    document.getElementById('scContractSum').value = s.contract_sum ?? s.contract_amount ?? '';
+    document.getElementById('scVoAmt').value = s.vo_amount ?? '';
     document.getElementById('scAmt').value = s.contract_amount || '';
     const paid = parseFloat(s.total_paid) || 0;
     const ca = parseFloat(s.contract_amount) || 0;
@@ -260,6 +314,11 @@ const SC = {
     this._payModalSc = s;
     const paid = parseFloat(s.total_paid) || 0;
     const ca = parseFloat(s.contract_amount) || 0;
+    const pending = ca - paid;
+    const h = parseFloat(s.contract_sum) || 0;
+    const vo = parseFloat(s.vo_amount) || 0;
+    const hvoLine = (h || vo)
+      ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Contract Sum ${fmt(h)} + VO ${fmt(vo)} = 修訂 ${fmt(ca)}</div>` : '';
 
     document.getElementById('scPayModalTitle').textContent = `${s.sc_no} — 付款記錄`;
     const subParts = [s.company_name_en, s.company_name_zh].filter(Boolean);
@@ -267,11 +326,11 @@ const SC = {
       subParts.join(' / ') || s.description || '';
     document.getElementById('scPaySummary').innerHTML = `
       <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px">
-        <div><span style="color:var(--text-muted)">修訂合約金額</span><br><strong>${fmt(ca)}</strong></div>
+        <div><span style="color:var(--text-muted)">修訂合約金額 (J)</span><br><strong>${fmt(ca)}</strong></div>
         <div><span style="color:var(--text-muted)">累計已付</span><br><strong style="color:var(--success)">${fmt(paid)}</strong></div>
-        <div><span style="color:var(--text-muted)">未付餘額</span><br><strong style="color:${ca - paid > 0 ? 'var(--warning)' : 'var(--text-primary)'}">${fmt(ca - paid)}</strong></div>
+        <div><span style="color:var(--text-muted)">待付金額</span><br><strong style="color:${pending > 0 ? 'var(--warning)' : 'var(--text-primary)'}">${fmt(pending)}</strong></div>
         <div><span style="color:var(--text-muted)">付款記錄</span><br><strong id="scPayCount">載入中...</strong></div>
-      </div>`;
+      </div>${hvoLine}`;
 
     document.getElementById('scPayTableBody').innerHTML =
       `<tr><td colspan="9"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>`;
@@ -279,19 +338,21 @@ const SC = {
 
     const payments = await api('GET',
       `/projects/${p.id}/payments?sc_no=${encodeURIComponent(s.sc_no)}`) || [];
-    this._renderPayModal(payments, ca, paid);
+    this._renderPayModal(payments, ca, paid, pending);
   },
 
-  _renderPayModal(payments, ca, paid) {
+  _renderPayModal(payments, ca, paid, pending) {
     const countEl = document.getElementById('scPayCount');
     if (countEl) countEl.textContent = `${payments.length} 條`;
 
     const tbody = document.getElementById('scPayTableBody');
     if (!payments.length) {
+      const pendingFmt = fmt(Math.max(0, pending != null ? pending : ca - paid));
       tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state" style="padding:40px">
         <div class="empty-icon">💰</div>
-        <div class="empty-title">暫無付款記錄</div>
-        <div class="empty-sub">此合同項目尚未有付款記錄</div>
+        <div class="empty-title">尚無付款記錄</div>
+        <div class="empty-sub" style="margin-top:8px">待付金額：<strong style="color:var(--warning)">${pendingFmt}</strong></div>
+        <div class="empty-sub" style="margin-top:4px">此項目已在合同清單立約，尚未錄入付款</div>
       </div></td></tr>`;
       return;
     }
@@ -366,6 +427,8 @@ const SC = {
       company_name_en: document.getElementById('scCompanyEn').value || null,
       company_name_zh: document.getElementById('scCompanyZh').value || null,
       description: document.getElementById('scDesc').value || null,
+      contract_sum: parseFloat(document.getElementById('scContractSum').value) || 0,
+      vo_amount: parseFloat(document.getElementById('scVoAmt').value) || 0,
       contract_amount: parseFloat(document.getElementById('scAmt').value) || 0,
       quotation_date: null,
       oa_date: document.getElementById('scOaDate').value || null,

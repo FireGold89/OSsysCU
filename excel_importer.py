@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 import database as db
+from sc_ref import derive_parent_sc_no, resolve_contract_amounts
 
 
 def safe_str(val):
@@ -222,9 +223,12 @@ def import_excel(filepath, project_code=None):
                 company_zh = safe_str(row_vals[4]) if len(row_vals) > 4 else None
                 description = safe_str(row_vals[5]) if len(row_vals) > 5 else None
                 contract_charge = safe_str(row_vals[6]) if len(row_vals) > 6 else None
-                revised_amt = safe_float(row_vals[9]) if len(row_vals) > 9 else 0
-                contract_amt = revised_amt if revised_amt > 0 else (
-                    safe_float(row_vals[7]) if len(row_vals) > 7 else 0)
+                # H=Contract Sum, I=VO, J=Revised Contract Sum (J = H + VO)
+                h_raw = safe_float(row_vals[7]) if len(row_vals) > 7 else 0
+                vo_raw = safe_float(row_vals[8]) if len(row_vals) > 8 else 0
+                j_raw = safe_float(row_vals[9]) if len(row_vals) > 9 else 0
+                contract_sum, vo_amount, contract_amt = resolve_contract_amounts(
+                    h_raw, vo_raw, j_raw if j_raw > 0 else None)
                 is_excluded = 1 if contract_charge == '*' else 0
                 quotation_no = safe_str(row_vals[2]) if len(row_vals) > 2 else None
 
@@ -242,10 +246,13 @@ def import_excel(filepath, project_code=None):
                 sc_id = db.upsert_subcontractor({
                     'project_id': project_id,
                     'sc_no': sc_no,
+                    'parent_sc_no': derive_parent_sc_no(sc_no),
                     'quotation_no': quotation_no,
                     'company_name_en': company_en,
                     'company_name_zh': company_zh,
                     'description': description,
+                    'contract_sum': contract_sum,
+                    'vo_amount': vo_amount,
                     'contract_amount': contract_amt,
                     'payment_note': payment_note,
                     'oa_status': oa_status,

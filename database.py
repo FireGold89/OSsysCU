@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 
 from config import DB_PATH
+from sc_ref import derive_parent_sc_no
 
 
 def get_conn():
@@ -123,6 +124,26 @@ def _migrate_db(conn):
             UPDATE subcontractors SET oa_date = quotation_date
             WHERE oa_date IS NULL AND quotation_date IS NOT NULL AND quotation_date != ''
         """)
+    if 'contract_sum' not in cols:
+        conn.execute("ALTER TABLE subcontractors ADD COLUMN contract_sum REAL DEFAULT 0")
+    if 'vo_amount' not in cols:
+        conn.execute("ALTER TABLE subcontractors ADD COLUMN vo_amount REAL DEFAULT 0")
+    if 'parent_sc_no' not in cols:
+        conn.execute("ALTER TABLE subcontractors ADD COLUMN parent_sc_no TEXT")
+    # 舊資料：contract_sum 預設為 contract_amount，補 parent_sc_no
+    rows = conn.execute(
+        "SELECT id, sc_no, contract_amount, contract_sum FROM subcontractors"
+    ).fetchall()
+    for row in rows:
+        r = dict(row)
+        parent = derive_parent_sc_no(r['sc_no'])
+        cs = r.get('contract_sum') or 0
+        if not cs and r.get('contract_amount'):
+            cs = r['contract_amount']
+        conn.execute(
+            "UPDATE subcontractors SET parent_sc_no=?, contract_sum=? WHERE id=?",
+            (parent, cs, r['id'])
+        )
     conn.commit()
 
 
@@ -191,12 +212,13 @@ def get_subcontractors(project_id):
     conn = get_conn()
     rows = conn.execute("""
         SELECT sc.*,
-               SUM(pr.paid_amount) AS total_paid
+               COALESCE(SUM(pr.paid_amount), 0) AS total_paid
         FROM subcontractors sc
-        LEFT JOIN payment_records pr ON pr.sc_id = sc.id
+        LEFT JOIN payment_records pr ON pr.project_id = sc.project_id
+            AND (pr.sc_id = sc.id OR pr.sc_no = sc.sc_no)
         WHERE sc.project_id = ?
         GROUP BY sc.id
-        ORDER BY sc.sc_no
+        ORDER BY COALESCE(sc.parent_sc_no, sc.sc_no), sc.sc_no
     """, (project_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -217,12 +239,18 @@ def upsert_subcontractor(data):
         (data['project_id'], data['sc_no'])
     ).fetchone()
 
+    data.setdefault('parent_sc_no', derive_parent_sc_no(data.get('sc_no')))
+    data.setdefault('contract_sum', data.get('contract_amount') or 0)
+    data.setdefault('vo_amount', 0)
+
     if existing:
         conn.execute("""
             UPDATE subcontractors SET
                 quotation_no=:quotation_no, company_name_en=:company_name_en,
                 company_name_zh=:company_name_zh, description=:description,
-                contract_amount=:contract_amount, payment_note=:payment_note,
+                contract_sum=:contract_sum, vo_amount=:vo_amount,
+                contract_amount=:contract_amount, parent_sc_no=:parent_sc_no,
+                payment_note=:payment_note,
                 oa_status=:oa_status, oa_ref=:oa_ref, oa_no=:oa_no,
                 quotation_saved=:quotation_saved, quotation_date=:quotation_date,
                 oa_date=:oa_date, is_excluded=:is_excluded
@@ -232,10 +260,12 @@ def upsert_subcontractor(data):
     else:
         cur = conn.execute("""
             INSERT INTO subcontractors (project_id, sc_no, quotation_no, company_name_en,
-                company_name_zh, description, contract_amount, payment_note,
+                company_name_zh, description, contract_sum, vo_amount, contract_amount,
+                parent_sc_no, payment_note,
                 oa_status, oa_ref, oa_no, quotation_saved, quotation_date, oa_date, is_excluded)
             VALUES (:project_id, :sc_no, :quotation_no, :company_name_en,
-                :company_name_zh, :description, :contract_amount, :payment_note,
+                :company_name_zh, :description, :contract_sum, :vo_amount, :contract_amount,
+                :parent_sc_no, :payment_note,
                 :oa_status, :oa_ref, :oa_no, :quotation_saved, :quotation_date, :oa_date, :is_excluded)
         """, data)
         sc_id = cur.lastrowid
@@ -335,6 +365,10 @@ def get_payments(project_id, filters=None):
         if filters.get('sc_no'):
             sql += " AND pr.sc_no = ?"
             params.append(filters['sc_no'])
+        elif filters.get('sc_group'):
+            grp = filters['sc_group']
+            sql += " AND (pr.sc_no = ? OR pr.sc_no LIKE ?)"
+            params.extend([grp, grp + '.%'])
         if filters.get('search'):
             sql += " AND (pr.company_name_en LIKE ? OR pr.invoice_no LIKE ? OR pr.description LIKE ?)"
             s = f"%{filters['search']}%"

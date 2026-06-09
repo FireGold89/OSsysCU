@@ -679,6 +679,16 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .table-wrap tbody tr.row-clickable { cursor: pointer; }
 .table-wrap tbody tr.row-clickable:hover td { background: var(--bg-hover); }
 
+/* ─── 合同項目父級分組 ─── */
+.table-wrap tbody tr.sc-group-header td {
+  background: var(--bg-card);
+  border-top: 2px solid var(--border);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.table-wrap tbody tr.sc-group-child td:first-child { padding-left: 28px; }
+.table-wrap tbody tr.sc-group-child td { font-size: 12px; }
+
 /* ─── 特殊欄位 ─── */
 .sc-no-chip {
   display: inline-block;

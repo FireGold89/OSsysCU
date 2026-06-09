@@ -256,7 +256,7 @@
           </div>
           <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合同項目</button>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他 · 點擊列可查看付款記錄</p>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他 · 同組編號（如 M-011.xx）自動分組小計 · 點擊列可查看付款記錄</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -749,19 +749,35 @@
         <label class="form-label">工程描述</label>
         <input type="text" class="form-input" id="scDesc">
       </div>
-      <div class="form-row">
+      <div class="section-title" style="margin-top:8px">合約金額（Excel H / I / J）</div>
+      <div class="form-row-3">
         <div class="form-group">
-          <label class="form-label">修訂合約金額 (Revised Contract Sum)</label>
+          <label class="form-label">Contract Sum (H)</label>
           <div class="amount-input-wrap">
-            <input type="number" class="form-input" id="scAmt" placeholder="0" step="0.01">
+            <input type="number" class="form-input" id="scContractSum" placeholder="0" step="0.01" oninput="SC.calcRevised()">
           </div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">對應 Excel J 欄，非已付金額</div>
         </div>
+        <div class="form-group">
+          <label class="form-label">VO (I)</label>
+          <div class="amount-input-wrap">
+            <input type="number" class="form-input" id="scVoAmt" placeholder="0" step="0.01" oninput="SC.calcRevised()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">修訂合約金額 (J)</label>
+          <div class="amount-input-wrap">
+            <input type="number" class="form-input" id="scAmt" placeholder="0" step="0.01" readonly style="opacity:0.9">
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">J = H + VO，非已付金額</div>
+        </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label class="form-label">OA日期</label>
           <input type="date" class="form-input" id="scOaDate">
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px">放入 OA 系統的日期（Excel O 欄）</div>
         </div>
+        <div class="form-group"></div>
       </div>
       <div class="form-row" id="scPaidRow">
         <div class="form-group">
