@@ -256,7 +256,7 @@
           </div>
           <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合同項目</button>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他</p>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他 · 點擊列可查看付款記錄</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -801,6 +801,46 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="SC.closeModal()">取消</button>
       <button class="btn btn-primary" onclick="SC.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：合同項目付款記錄 ───────────────────────────────── -->
+<div class="modal-backdrop" id="scPayModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="scPayModalTitle">付款記錄</div>
+        <div id="scPayModalSub" style="font-size:12px;color:var(--text-secondary);margin-top:4px"></div>
+      </div>
+      <button class="modal-close" onclick="SC.closePayModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div id="scPaySummary" style="padding:16px 24px;border-bottom:1px solid var(--border)"></div>
+      <div class="table-wrap" style="border:none;max-height:50vh;overflow-y:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>發票日期</th>
+              <th>發票號碼</th>
+              <th>描述</th>
+              <th style="text-align:right">合約金額</th>
+              <th style="text-align:right">已付金額</th>
+              <th style="text-align:right">餘額</th>
+              <th>OA狀態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="scPayTableBody">
+            <tr><td colspan="9"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="SC.closePayModal()">關閉</button>
+      <button class="btn btn-primary" onclick="SC.goToPayments()">前往付款記錄</button>
     </div>
   </div>
 </div>

@@ -137,6 +137,7 @@ const Projects = {
 const SC = {
   data: [],
   filtered: [],
+  _payModalSc: null,
 
   async load() {
     const p = App.currentProject;
@@ -175,7 +176,7 @@ const SC = {
                       s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
       const oaDateStr = (s.oa_date || s.quotation_date) ? fmtDate(s.oa_date || s.quotation_date) : '';
       return `
-        <tr>
+        <tr class="row-clickable" onclick="SC.showPayments(${s.id})" title="點擊查看付款記錄">
           <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">Excluded (C)</span>' : ''}</td>
           <td>
             <div style="font-weight:600">${s.company_name_en || '—'}</div>
@@ -244,6 +245,111 @@ const SC = {
 
   closeModal() {
     document.getElementById('scModal').classList.remove('open');
+  },
+
+  async showPayments(id) {
+    const p = App.currentProject;
+    if (!p) { toast('請先選擇項目', 'warning'); return; }
+
+    let s = this.data.find(x => x.id == id) || App.scList.find(x => x.id == id);
+    if (!s) {
+      try { s = await api('GET', `/subcontractors/${id}`); } catch (e) { return; }
+    }
+    if (!s) return;
+
+    this._payModalSc = s;
+    const paid = parseFloat(s.total_paid) || 0;
+    const ca = parseFloat(s.contract_amount) || 0;
+
+    document.getElementById('scPayModalTitle').textContent = `${s.sc_no} — 付款記錄`;
+    const subParts = [s.company_name_en, s.company_name_zh].filter(Boolean);
+    document.getElementById('scPayModalSub').textContent =
+      subParts.join(' / ') || s.description || '';
+    document.getElementById('scPaySummary').innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px">
+        <div><span style="color:var(--text-muted)">修訂合約金額</span><br><strong>${fmt(ca)}</strong></div>
+        <div><span style="color:var(--text-muted)">累計已付</span><br><strong style="color:var(--success)">${fmt(paid)}</strong></div>
+        <div><span style="color:var(--text-muted)">未付餘額</span><br><strong style="color:${ca - paid > 0 ? 'var(--warning)' : 'var(--text-primary)'}">${fmt(ca - paid)}</strong></div>
+        <div><span style="color:var(--text-muted)">付款記錄</span><br><strong id="scPayCount">載入中...</strong></div>
+      </div>`;
+
+    document.getElementById('scPayTableBody').innerHTML =
+      `<tr><td colspan="9"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>`;
+    document.getElementById('scPayModal').classList.add('open');
+
+    const payments = await api('GET',
+      `/projects/${p.id}/payments?sc_no=${encodeURIComponent(s.sc_no)}`) || [];
+    this._renderPayModal(payments, ca, paid);
+  },
+
+  _renderPayModal(payments, ca, paid) {
+    const countEl = document.getElementById('scPayCount');
+    if (countEl) countEl.textContent = `${payments.length} 條`;
+
+    const tbody = document.getElementById('scPayTableBody');
+    if (!payments.length) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state" style="padding:40px">
+        <div class="empty-icon">💰</div>
+        <div class="empty-title">暫無付款記錄</div>
+        <div class="empty-sub">此合同項目尚未有付款記錄</div>
+      </div></td></tr>`;
+      return;
+    }
+
+    const sorted = [...payments].sort((a, b) => {
+      const sa = parseFloat(a.seq_no) || a.id;
+      const sb = parseFloat(b.seq_no) || b.id;
+      return sa - sb;
+    });
+
+    tbody.innerHTML = sorted.map(r => {
+      const remClass = parseFloat(r.remainder_amount) > 0 ? 'negative' : '';
+      const paidClass = parseFloat(r.paid_amount) > 0 ? 'positive' : '';
+      const oaBadge = r.oa_ref === 'OK' ? '<span class="badge badge-success">OK</span>' :
+                      r.oa_ref === '-'  ? '<span class="badge badge-muted">—</span>' :
+                      r.oa_ref          ? `<span class="badge badge-warning">${r.oa_ref}</span>` : '—';
+      const pdfBtn = r.pdf_path
+        ? `<button class="btn btn-icon btn-secondary btn-sm" title="查看原PDF" onclick="event.stopPropagation();Payments.viewPdf(${JSON.stringify(r.pdf_path)})">📄</button>`
+        : '';
+      return `
+        <tr class="row-clickable" onclick="SC.openPayEdit(${r.id})" title="點擊編輯">
+          <td class="td-muted" style="font-size:11px">${r.seq_no || '—'}</td>
+          <td class="td-muted">${fmtDate(r.invoice_date)}</td>
+          <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
+          <td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description || ''}">${r.description || '—'}</td>
+          <td class="td-amount">${fmt(r.contract_amount)}</td>
+          <td class="td-amount ${paidClass}">${fmt(r.paid_amount)}</td>
+          <td class="td-amount ${remClass}">${fmt(r.remainder_amount)}</td>
+          <td>${oaBadge}</td>
+          <td onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px">
+              ${pdfBtn}
+              <button class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="SC.openPayEdit(${r.id})">✏️</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  },
+
+  closePayModal() {
+    document.getElementById('scPayModal').classList.remove('open');
+    this._payModalSc = null;
+  },
+
+  goToPayments() {
+    const sc = this._payModalSc;
+    if (!sc) return;
+    const scNo = sc.sc_no;
+    this.closePayModal();
+    const sel = document.getElementById('payFilterSc');
+    if (sel) sel.value = scNo;
+    App.navigate('payments');
+  },
+
+  openPayEdit(paymentId) {
+    this.closePayModal();
+    App.navigate('payments');
+    setTimeout(() => Payments.openEdit(paymentId), 150);
   },
 
   async saveModal() {

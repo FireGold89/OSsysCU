@@ -675,6 +675,10 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
 }
 
+/* ─── 可點擊表格列 ─── */
+.table-wrap tbody tr.row-clickable { cursor: pointer; }
+.table-wrap tbody tr.row-clickable:hover td { background: var(--bg-hover); }
+
 /* ─── 特殊欄位 ─── */
 .sc-no-chip {
   display: inline-block;
