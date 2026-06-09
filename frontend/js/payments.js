@@ -2,8 +2,8 @@
 const Payments = {
   data: [],
   filtered: [],
-  sortKey: 'invoice_date',
-  sortDir: 'desc',
+  sortKey: 'seq_no',
+  sortDir: 'asc',
 
   async load() {
     const p = App.currentProject;
@@ -28,7 +28,7 @@ const Payments = {
       this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
     } else {
       this.sortKey = key;
-      this.sortDir = ['invoice_date', 'contract_amount', 'paid_amount', 'remainder_amount', 'seq_no'].includes(key)
+      this.sortDir = ['invoice_date', 'contract_amount', 'paid_amount', 'remainder_amount'].includes(key)
         ? 'desc' : 'asc';
     }
     this.applySort();
