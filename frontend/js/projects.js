@@ -206,6 +206,8 @@ const SC = {
     document.getElementById('scAmt').value = '';
     document.getElementById('scQuotDate').value = '';
     document.getElementById('scExcluded').checked = false;
+    document.getElementById('scPaidAmt').value = '';
+    document.getElementById('scRemainAmt').value = '';
     document.getElementById('scModal').classList.add('open');
   },
 
@@ -227,6 +229,10 @@ const SC = {
     document.getElementById('scCompanyZh').value = s.company_name_zh || '';
     document.getElementById('scDesc').value = s.description || '';
     document.getElementById('scAmt').value = s.contract_amount || '';
+    const paid = parseFloat(s.total_paid) || 0;
+    const ca = parseFloat(s.contract_amount) || 0;
+    document.getElementById('scPaidAmt').value = fmt(paid);
+    document.getElementById('scRemainAmt').value = fmt(ca - paid);
     document.getElementById('scQuotDate').value = s.quotation_date || '';
     document.getElementById('scOaStatus').value = s.oa_status || '';
     document.getElementById('scOaNo').value = s.oa_no || '';
