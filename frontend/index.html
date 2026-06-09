@@ -138,6 +138,16 @@
             </div>
           </div>
 
+          <!-- Excel Project Summary 結算 -->
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <div class="card-title">📋 合約金額結算 <span style="font-size:11px;color:var(--text-muted);font-weight:400">參考 Excel Project Summary</span></div>
+            </div>
+            <div class="card-body" id="dashContractCalc">
+              <div class="empty-state" style="padding:24px">載入中...</div>
+            </div>
+          </div>
+
           <!-- 圖表 -->
           <div class="form-row" style="gap:20px">
             <div class="card">
@@ -387,6 +397,14 @@
 
       <!-- ─── 財務報表 ──────────────────────── -->
       <div class="page" id="page-reports">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header">
+            <div class="card-title">📋 合約金額結算</div>
+          </div>
+          <div class="card-body" id="rptContractCalc">
+            <div class="empty-state" style="padding:24px">載入中...</div>
+          </div>
+        </div>
         <div class="stats-grid" id="reportStats">
           <div class="stat-card">
             <div class="stat-label">合同項目數</div>
@@ -667,15 +685,24 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">主合約金額 (HK$)</label>
+          <label class="form-label">(A) 承建金額 (HK$)</label>
           <div class="amount-input-wrap">
             <input type="number" class="form-input" id="pAmt" placeholder="0">
           </div>
         </div>
         <div class="form-group">
+          <label class="form-label">工調工程款分攤 (HK$)</label>
+          <div class="amount-input-wrap">
+            <input type="number" class="form-input" id="pLabour" placeholder="0" step="0.01">
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
           <label class="form-label">開工日期</label>
           <input type="date" class="form-input" id="pStartDate">
         </div>
+        <div class="form-group"></div>
       </div>
       <div class="form-group">
         <label class="form-label">備注</label>
@@ -747,6 +774,15 @@
       <div class="form-group">
         <label class="form-label">付款備注</label>
         <input type="text" class="form-input" id="scPayNote" placeholder="如: $16,000/month">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="scExcluded" style="width:auto">
+          Excluded (C) — Contract Charge 標記 *
+        </label>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          合約金額維持正數；結算時計入 (C) 並以負數顯示，如 O-017 的 HK$1,500
+        </div>
       </div>
     </div>
     <div class="modal-footer">

@@ -14,6 +14,34 @@ function fmt(num, decimals = 0) {
   return 'HK$' + n.toLocaleString('en-HK', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+/** Excel 會計格式：負數用括號 (1,500) */
+function fmtAcct(num, decimals = 0) {
+  if (num == null || num === '') return '—';
+  const n = parseFloat(num);
+  if (isNaN(n)) return '—';
+  const abs = Math.abs(n).toLocaleString('en-HK', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return n < 0 ? `(HK$${abs})` : `HK$${abs}`;
+}
+
+function renderContractCalc(calc, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el || !calc) return;
+  const rateClass = calc.profit_rate < 0 ? 'negative' : 'positive';
+  el.innerHTML = `
+    <table class="contract-calc-table">
+      <tbody>
+        <tr><td class="calc-label">(A) 承建金額 Main Contract</td><td class="calc-value">${fmtAcct(calc.main_contract_amount)}</td></tr>
+        <tr><td class="calc-label">(B) Sub-total</td><td class="calc-value">${fmtAcct(calc.sub_total_b)}</td></tr>
+        <tr><td class="calc-label">(C) Excluded Contract Charge item</td><td class="calc-value ${calc.excluded_c < 0 ? 'negative' : ''}">${fmtAcct(calc.excluded_c)}</td></tr>
+        <tr><td class="calc-label">工調工程款分攤（人工分攤）</td><td class="calc-value highlight">${fmtAcct(calc.labour_allocation)}</td></tr>
+        <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+分攤</td><td class="calc-value">${fmtAcct(calc.total_d)}</td></tr>
+        <tr><td class="calc-label">(E) = (A)−(D) 預計利潤</td><td class="calc-value ${rateClass}">${fmtAcct(calc.profit_e)}</td></tr>
+        <tr><td class="calc-label">預計利潤率</td><td class="calc-value ${rateClass}">${calc.profit_rate}%</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
 function fmtDate(str) {
   if (!str) return '—';
   const d = new Date(str);
@@ -243,6 +271,8 @@ const Dashboard = {
     document.getElementById('dashPayCount').textContent = payments?.length || 0;
     document.getElementById('payBadge').textContent = payments?.length || 0;
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
+
+    renderContractCalc(summary.contract_calc, 'dashContractCalc');
 
     // 最近記錄
     const recent = (payments || []).slice(0, 8);

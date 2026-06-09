@@ -219,7 +219,9 @@ def import_excel(filepath, project_code=None):
                 company_en = safe_str(row_vals[3]) if len(row_vals) > 3 else None
                 company_zh = safe_str(row_vals[4]) if len(row_vals) > 4 else None
                 description = safe_str(row_vals[5]) if len(row_vals) > 5 else None
+                contract_charge = safe_str(row_vals[6]) if len(row_vals) > 6 else None
                 contract_amt = safe_float(row_vals[7]) if len(row_vals) > 7 else 0
+                is_excluded = 1 if contract_charge == '*' else 0
                 quotation_no = safe_str(row_vals[2]) if len(row_vals) > 2 else None
 
                 # 狀態欄 (col 11-16)
@@ -247,6 +249,7 @@ def import_excel(filepath, project_code=None):
                     'oa_no': oa_no,
                     'quotation_saved': quotation_saved,
                     'quotation_date': quotation_date,
+                    'is_excluded': is_excluded,
                 })
                 sc_map[sc_no] = sc_id
                 sc_count += 1

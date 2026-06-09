@@ -103,8 +103,20 @@ def init_db():
         );
     """)
     conn.commit()
+    _migrate_db(conn)
     conn.close()
     print(f"[DB] 資料庫已初始化: {DB_PATH}")
+
+
+def _migrate_db(conn):
+    """增量欄位（舊資料庫相容）"""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(subcontractors)")}
+    if 'is_excluded' not in cols:
+        conn.execute("ALTER TABLE subcontractors ADD COLUMN is_excluded INTEGER DEFAULT 0")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)")}
+    if 'labour_allocation' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN labour_allocation REAL DEFAULT 0")
+    conn.commit()
 
 
 # ─── Projects ──────────────────────────────────────────────────────────
@@ -136,9 +148,9 @@ def create_project(data):
     conn = get_conn()
     cur = conn.execute("""
         INSERT INTO projects (project_code, project_name, client, main_contractor,
-                              contract_amount, start_date, status, notes)
+                              contract_amount, labour_allocation, start_date, status, notes)
         VALUES (:project_code, :project_name, :client, :main_contractor,
-                :contract_amount, :start_date, :status, :notes)
+                :contract_amount, :labour_allocation, :start_date, :status, :notes)
     """, data)
     conn.commit()
     new_id = cur.lastrowid
@@ -151,8 +163,8 @@ def update_project(project_id, data):
     conn.execute("""
         UPDATE projects SET project_code=:project_code, project_name=:project_name,
             client=:client, main_contractor=:main_contractor,
-            contract_amount=:contract_amount, start_date=:start_date,
-            status=:status, notes=:notes
+            contract_amount=:contract_amount, labour_allocation=:labour_allocation,
+            start_date=:start_date, status=:status, notes=:notes
         WHERE id=:id
     """, {**data, 'id': project_id})
     conn.commit()
@@ -205,7 +217,8 @@ def upsert_subcontractor(data):
                 company_name_zh=:company_name_zh, description=:description,
                 contract_amount=:contract_amount, payment_note=:payment_note,
                 oa_status=:oa_status, oa_ref=:oa_ref, oa_no=:oa_no,
-                quotation_saved=:quotation_saved, quotation_date=:quotation_date
+                quotation_saved=:quotation_saved, quotation_date=:quotation_date,
+                is_excluded=:is_excluded
             WHERE project_id=:project_id AND sc_no=:sc_no
         """, data)
         sc_id = existing['id']
@@ -213,10 +226,10 @@ def upsert_subcontractor(data):
         cur = conn.execute("""
             INSERT INTO subcontractors (project_id, sc_no, quotation_no, company_name_en,
                 company_name_zh, description, contract_amount, payment_note,
-                oa_status, oa_ref, oa_no, quotation_saved, quotation_date)
+                oa_status, oa_ref, oa_no, quotation_saved, quotation_date, is_excluded)
             VALUES (:project_id, :sc_no, :quotation_no, :company_name_en,
                 :company_name_zh, :description, :contract_amount, :payment_note,
-                :oa_status, :oa_ref, :oa_no, :quotation_saved, :quotation_date)
+                :oa_status, :oa_ref, :oa_no, :quotation_saved, :quotation_date, :is_excluded)
         """, data)
         sc_id = cur.lastrowid
 
@@ -423,12 +436,33 @@ def get_project_summary(project_id):
         FROM payment_records WHERE project_id=?
     """, (project_id,)).fetchone()
 
+    # Excel Project Summary 右下角結算 (B)(C)(D)(E)
+    sc_items = conn.execute("""
+        SELECT contract_amount, is_excluded FROM subcontractors WHERE project_id=?
+    """, (project_id,)).fetchall()
+    sub_total_b = sum(r['contract_amount'] or 0 for r in sc_items if not r['is_excluded'])
+    excluded_c = -sum(r['contract_amount'] or 0 for r in sc_items if r['is_excluded'])
+    labour = dict(project).get('labour_allocation') or 0
+    total_d = sub_total_b + excluded_c + labour
+    contract_a = dict(project).get('contract_amount') or 0
+    profit_e = contract_a - total_d
+    profit_rate = (profit_e / contract_a * 100) if contract_a else 0
+
     conn.close()
     return {
         'project': dict(project),
         'sc_stats': [dict(r) for r in sc_stats],
         'total_paid': totals['total_paid'] or 0,
         'total_remainder': totals['total_remainder'] or 0,
+        'contract_calc': {
+            'main_contract_amount': contract_a,
+            'sub_total_b': sub_total_b,
+            'excluded_c': excluded_c,
+            'labour_allocation': labour,
+            'total_d': total_d,
+            'profit_e': profit_e,
+            'profit_rate': round(profit_rate, 1),
+        },
     }
 
 

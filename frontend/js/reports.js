@@ -17,6 +17,8 @@ const Reports = {
     document.getElementById('rptTotalPaid').textContent = fmt(this.data.total_paid);
     document.getElementById('rptRemainder').textContent = fmt(this.data.total_remainder);
 
+    renderContractCalc(this.data.contract_calc, 'rptContractCalc');
+
     // 表格
     const tbody = document.getElementById('rptTableBody');
     const stats = this.data.sc_stats || [];

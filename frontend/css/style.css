@@ -698,6 +698,42 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   font-weight: 500;
 }
 
+/* ─── Excel 合約結算表 ─── */
+.contract-calc-table {
+  width: 100%;
+  max-width: 520px;
+  margin-left: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.contract-calc-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.contract-calc-table .calc-label {
+  color: var(--text-secondary);
+  text-align: left;
+}
+.contract-calc-table .calc-value {
+  text-align: right;
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.contract-calc-table .calc-value.highlight {
+  color: #f59e0b;
+}
+.contract-calc-table .calc-value.negative {
+  color: var(--danger);
+}
+.contract-calc-table .calc-value.positive {
+  color: var(--success);
+}
+.contract-calc-table tr.calc-total td {
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+}
+
 /* ─── 可排序表頭 ─── */
 .th-sortable {
   cursor: pointer;

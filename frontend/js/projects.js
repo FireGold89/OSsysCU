@@ -65,6 +65,7 @@ const Projects = {
     document.getElementById('projModalId').value = '';
     ['pCode','pName','pClient','pMc','pNotes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('pAmt').value = '';
+    document.getElementById('pLabour').value = '';
     document.getElementById('pStartDate').value = '';
     document.getElementById('pStatus').value = 'Active';
     document.getElementById('projectModal').classList.add('open');
@@ -80,6 +81,7 @@ const Projects = {
     document.getElementById('pClient').value = p.client || '';
     document.getElementById('pMc').value = p.main_contractor || '';
     document.getElementById('pAmt').value = p.contract_amount || '';
+    document.getElementById('pLabour').value = p.labour_allocation || '';
     document.getElementById('pStartDate').value = p.start_date || '';
     document.getElementById('pStatus').value = p.status || 'Active';
     document.getElementById('pNotes').value = p.notes || '';
@@ -98,6 +100,7 @@ const Projects = {
       client: document.getElementById('pClient').value.trim(),
       main_contractor: document.getElementById('pMc').value.trim(),
       contract_amount: parseFloat(document.getElementById('pAmt').value) || 0,
+      labour_allocation: parseFloat(document.getElementById('pLabour').value) || 0,
       start_date: document.getElementById('pStartDate').value || null,
       status: document.getElementById('pStatus').value,
       notes: document.getElementById('pNotes').value.trim(),
@@ -172,7 +175,7 @@ const SC = {
                       s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
       return `
         <tr>
-          <td>${fmtRefNo(s.sc_no)}</td>
+          <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">Excluded (C)</span>' : ''}</td>
           <td>
             <div style="font-weight:600">${s.company_name_en || '—'}</div>
             <div style="font-size:11px;color:var(--text-muted)">${s.company_name_zh || ''}</div>
@@ -202,6 +205,7 @@ const SC = {
     ['scNo','scQuotNo','scCompanyEn','scCompanyZh','scDesc','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('scAmt').value = '';
     document.getElementById('scQuotDate').value = '';
+    document.getElementById('scExcluded').checked = false;
     document.getElementById('scModal').classList.add('open');
   },
 
@@ -227,6 +231,7 @@ const SC = {
     document.getElementById('scOaStatus').value = s.oa_status || '';
     document.getElementById('scOaNo').value = s.oa_no || '';
     document.getElementById('scPayNote').value = s.payment_note || '';
+    document.getElementById('scExcluded').checked = !!s.is_excluded;
     document.getElementById('scModal').classList.add('open');
   },
 
@@ -255,6 +260,7 @@ const SC = {
       oa_no: document.getElementById('scOaNo').value || null,
       quotation_saved: null,
       payment_note: document.getElementById('scPayNote').value || null,
+      is_excluded: document.getElementById('scExcluded').checked ? 1 : 0,
     };
 
     try {

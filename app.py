@@ -100,6 +100,7 @@ def create_project():
     data.setdefault('start_date', None)
     data.setdefault('status', 'Active')
     data.setdefault('notes', '')
+    data.setdefault('labour_allocation', 0)
     new_id = db.create_project(data)
     return resp({'id': new_id}, status=201)
 
@@ -115,6 +116,7 @@ def update_project(project_id):
     data.setdefault('start_date', None)
     data.setdefault('status', 'Active')
     data.setdefault('notes', '')
+    data.setdefault('labour_allocation', 0)
     db.update_project(project_id, data)
     return resp({'message': '已更新'})
 
@@ -147,6 +149,7 @@ def create_subcontractor():
     data.setdefault('oa_no', None)
     data.setdefault('quotation_saved', None)
     data.setdefault('quotation_date', None)
+    data.setdefault('is_excluded', 0)
     sc_id = db.upsert_subcontractor(data)
     return resp({'id': sc_id}, status=201)
 
