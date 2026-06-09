@@ -206,7 +206,14 @@ const SC = {
   },
 
   async openEdit(id) {
-    const s = await api('GET', `/subcontractors/${id}`) || App.scList.find(x => x.id == id);
+    let s = this.data.find(x => x.id == id) || App.scList.find(x => x.id == id);
+    if (!s) {
+      try {
+        s = await api('GET', `/subcontractors/${id}`);
+      } catch (e) {
+        return;
+      }
+    }
     if (!s) return;
     document.getElementById('scModalTitle').textContent = '編輯合同項目';
     document.getElementById('scModalId').value = s.id;

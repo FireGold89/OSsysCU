@@ -151,6 +151,14 @@ def create_subcontractor():
     return resp({'id': sc_id}, status=201)
 
 
+@app.route('/api/subcontractors/<int:sc_id>', methods=['GET'])
+def get_subcontractor(sc_id):
+    sc = db.get_subcontractor(sc_id)
+    if not sc:
+        return resp(error='合同項目不存在', status=404)
+    return resp(sc)
+
+
 @app.route('/api/subcontractors/<int:sc_id>', methods=['DELETE'])
 def delete_subcontractor(sc_id):
     db.delete_subcontractor(sc_id)
