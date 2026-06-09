@@ -34,7 +34,7 @@ const Reports = {
 
       return `
         <tr>
-          <td><span class="sc-no-chip">${s.sc_no || '—'}</span></td>
+          <td>${fmtRefNo(s.sc_no)}</td>
           <td>
             <div style="font-weight:600">${s.company_name_en || '—'}</div>
             <div style="font-size:11px;color:var(--text-muted)">${s.description || ''}</div>
@@ -79,7 +79,7 @@ const Reports = {
 
   exportCsv() {
     if (!this.data?.sc_stats) { toast('暫無數據', 'warning'); return; }
-    const headers = ['分判商編號','公司名稱','描述','合約金額','累計已付','未付餘額','付款次數','進度%'];
+    const headers = ['參考編號','公司名稱','描述','合約金額','累計已付','未付餘額','付款次數','進度%'];
     const rows = this.data.sc_stats.map(s => {
       const ca = parseFloat(s.contract_amount) || 0;
       const paid = parseFloat(s.total_paid) || 0;

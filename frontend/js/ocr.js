@@ -7,7 +7,7 @@ const OCR = {
     const sel = document.getElementById('ocrScNo');
     const cur = sel?.value;
     if (!sel) return;
-    sel.innerHTML = '<option value="">— 選擇分判商 —</option>';
+    sel.innerHTML = '<option value="">— 選擇參考編號 —</option>';
     (App.scList || []).forEach(sc => {
       const opt = document.createElement('option');
       opt.value = sc.sc_no;

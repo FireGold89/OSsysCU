@@ -47,7 +47,7 @@ const Projects = {
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
               <div style="font-size:11px;color:var(--text-muted)">
-                📋 ${p.sc_count || 0} 個分判商
+                📋 ${p.sc_count || 0} 個合同項目
               </div>
               <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="Projects.openEdit(${p.id})">✏️ 編輯</button>
@@ -119,7 +119,7 @@ const Projects = {
   },
 
   async delete(id, code) {
-    if (!confirm(`確認刪除項目「${code}」？\n此操作將同時刪除所有相關分判商及付款記錄！`)) return;
+    if (!confirm(`確認刪除項目「${code}」？\n此操作將同時刪除所有相關合同項目及付款記錄！`)) return;
     await api('DELETE', `/projects/${id}`);
     toast('項目已刪除', 'success');
     if (App.currentProject?.id == id) {
@@ -160,7 +160,7 @@ const SC = {
   render() {
     const tbody = document.getElementById('scTableBody');
     if (this.filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:48px"><div class="empty-icon">🏢</div><div class="empty-title">暫無分判商</div></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:48px"><div class="empty-icon">🏢</div><div class="empty-title">暫無合同項目</div></div></td></tr>`;
       return;
     }
     tbody.innerHTML = this.filtered.map(s => {
@@ -172,7 +172,7 @@ const SC = {
                       s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
       return `
         <tr>
-          <td><span class="sc-no-chip">${s.sc_no}</span></td>
+          <td>${fmtRefNo(s.sc_no)}</td>
           <td>
             <div style="font-weight:600">${s.company_name_en || '—'}</div>
             <div style="font-size:11px;color:var(--text-muted)">${s.company_name_zh || ''}</div>
@@ -197,7 +197,7 @@ const SC = {
   },
 
   openAdd() {
-    document.getElementById('scModalTitle').textContent = '新增分判商';
+    document.getElementById('scModalTitle').textContent = '新增合同項目';
     document.getElementById('scModalId').value = '';
     ['scNo','scQuotNo','scCompanyEn','scCompanyZh','scDesc','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('scAmt').value = '';
@@ -208,7 +208,7 @@ const SC = {
   async openEdit(id) {
     const s = await api('GET', `/subcontractors/${id}`) || App.scList.find(x => x.id == id);
     if (!s) return;
-    document.getElementById('scModalTitle').textContent = '編輯分判商';
+    document.getElementById('scModalTitle').textContent = '編輯合同項目';
     document.getElementById('scModalId').value = s.id;
     document.getElementById('scNo').value = s.sc_no || '';
     document.getElementById('scQuotNo').value = s.quotation_no || '';
@@ -232,7 +232,7 @@ const SC = {
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     const id = document.getElementById('scModalId').value;
     const scNo = document.getElementById('scNo').value.trim();
-    if (!scNo) { toast('請輸入分判商編號', 'warning'); return; }
+    if (!scNo) { toast('請輸入參考編號', 'warning'); return; }
 
     const data = {
       project_id: p.id,
@@ -252,7 +252,7 @@ const SC = {
 
     try {
       await api('POST', '/subcontractors', data);
-      toast('分判商已儲存', 'success');
+      toast('合同項目已儲存', 'success');
       this.closeModal();
       // 刷新分判商列表
       App.scList = await api('GET', `/projects/${p.id}/subcontractors`) || [];
@@ -263,7 +263,7 @@ const SC = {
   },
 
   async delete(id, scNo) {
-    if (!confirm(`確認刪除分判商 ${scNo}？`)) return;
+    if (!confirm(`確認刪除合同項目 ${scNo}？`)) return;
     await api('DELETE', `/subcontractors/${id}`);
     toast('已刪除', 'success');
     const p = App.currentProject;

@@ -47,7 +47,7 @@
         <span class="nav-badge" id="payBadge">0</span>
       </div>
       <div class="nav-item" data-page="subcontractors" onclick="App.navigate('subcontractors')">
-        <span class="nav-icon">🏢</span> 分判商
+        <span class="nav-icon">🏢</span> 合同項目
       </div>
       <div class="nav-item" data-page="ocr" onclick="App.navigate('ocr')">
         <span class="nav-icon">📄</span> PDF OCR識別
@@ -127,9 +127,9 @@
               <div class="stat-sub">Payment Records</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">分判商數目</div>
+              <div class="stat-label">合同項目數</div>
               <div class="stat-value" id="dashScCount">—</div>
-              <div class="stat-sub">Subcontractors</div>
+              <div class="stat-sub">Contract Items</div>
             </div>
             <div class="stat-card danger">
               <div class="stat-label">付款進度</div>
@@ -142,7 +142,7 @@
           <div class="form-row" style="gap:20px">
             <div class="card">
               <div class="card-header">
-                <div class="card-title">💰 分判商付款狀況</div>
+                <div class="card-title">💰 合同項目付款狀況</div>
               </div>
               <div class="card-body">
                 <div class="chart-wrap">
@@ -173,11 +173,11 @@
                 <thead>
                   <tr>
                     <th>日期</th>
-                    <th>分判商編號</th>
+                    <th>參考編號</th>
                     <th>公司</th>
                     <th>描述</th>
                     <th style="text-align:right">已付金額</th>
-                    <th>發票號</th>
+                    <th>發票號碼</th>
                   </tr>
                 </thead>
                 <tbody id="dashRecentPayments">
@@ -197,7 +197,7 @@
             <input type="text" id="paySearch" placeholder="搜尋公司名、發票號、描述..." oninput="Payments.search(this.value)">
           </div>
           <select class="form-input" id="payFilterSc" style="width:auto;min-width:160px" onchange="Payments.filterBySc(this.value)">
-            <option value="">全部分判商</option>
+            <option value="">全部參考編號</option>
           </select>
           <button class="btn btn-primary" onclick="Payments.openAdd()">➕ 新增記錄</button>
           <button class="btn btn-secondary" onclick="Payments.exportCsv()">📤 匯出CSV</button>
@@ -219,7 +219,7 @@
                   <th>#</th>
                   <th>發票日期</th>
                   <th>發票號碼</th>
-                  <th>分判商編號</th>
+                  <th>參考編號</th>
                   <th>公司名稱</th>
                   <th>描述</th>
                   <th style="text-align:right">合約金額</th>
@@ -242,15 +242,16 @@
         <div class="toolbar">
           <div class="search-wrap">
             <span class="search-icon">🔍</span>
-            <input type="text" id="scSearch" placeholder="搜尋分判商..." oninput="SC.search(this.value)">
+            <input type="text" id="scSearch" placeholder="搜尋參考編號、公司名..." oninput="SC.search(this.value)">
           </div>
-          <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增分判商</button>
+          <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合同項目</button>
         </div>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他</p>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>編號</th>
+                <th>參考編號</th>
                 <th>公司名稱</th>
                 <th>描述</th>
                 <th style="text-align:right">合約金額</th>
@@ -311,9 +312,9 @@
               </div>
               <div class="card-body">
                 <div class="form-group">
-                  <label class="form-label">關聯分判商</label>
+                  <label class="form-label">關聯參考編號</label>
                   <select class="form-input" id="ocrScNo">
-                    <option value="">— 選擇分判商 —</option>
+                    <option value="">— 選擇參考編號 —</option>
                   </select>
                 </div>
                 <div class="form-row">
@@ -388,7 +389,7 @@
       <div class="page" id="page-reports">
         <div class="stats-grid" id="reportStats">
           <div class="stat-card">
-            <div class="stat-label">分判商數目</div>
+            <div class="stat-label">合同項目數</div>
             <div class="stat-value" id="rptScCount">—</div>
           </div>
           <div class="stat-card success">
@@ -402,14 +403,14 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <div class="card-title">📊 分判商付款明細</div>
+            <div class="card-title">📊 合同項目付款明細</div>
             <button class="btn btn-secondary btn-sm" onclick="Reports.exportCsv()">📤 匯出</button>
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
               <thead>
                 <tr>
-                  <th>分判商編號</th>
+                  <th>參考編號</th>
                   <th>公司名稱</th>
                   <th>描述</th>
                   <th style="text-align:right">合約金額</th>
@@ -542,9 +543,9 @@
           <input type="text" class="form-input" id="fQuotNo" placeholder="Q-001">
         </div>
         <div class="form-group">
-          <label class="form-label">分判商編號</label>
+          <label class="form-label">參考編號</label>
           <select class="form-input" id="fScNo" onchange="Payments.onScChange(this.value)">
-            <option value="">— 選擇分判商 —</option>
+            <option value="">— 選擇參考編號 —</option>
           </select>
         </div>
       </div>
@@ -692,15 +693,15 @@
 <div class="modal-backdrop" id="scModal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title" id="scModalTitle">新增分判商</div>
+      <div class="modal-title" id="scModalTitle">新增合同項目</div>
       <button class="modal-close" onclick="SC.closeModal()">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="scModalId">
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">分判商編號 <span class="required">*</span></label>
-          <input type="text" class="form-input" id="scNo" placeholder="SC-001">
+          <label class="form-label">參考編號 <span class="required">*</span></label>
+          <input type="text" class="form-input" id="scNo" placeholder="M-011 / SC-019 / O-012">
         </div>
         <div class="form-group">
           <label class="form-label">報價單號</label>

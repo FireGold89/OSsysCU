@@ -686,6 +686,17 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   font-size: 11px;
   font-weight: 600;
 }
+.ref-no-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ref-type-badge {
+  font-size: 10px !important;
+  padding: 1px 6px !important;
+  font-weight: 500;
+}
 .amount-input-wrap { position: relative; }
 .amount-input-wrap::before {
   content: 'HK$';

@@ -21,6 +21,24 @@ function fmtDate(str) {
   return d.toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
+/** M-/SC-/O- 參考編號類型（對應 Excel 灰色提示） */
+function refNoType(scNo) {
+  const s = (scNo || '').toUpperCase().trim();
+  if (/^M[-.]/.test(s) || s.startsWith('M')) return { label: '物料', badge: 'info' };
+  if (/^SC[-.]/.test(s) || s.startsWith('SC')) return { label: '分判', badge: 'success' };
+  if (/^O[-.]/.test(s) || s.startsWith('O')) return { label: '其他', badge: 'warning' };
+  return { label: '', badge: 'muted' };
+}
+
+function fmtRefNo(scNo) {
+  if (!scNo) return '—';
+  const t = refNoType(scNo);
+  const typeBadge = t.label
+    ? `<span class="badge badge-${t.badge} ref-type-badge">${t.label}</span>`
+    : '';
+  return `<span class="ref-no-wrap"><span class="sc-no-chip">${scNo}</span>${typeBadge}</span>`;
+}
+
 function showLoading(text = '載入中...') {
   document.getElementById('loadingText').textContent = text;
   document.getElementById('loadingOverlay').classList.add('show');
@@ -138,7 +156,7 @@ const App = {
     const titles = {
       dashboard: ['儀表板', '項目財務總覽'],
       payments: ['付款記錄', '管理所有付款'],
-      subcontractors: ['分判商', '分判商合約管理'],
+      subcontractors: ['合同項目', 'M=物料 · SC=分判 · O=其他'],
       ocr: ['PDF OCR識別', '自動提取發票資料'],
       reports: ['財務報表', '付款統計分析'],
       projects: ['項目管理', '管理所有工程項目'],
@@ -235,7 +253,7 @@ const Dashboard = {
       tbody.innerHTML = recent.map(r => `
         <tr onclick="App.navigate('payments')">
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
-          <td><span class="sc-no-chip">${r.sc_no || '—'}</span></td>
+          <td>${fmtRefNo(r.sc_no)}</td>
           <td>${r.company_name_en || r.company_name_zh || '—'}</td>
           <td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description || '—'}</td>
           <td class="td-amount positive">${fmt(r.paid_amount)}</td>
@@ -283,9 +301,7 @@ const Dashboard = {
     // 圓餅圖 - 類別分佈
     const categories = {};
     scStats.forEach(s => {
-      const key = s.sc_no?.startsWith('SC') ? '分判商(SC)' :
-                  s.sc_no?.startsWith('M')  ? '材料(M)' :
-                  s.sc_no?.startsWith('O')  ? '其他(O)' : '其他';
+      const key = refNoType(s.sc_no).label || '其他';
       categories[key] = (categories[key] || 0) + (s.total_paid || 0);
     });
 
