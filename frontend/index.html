@@ -214,18 +214,18 @@
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
-              <thead>
+              <thead id="payTableHead">
                 <tr>
-                  <th>#</th>
-                  <th>發票日期</th>
-                  <th>發票號碼</th>
-                  <th>參考編號</th>
-                  <th>公司名稱</th>
-                  <th>描述</th>
-                  <th style="text-align:right">合約金額</th>
-                  <th style="text-align:right">已付金額</th>
-                  <th style="text-align:right">餘額</th>
-                  <th>OA狀態</th>
+                  <th class="th-sortable" data-sort="seq_no" onclick="Payments.sortBy('seq_no')">#<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="invoice_date" onclick="Payments.sortBy('invoice_date')">發票日期<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="invoice_no" onclick="Payments.sortBy('invoice_no')">發票號碼<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="sc_no" onclick="Payments.sortBy('sc_no')">參考編號<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="company" onclick="Payments.sortBy('company')">公司名稱<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="description" onclick="Payments.sortBy('description')">描述<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable th-num" data-sort="contract_amount" onclick="Payments.sortBy('contract_amount')">合約金額<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable th-num" data-sort="paid_amount" onclick="Payments.sortBy('paid_amount')">已付金額<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable th-num" data-sort="remainder_amount" onclick="Payments.sortBy('remainder_amount')">餘額<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="oa_ref" onclick="Payments.sortBy('oa_ref')">OA狀態<span class="sort-icon">↕</span></th>
                   <th>操作</th>
                 </tr>
               </thead>

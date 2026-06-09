@@ -2,6 +2,8 @@
 const Payments = {
   data: [],
   filtered: [],
+  sortKey: 'invoice_date',
+  sortDir: 'desc',
 
   async load() {
     const p = App.currentProject;
@@ -17,7 +19,92 @@ const Payments = {
 
     this.data = await api('GET', `/projects/${p.id}/payments?${params}`) || [];
     this.filtered = [...this.data];
+    this.applySort();
     this.render();
+  },
+
+  sortBy(key) {
+    if (this.sortKey === key) {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortKey = key;
+      this.sortDir = ['invoice_date', 'contract_amount', 'paid_amount', 'remainder_amount', 'seq_no'].includes(key)
+        ? 'desc' : 'asc';
+    }
+    this.applySort();
+    this.render();
+  },
+
+  _sortValue(row, key) {
+    switch (key) {
+      case 'seq_no':
+        return parseFloat(row.seq_no) || row.id || 0;
+      case 'invoice_date':
+        return row.invoice_date || '';
+      case 'invoice_no':
+        return (row.invoice_no || '').toLowerCase();
+      case 'sc_no':
+        return (row.sc_no || '').toLowerCase();
+      case 'company':
+        return ((row.company_name_en || row.company_name_zh || '')).toLowerCase();
+      case 'description':
+        return (row.description || '').toLowerCase();
+      case 'contract_amount':
+      case 'paid_amount':
+      case 'remainder_amount':
+        return parseFloat(row[key]) || 0;
+      case 'oa_ref':
+        return (row.oa_ref || '').toLowerCase();
+      default:
+        return '';
+    }
+  },
+
+  _sortIsEmpty(row, key) {
+    switch (key) {
+      case 'company':
+        return !row.company_name_en && !row.company_name_zh;
+      case 'contract_amount':
+      case 'paid_amount':
+      case 'remainder_amount':
+        return row[key] == null || row[key] === '';
+      default:
+        return !this._sortValue(row, key);
+    }
+  },
+
+  applySort() {
+    if (!this.sortKey || !this.filtered.length) return;
+    const key = this.sortKey;
+    const dir = this.sortDir === 'asc' ? 1 : -1;
+    const isNum = ['seq_no', 'contract_amount', 'paid_amount', 'remainder_amount'].includes(key);
+
+    this.filtered.sort((a, b) => {
+      const aEmpty = this._sortIsEmpty(a, key);
+      const bEmpty = this._sortIsEmpty(b, key);
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+
+      const va = this._sortValue(a, key);
+      const vb = this._sortValue(b, key);
+      const cmp = isNum ? (va - vb) : String(va).localeCompare(String(vb), 'zh-Hant');
+      return cmp * dir;
+    });
+  },
+
+  updateSortHeaders() {
+    document.querySelectorAll('#payTableHead .th-sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      const icon = th.querySelector('.sort-icon');
+      const key = th.dataset.sort;
+      if (key === this.sortKey) {
+        th.classList.add(this.sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        if (icon) icon.textContent = this.sortDir === 'asc' ? '↑' : '↓';
+      } else if (icon) {
+        icon.textContent = '↕';
+      }
+    });
   },
 
   render() {
@@ -62,6 +149,7 @@ const Payments = {
         </tr>
       `;
     }).join('');
+    this.updateSortHeaders();
   },
 
   renderEmpty() {

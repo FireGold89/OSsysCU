@@ -697,6 +697,32 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   padding: 1px 6px !important;
   font-weight: 500;
 }
+
+/* ─── 可排序表頭 ─── */
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.th-sortable:hover {
+  color: var(--accent-light);
+}
+.th-sortable .sort-icon {
+  display: inline-block;
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.35;
+  vertical-align: middle;
+}
+.th-sortable.sort-asc .sort-icon,
+.th-sortable.sort-desc .sort-icon {
+  opacity: 1;
+  color: var(--accent-light);
+}
+.th-sortable.th-num {
+  text-align: right;
+}
 .amount-input-wrap { position: relative; }
 .amount-input-wrap::before {
   content: 'HK$';
