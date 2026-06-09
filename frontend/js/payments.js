@@ -44,10 +44,10 @@ const Payments = {
         <tr onclick="Payments.openEdit(${r.id})">
           <td class="td-muted" style="font-size:11px">${r.seq_no || r.id}</td>
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
+          <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
           <td><span class="sc-no-chip">${r.sc_no || '—'}</span></td>
           <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.company_name_en || ''}">${r.company_name_en || r.company_name_zh || '—'}</td>
           <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description || ''}">${r.description || '—'}</td>
-          <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
           <td class="td-amount">${fmt(r.contract_amount)}</td>
           <td class="td-amount ${paidClass}">${fmt(r.paid_amount)}</td>
           <td class="td-amount ${remClass}">${fmt(r.remainder_amount)}</td>
@@ -248,10 +248,10 @@ const Payments = {
 
   exportCsv() {
     if (!this.filtered.length) { toast('沒有資料可匯出', 'warning'); return; }
-    const headers = ['序號','發票日期','分判商編號','公司名稱(英)','公司名稱(中)','描述','發票號','合約金額','已付金額','餘額','OA參考','OA編號','MC IP No.','Sub-IP No.','備注'];
+    const headers = ['序號','發票日期','發票號碼','分判商編號','公司名稱(英)','公司名稱(中)','描述','合約金額','已付金額','餘額','OA參考','OA編號','MC IP No.','Sub-IP No.','備注'];
     const rows = this.filtered.map(r => [
-      r.seq_no, r.invoice_date, r.sc_no, r.company_name_en, r.company_name_zh,
-      r.description, r.invoice_no, r.contract_amount, r.paid_amount, r.remainder_amount,
+      r.seq_no, r.invoice_date, r.invoice_no, r.sc_no, r.company_name_en, r.company_name_zh,
+      r.description, r.contract_amount, r.paid_amount, r.remainder_amount,
       r.oa_ref, r.oa_no, r.mc_ip_no, r.sub_ip_no, r.remark
     ]);
     downloadCsv([headers, ...rows], `payments_${App.currentProject?.project_code}_${new Date().toISOString().slice(0,10)}.csv`);
