@@ -49,6 +49,16 @@ function fmtDate(str) {
   return d.toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
+/** 推導父級參考編號（M-011.26 → M-011，SC-003A → SC-003） */
+function deriveParentScNo(scNo) {
+  if (!scNo) return scNo;
+  const s = String(scNo).trim();
+  if (s.includes('.')) return s.replace(/\.[^.]+$/, '');
+  const m = s.match(/^(.+?)([A-Z]\d*)$/);
+  if (m && m[1] !== s && m[2].length <= 3) return m[1];
+  return s;
+}
+
 /** M-/SC-/O- 參考編號類型（對應 Excel 灰色提示） */
 function refNoType(scNo) {
   const s = (scNo || '').toUpperCase().trim();

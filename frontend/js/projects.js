@@ -140,12 +140,16 @@ const SC = {
   _payModalSc: null,
   _collapsedGroups: null,
 
+  _groupKey(s) {
+    return s.parent_sc_no || deriveParentScNo(s.sc_no) || s.sc_no;
+  },
+
   _collapseKey(parent) {
     return `${App.currentProject?.id || 0}:${parent}`;
   },
 
-  _loadCollapseState() {
-    if (this._collapsedGroups) return;
+  _ensureCollapseState() {
+    if (this._collapsedGroups instanceof Set) return;
     try {
       const raw = localStorage.getItem('qs_sc_collapsed');
       this._collapsedGroups = raw ? new Set(JSON.parse(raw)) : new Set();
@@ -155,17 +159,22 @@ const SC = {
   },
 
   _saveCollapseState() {
+    this._ensureCollapseState();
     localStorage.setItem('qs_sc_collapsed', JSON.stringify([...this._collapsedGroups]));
   },
 
   isGroupCollapsed(parent) {
-    this._loadCollapseState();
+    this._ensureCollapseState();
     return this._collapsedGroups.has(this._collapseKey(parent));
+  },
+
+  _listGroups(items) {
+    return this._groupItems(items).filter(g => g.isGroup);
   },
 
   toggleGroup(parent, event) {
     if (event) event.stopPropagation();
-    this._loadCollapseState();
+    this._ensureCollapseState();
     const key = this._collapseKey(parent);
     if (this._collapsedGroups.has(key)) this._collapsedGroups.delete(key);
     else this._collapsedGroups.add(key);
@@ -174,22 +183,34 @@ const SC = {
   },
 
   expandAllGroups() {
-    this._loadCollapseState();
+    this._ensureCollapseState();
     const prefix = `${App.currentProject?.id || 0}:`;
+    let n = 0;
     for (const key of [...this._collapsedGroups]) {
-      if (key.startsWith(prefix)) this._collapsedGroups.delete(key);
+      if (key.startsWith(prefix)) {
+        this._collapsedGroups.delete(key);
+        n++;
+      }
     }
     this._saveCollapseState();
     this.render();
+    toast(n > 0 ? `已展開 ${n} 個分組` : '所有分組已展開', 'info');
   },
 
   collapseAllGroups() {
-    this._loadCollapseState();
-    for (const g of this._groupItems(this.filtered)) {
-      if (g.isGroup) this._collapsedGroups.add(this._collapseKey(g.parent));
+    const source = this.data.length ? this.data : this.filtered;
+    const groups = this._listGroups(source);
+    if (!groups.length) {
+      toast('沒有可收合的分組', 'warning');
+      return;
+    }
+    this._ensureCollapseState();
+    for (const g of groups) {
+      this._collapsedGroups.add(this._collapseKey(g.parent));
     }
     this._saveCollapseState();
     this.render();
+    toast(`已收合 ${groups.length} 個分組`, 'info');
   },
 
   async load() {
@@ -215,15 +236,22 @@ const SC = {
   },
 
   _groupItems(items) {
+    if (!items.length) return [];
+    const sorted = [...items].sort((a, b) => {
+      const ga = this._groupKey(a);
+      const gb = this._groupKey(b);
+      if (ga !== gb) return ga.localeCompare(gb, 'zh-Hant', { numeric: true });
+      return (a.sc_no || '').localeCompare(b.sc_no || '', 'zh-Hant', { numeric: true });
+    });
     const result = [];
     let i = 0;
-    while (i < items.length) {
-      const parent = items[i].parent_sc_no || items[i].sc_no;
+    while (i < sorted.length) {
+      const parent = this._groupKey(sorted[i]);
       const groupItems = [];
-      while (i < items.length && (items[i].parent_sc_no || items[i].sc_no) === parent) {
-        groupItems.push(items[i++]);
+      while (i < sorted.length && this._groupKey(sorted[i]) === parent) {
+        groupItems.push(sorted[i++]);
       }
-      const isGroup = groupItems.length > 1 && groupItems.some(x => x.sc_no !== parent);
+      const isGroup = groupItems.length > 1;
       result.push({ parent, items: groupItems, isGroup });
     }
     return result;
