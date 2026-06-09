@@ -116,6 +116,13 @@ def _migrate_db(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)")}
     if 'labour_allocation' not in cols:
         conn.execute("ALTER TABLE projects ADD COLUMN labour_allocation REAL DEFAULT 0")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(subcontractors)")}
+    if 'oa_date' not in cols:
+        conn.execute("ALTER TABLE subcontractors ADD COLUMN oa_date TEXT")
+        conn.execute("""
+            UPDATE subcontractors SET oa_date = quotation_date
+            WHERE oa_date IS NULL AND quotation_date IS NOT NULL AND quotation_date != ''
+        """)
     conn.commit()
 
 
@@ -218,7 +225,7 @@ def upsert_subcontractor(data):
                 contract_amount=:contract_amount, payment_note=:payment_note,
                 oa_status=:oa_status, oa_ref=:oa_ref, oa_no=:oa_no,
                 quotation_saved=:quotation_saved, quotation_date=:quotation_date,
-                is_excluded=:is_excluded
+                oa_date=:oa_date, is_excluded=:is_excluded
             WHERE project_id=:project_id AND sc_no=:sc_no
         """, data)
         sc_id = existing['id']
@@ -226,10 +233,10 @@ def upsert_subcontractor(data):
         cur = conn.execute("""
             INSERT INTO subcontractors (project_id, sc_no, quotation_no, company_name_en,
                 company_name_zh, description, contract_amount, payment_note,
-                oa_status, oa_ref, oa_no, quotation_saved, quotation_date, is_excluded)
+                oa_status, oa_ref, oa_no, quotation_saved, quotation_date, oa_date, is_excluded)
             VALUES (:project_id, :sc_no, :quotation_no, :company_name_en,
                 :company_name_zh, :description, :contract_amount, :payment_note,
-                :oa_status, :oa_ref, :oa_no, :quotation_saved, :quotation_date, :is_excluded)
+                :oa_status, :oa_ref, :oa_no, :quotation_saved, :quotation_date, :oa_date, :is_excluded)
         """, data)
         sc_id = cur.lastrowid
 

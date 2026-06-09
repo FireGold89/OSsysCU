@@ -31,7 +31,9 @@ def safe_date(val):
     if isinstance(val, datetime):
         return val.strftime('%Y-%m-%d')
     s = str(val).strip()
-    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
+    if s in ('-', '—', 'none', 'nan'):
+        return None
+    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d/%m/%y']:
         try:
             return datetime.strptime(s, fmt).strftime('%Y-%m-%d')
         except ValueError:
@@ -220,16 +222,18 @@ def import_excel(filepath, project_code=None):
                 company_zh = safe_str(row_vals[4]) if len(row_vals) > 4 else None
                 description = safe_str(row_vals[5]) if len(row_vals) > 5 else None
                 contract_charge = safe_str(row_vals[6]) if len(row_vals) > 6 else None
-                contract_amt = safe_float(row_vals[7]) if len(row_vals) > 7 else 0
+                revised_amt = safe_float(row_vals[9]) if len(row_vals) > 9 else 0
+                contract_amt = revised_amt if revised_amt > 0 else (
+                    safe_float(row_vals[7]) if len(row_vals) > 7 else 0)
                 is_excluded = 1 if contract_charge == '*' else 0
                 quotation_no = safe_str(row_vals[2]) if len(row_vals) > 2 else None
 
-                # 狀態欄 (col 11-16)
+                # 狀態欄：O 欄 = OA 日期（放入 OA 系統日期，非報價單日期）
                 oa_status = safe_str(row_vals[11]) if len(row_vals) > 11 else None
                 oa_ref = safe_str(row_vals[12]) if len(row_vals) > 12 else None
                 oa_no = safe_str(row_vals[13]) if len(row_vals) > 13 else None
+                oa_date = safe_date(row_vals[14]) if len(row_vals) > 14 else None
                 quotation_saved = safe_str(row_vals[15]) if len(row_vals) > 15 else None
-                quotation_date = safe_date(row_vals[16]) if len(row_vals) > 16 else None
                 payment_note = safe_str(row_vals[10]) if len(row_vals) > 10 else None
 
                 if not company_en and not company_zh:
@@ -248,7 +252,8 @@ def import_excel(filepath, project_code=None):
                     'oa_ref': oa_ref,
                     'oa_no': oa_no,
                     'quotation_saved': quotation_saved,
-                    'quotation_date': quotation_date,
+                    'quotation_date': None,
+                    'oa_date': oa_date,
                     'is_excluded': is_excluded,
                 })
                 sc_map[sc_no] = sc_id

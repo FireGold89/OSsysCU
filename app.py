@@ -149,6 +149,7 @@ def create_subcontractor():
     data.setdefault('oa_no', None)
     data.setdefault('quotation_saved', None)
     data.setdefault('quotation_date', None)
+    data.setdefault('oa_date', None)
     data.setdefault('is_excluded', 0)
     sc_id = db.upsert_subcontractor(data)
     return resp({'id': sc_id}, status=201)

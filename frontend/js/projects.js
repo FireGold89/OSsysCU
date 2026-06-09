@@ -185,7 +185,7 @@ const SC = {
           <td class="td-amount positive">${fmt(s.total_paid)}</td>
           <td>
             <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">${s.quotation_no || '—'}</div>
-            <div style="font-size:10px;color:var(--text-muted)">${s.quotation_date ? fmtDate(s.quotation_date) : ''}</div>
+            <div style="font-size:10px;color:var(--text-muted)">${(s.oa_date || s.quotation_date) ? 'OA ' + fmtDate(s.oa_date || s.quotation_date) : ''}</div>
           </td>
           <td>${oaBadge}</td>
           <td onclick="event.stopPropagation()">
@@ -204,7 +204,7 @@ const SC = {
     document.getElementById('scModalId').value = '';
     ['scNo','scQuotNo','scCompanyEn','scCompanyZh','scDesc','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('scAmt').value = '';
-    document.getElementById('scQuotDate').value = '';
+    document.getElementById('scOaDate').value = '';
     document.getElementById('scExcluded').checked = false;
     document.getElementById('scPaidAmt').value = '';
     document.getElementById('scRemainAmt').value = '';
@@ -233,7 +233,7 @@ const SC = {
     const ca = parseFloat(s.contract_amount) || 0;
     document.getElementById('scPaidAmt').value = fmt(paid);
     document.getElementById('scRemainAmt').value = fmt(ca - paid);
-    document.getElementById('scQuotDate').value = s.quotation_date || '';
+    document.getElementById('scOaDate').value = s.oa_date || s.quotation_date || '';
     document.getElementById('scOaStatus').value = s.oa_status || '';
     document.getElementById('scOaNo').value = s.oa_no || '';
     document.getElementById('scPayNote').value = s.payment_note || '';
@@ -260,7 +260,8 @@ const SC = {
       company_name_zh: document.getElementById('scCompanyZh').value || null,
       description: document.getElementById('scDesc').value || null,
       contract_amount: parseFloat(document.getElementById('scAmt').value) || 0,
-      quotation_date: document.getElementById('scQuotDate').value || null,
+      quotation_date: null,
+      oa_date: document.getElementById('scOaDate').value || null,
       oa_status: document.getElementById('scOaStatus').value || null,
       oa_ref: null,
       oa_no: document.getElementById('scOaNo').value || null,
