@@ -138,6 +138,59 @@ const SC = {
   data: [],
   filtered: [],
   _payModalSc: null,
+  _collapsedGroups: null,
+
+  _collapseKey(parent) {
+    return `${App.currentProject?.id || 0}:${parent}`;
+  },
+
+  _loadCollapseState() {
+    if (this._collapsedGroups) return;
+    try {
+      const raw = localStorage.getItem('qs_sc_collapsed');
+      this._collapsedGroups = raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) {
+      this._collapsedGroups = new Set();
+    }
+  },
+
+  _saveCollapseState() {
+    localStorage.setItem('qs_sc_collapsed', JSON.stringify([...this._collapsedGroups]));
+  },
+
+  isGroupCollapsed(parent) {
+    this._loadCollapseState();
+    return this._collapsedGroups.has(this._collapseKey(parent));
+  },
+
+  toggleGroup(parent, event) {
+    if (event) event.stopPropagation();
+    this._loadCollapseState();
+    const key = this._collapseKey(parent);
+    if (this._collapsedGroups.has(key)) this._collapsedGroups.delete(key);
+    else this._collapsedGroups.add(key);
+    this._saveCollapseState();
+    this.render();
+  },
+
+  expandAllGroups() {
+    this._loadCollapseState();
+    const prefix = `${App.currentProject?.id || 0}:`;
+    for (const key of [...this._collapsedGroups]) {
+      if (key.startsWith(prefix)) this._collapsedGroups.delete(key);
+    }
+    this._saveCollapseState();
+    this.render();
+  },
+
+  collapseAllGroups() {
+    this._loadCollapseState();
+    for (const g of this._groupItems(this.filtered)) {
+      if (g.isGroup) this._collapsedGroups.add(this._collapseKey(g.parent));
+    }
+    this._saveCollapseState();
+    this.render();
+  },
 
   async load() {
     const p = App.currentProject;
@@ -180,11 +233,15 @@ const SC = {
     const totalRev = g.items.reduce((s, x) => s + (parseFloat(x.contract_amount) || 0), 0);
     const totalPaid = g.items.reduce((s, x) => s + (parseFloat(x.total_paid) || 0), 0);
     const company = g.items[0].company_name_en || g.items[0].company_name_zh || '';
+    const collapsed = this.isGroupCollapsed(g.parent);
+    const parentJson = JSON.stringify(g.parent);
     return `
-      <tr class="sc-group-header">
+      <tr class="sc-group-header" onclick="SC.toggleGroup(${parentJson}, event)" title="點擊收合/展開">
         <td colspan="2">
+          <span class="sc-group-toggle" aria-hidden="true">${collapsed ? '▶' : '▼'}</span>
           ${fmtRefNo(g.parent)}
           <span class="badge badge-muted" style="margin-left:6px">${g.items.length} 項</span>
+          ${collapsed ? '<span class="badge badge-info" style="margin-left:4px;font-size:10px">已收合</span>' : ''}
           <div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px">${company}</div>
         </td>
         <td class="td-muted" style="font-size:11px">小計</td>
@@ -235,7 +292,9 @@ const SC = {
     const html = [];
     for (const g of this._groupItems(this.filtered)) {
       if (g.isGroup) html.push(this._renderGroupHeader(g));
-      g.items.forEach(s => html.push(this._renderRow(s, g.isGroup)));
+      if (!g.isGroup || !this.isGroupCollapsed(g.parent)) {
+        g.items.forEach(s => html.push(this._renderRow(s, g.isGroup)));
+      }
     }
     tbody.innerHTML = html.join('');
   },

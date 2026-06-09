@@ -255,8 +255,10 @@
             <input type="text" id="scSearch" placeholder="搜尋參考編號、公司名..." oninput="SC.search(this.value)">
           </div>
           <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合同項目</button>
+          <button class="btn btn-secondary btn-sm" onclick="SC.expandAllGroups()">展開全部</button>
+          <button class="btn btn-secondary btn-sm" onclick="SC.collapseAllGroups()">收合全部</button>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他 · 同組編號（如 M-011.xx）自動分組小計 · 點擊列可查看付款記錄</p>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他 · 點擊分組列（如 M-011）可收合/展開 · 點擊子項可查看付款記錄</p>
         <div class="table-wrap">
           <table>
             <thead>
