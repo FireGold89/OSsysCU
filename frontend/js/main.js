@@ -30,11 +30,11 @@ function renderContractCalc(calc, containerId) {
   el.innerHTML = `
     <table class="contract-calc-table">
       <tbody>
-        <tr><td class="calc-label">(A) 承建金額 Main Contract</td><td class="calc-value">${fmtAcct(calc.main_contract_amount)}</td></tr>
-        <tr><td class="calc-label">(B) Sub-total</td><td class="calc-value">${fmtAcct(calc.sub_total_b)}</td></tr>
-        <tr><td class="calc-label">(C) Excluded Contract Charge item</td><td class="calc-value ${calc.excluded_c < 0 ? 'negative' : ''}">${fmtAcct(calc.excluded_c)}</td></tr>
-        <tr><td class="calc-label">工調工程款分攤（人工分攤）</td><td class="calc-value highlight">${fmtAcct(calc.labour_allocation)}</td></tr>
-        <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+分攤</td><td class="calc-value">${fmtAcct(calc.total_d)}</td></tr>
+        <tr><td class="calc-label">(A) 承建金額</td><td class="calc-value">${fmtAcct(calc.main_contract_amount)}</td></tr>
+        <tr><td class="calc-label">(B) 分判及代支小計</td><td class="calc-value">${fmtAcct(calc.sub_total_b)}</td></tr>
+        <tr><td class="calc-label">(C) 除外合約收費項目</td><td class="calc-value ${calc.excluded_c < 0 ? 'negative' : ''}">${fmtAcct(calc.excluded_c)}</td></tr>
+        <tr><td class="calc-label">財務會作調撥（人工分攤）</td><td class="calc-value highlight">${fmtAcct(calc.labour_allocation)}</td></tr>
+        <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+調撥</td><td class="calc-value">${fmtAcct(calc.total_d)}</td></tr>
         <tr><td class="calc-label">(E) = (A)−(D) 預計利潤</td><td class="calc-value ${rateClass}">${fmtAcct(calc.profit_e)}</td></tr>
         <tr><td class="calc-label">預計利潤率</td><td class="calc-value ${rateClass}">${calc.profit_rate}%</td></tr>
       </tbody>
