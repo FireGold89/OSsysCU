@@ -173,6 +173,7 @@ const SC = {
       const oaBadge = s.oa_status === 'OK' ? '<span class="badge badge-success">OK</span>' :
                       s.oa_status === '-'  ? '<span class="badge badge-muted">—</span>' :
                       s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
+      const oaDateStr = (s.oa_date || s.quotation_date) ? fmtDate(s.oa_date || s.quotation_date) : '';
       return `
         <tr>
           <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">Excluded (C)</span>' : ''}</td>
@@ -183,11 +184,11 @@ const SC = {
           <td class="td-muted">${s.description || '—'}</td>
           <td class="td-amount">${fmt(s.contract_amount)}</td>
           <td class="td-amount positive">${fmt(s.total_paid)}</td>
+          <td style="font-size:11px;color:var(--text-secondary)">${s.quotation_no || '—'}</td>
           <td>
-            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">${s.quotation_no || '—'}</div>
-            <div style="font-size:10px;color:var(--text-muted)">${(s.oa_date || s.quotation_date) ? 'OA ' + fmtDate(s.oa_date || s.quotation_date) : ''}</div>
+            <div>${oaBadge}</div>
+            ${oaDateStr ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">${oaDateStr}</div>` : ''}
           </td>
-          <td>${oaBadge}</td>
           <td onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px">
               <button class="btn btn-icon btn-secondary btn-sm" onclick="SC.openEdit(${s.id})">✏️</button>
