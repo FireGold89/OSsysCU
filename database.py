@@ -234,7 +234,75 @@ def delete_subcontractor(sc_id):
 
 # ─── Payment Records ───────────────────────────────────────────────────
 
+def _payment_seq_sort_key(row):
+    """排序用：優先 seq_no，否則用 id"""
+    try:
+        if row.get('seq_no'):
+            return (int(str(row['seq_no']).strip()), row.get('invoice_date') or '', row['id'])
+    except (ValueError, TypeError):
+        pass
+    return (row['id'], row.get('invoice_date') or '', row['id'])
+
+
+def compact_seq_numbers(project_id):
+    """刪除後重新編號為 1, 2, 3… 無空缺"""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT id, seq_no, invoice_date FROM payment_records WHERE project_id = ?",
+        (project_id,)
+    ).fetchall()
+    if not rows:
+        conn.close()
+        return
+    ordered = sorted([dict(r) for r in rows], key=_payment_seq_sort_key)
+    for i, row in enumerate(ordered, 1):
+        conn.execute(
+            "UPDATE payment_records SET seq_no = ? WHERE id = ?",
+            (str(i), row['id'])
+        )
+    conn.commit()
+    conn.close()
+
+
+def ensure_seq_compact(project_id):
+    """若最大編號大於筆數（有空缺），自動重新編號"""
+    conn = get_conn()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM payment_records WHERE project_id = ?",
+        (project_id,)
+    ).fetchone()[0]
+    rows = conn.execute(
+        "SELECT seq_no, id FROM payment_records WHERE project_id = ?",
+        (project_id,)
+    ).fetchall()
+    conn.close()
+    if count == 0:
+        return
+    max_n = 0
+    for r in rows:
+        try:
+            n = int(r['seq_no']) if r['seq_no'] else int(r['id'])
+        except (ValueError, TypeError):
+            n = r['id']
+        max_n = max(max_n, n)
+    if max_n > count:
+        compact_seq_numbers(project_id)
+
+
+def get_next_seq_no(project_id):
+    """下一個可用序號（填補空缺後為 count+1）"""
+    ensure_seq_compact(project_id)
+    conn = get_conn()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM payment_records WHERE project_id = ?",
+        (project_id,)
+    ).fetchone()[0]
+    conn.close()
+    return str(count + 1)
+
+
 def get_payments(project_id, filters=None):
+    ensure_seq_compact(project_id)
     conn = get_conn()
     sql = """
         SELECT pr.*, sc.company_name_en AS sc_company
@@ -271,6 +339,9 @@ def create_payment(data):
         ca = float(data.get('contract_amount') or 0)
         pa = float(data.get('paid_amount') or 0)
         data['remainder_amount'] = ca - pa
+
+    if not data.get('seq_no'):
+        data['seq_no'] = get_next_seq_no(data['project_id'])
 
     cur = conn.execute("""
         INSERT INTO payment_records (
@@ -312,9 +383,15 @@ def update_payment(payment_id, data):
 
 def delete_payment(payment_id):
     conn = get_conn()
+    row = conn.execute(
+        "SELECT project_id FROM payment_records WHERE id=?", (payment_id,)
+    ).fetchone()
+    project_id = row['project_id'] if row else None
     conn.execute("DELETE FROM payment_records WHERE id=?", (payment_id,))
     conn.commit()
     conn.close()
+    if project_id:
+        compact_seq_numbers(project_id)
 
 
 # ─── Reports ───────────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ const Payments = {
   _sortValue(row, key) {
     switch (key) {
       case 'seq_no':
-        return parseFloat(row.seq_no) || row.id || 0;
+        return parseFloat(row.seq_no) || 0;
       case 'invoice_date':
         return row.invoice_date || '';
       case 'invoice_no':
@@ -129,7 +129,7 @@ const Payments = {
                       r.oa_ref          ? `<span class="badge badge-warning">${r.oa_ref}</span>` : '—';
       return `
         <tr onclick="Payments.openEdit(${r.id})">
-          <td class="td-muted" style="font-size:11px">${r.seq_no || r.id}</td>
+          <td class="td-muted" style="font-size:11px">${r.seq_no || '—'}</td>
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
           <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
           <td>${fmtRefNo(r.sc_no)}</td>
@@ -243,8 +243,14 @@ const Payments = {
     document.getElementById('payModalTitle').textContent = '新增付款記錄';
     document.getElementById('payModalId').value = '';
     this._setPdfUi(null);
-    const fields = ['fSeqNo','fInvDate','fInvNo','fQuotNo','fCompanyEn','fCompanyZh','fDesc','fOaRef','fOaNo','fMcIpNo','fBcToSub','fSubIpNo','fRemark'];
+    const fields = ['fInvDate','fInvNo','fQuotNo','fCompanyEn','fCompanyZh','fDesc','fOaRef','fOaNo','fMcIpNo','fBcToSub','fSubIpNo','fRemark'];
     fields.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    const seqEl = document.getElementById('fSeqNo');
+    if (seqEl) {
+      seqEl.value = '';
+      seqEl.placeholder = '自動編號';
+      seqEl.readOnly = true;
+    }
     ['fContractAmt','fPaidAmt','fRemAmt'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
     document.getElementById('fScNo').value = '';
     this.populateScSelect();
@@ -257,7 +263,12 @@ const Payments = {
     document.getElementById('payModalTitle').textContent = '編輯付款記錄';
     document.getElementById('payModalId').value = r.id;
     this.populateScSelect();
-    document.getElementById('fSeqNo').value = r.seq_no || '';
+    const seqEl = document.getElementById('fSeqNo');
+    if (seqEl) {
+      seqEl.value = r.seq_no || '';
+      seqEl.readOnly = false;
+      seqEl.placeholder = '自動';
+    }
     document.getElementById('fInvDate').value = r.invoice_date || '';
     document.getElementById('fInvNo').value = r.invoice_no || '';
     document.getElementById('fQuotNo').value = r.quotation_no || '';
@@ -289,7 +300,9 @@ const Payments = {
     const data = {
       project_id: App.currentProject?.id,
       sc_id: sc?.id || null,
-      seq_no: document.getElementById('fSeqNo').value || null,
+      seq_no: document.getElementById('payModalId').value
+        ? (document.getElementById('fSeqNo').value || null)
+        : null,
       invoice_date: document.getElementById('fInvDate').value || null,
       invoice_no: document.getElementById('fInvNo').value || null,
       quotation_no: document.getElementById('fQuotNo').value || null,
