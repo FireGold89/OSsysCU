@@ -664,7 +664,108 @@ def _is_skippable_desc_line(line):
     hits = sum(1 for m in _COMPANY_SKIP if m in line or m in upper)
     if hits >= 1 and not re.search(r'[,，]', line) and len(line) < 50:
         return True
+    if _is_invoice_meta_line(line):
+        return True
     return False
+
+
+_DESC_FIELD_RE = re.compile(
+    r'(?:DESCRIPTION|DESCRIPION|DESC(?:RIPTION)?|貨品名稱|货品名称|品名)\s*[:：]?\s*(.+)$',
+    re.IGNORECASE,
+)
+
+_META_LINE_RE = [
+    re.compile(r'^RECEIVER\s*[:：]', re.I),
+    re.compile(r'^FROM\s*[:：]', re.I),
+    re.compile(r'OUR\s*REF', re.I),
+    re.compile(r'NO\.\s*OF\s*PAG', re.I),
+    re.compile(r'頁數'),
+    re.compile(r'收件人'),
+    re.compile(r'寄件人'),
+    re.compile(r'本公司備註'),
+    re.compile(r'請在.*聯絡'),
+    re.compile(r'Des\s*Voeux', re.I),
+    re.compile(r'德輔道西'),
+    re.compile(r'\bG/F\.', re.I),
+    re.compile(r'Hong\s*Kong', re.I),
+    re.compile(r'^\d{3,4}\s*\d{4}\s*\d{4}'),
+]
+
+
+def _is_invoice_meta_line(line):
+    if not line:
+        return True
+    for pat in _META_LINE_RE:
+        if pat.search(line):
+            return True
+    if re.match(r'^Q\d{4,}\s', line) and ('有限公司' in line or 'LIMITED' in line.upper()):
+        return True
+    return False
+
+
+def _is_invoice_meta_chunk(text):
+    if not text or len(text) < 2:
+        return True
+    if _is_invoice_meta_line(text):
+        return True
+    if re.search(r'有限公司|LIMITED|LTD\.?|Road|Street|Hong Kong|德輔|RECEIVER|FROM|OUR REF', text, re.I):
+        return True
+    if re.match(r'^Q\d{4,}$', text.strip()):
+        return True
+    return False
+
+
+def _extract_description_from_line(line):
+    """若該行含 Description/貨品名稱，只取欄位內容"""
+    if not line:
+        return None
+    m = _DESC_FIELD_RE.search(line.strip())
+    if m:
+        val = m.group(1).strip(' ,.-')
+        return val if len(val) >= 2 else None
+    return None
+
+
+def _clean_item_description(desc):
+    """只保留 Description/貨品名稱 對應的產品描述，去掉地址、收件人等雜訊"""
+    if not desc:
+        return ''
+    desc = re.sub(r'\s+', ' ', str(desc).strip())
+
+    m = _DESC_FIELD_RE.search(desc)
+    if m:
+        cleaned = m.group(1).strip(' ,.-')
+        if len(cleaned) >= 2:
+            return cleaned
+
+    chunks = [c.strip() for c in re.split(r'[,，]\s*', desc) if c.strip()]
+    product_chunks = []
+    for c in chunks:
+        if _is_invoice_meta_chunk(c):
+            continue
+        c = re.sub(r'^Q\d{4,}\s*', '', c).strip()
+        if len(c) >= 2 and not _is_invoice_meta_chunk(c):
+            product_chunks.append(c)
+    if product_chunks:
+        return product_chunks[-1]
+
+    desc = re.sub(r'^Q\d{4,}\s*', '', desc).strip()
+    if _is_invoice_meta_chunk(desc):
+        return ''
+    return desc
+
+
+def _append_desc_part(parts, line):
+    """累加描述行：優先 Description/貨品名稱 欄位內容"""
+    inline = _extract_description_from_line(line)
+    if inline:
+        parts.append(inline)
+        return
+    if _is_skippable_desc_line(line) or _is_invoice_meta_line(line):
+        return
+    if len(line) > 100 and _is_invoice_meta_chunk(line):
+        return
+    parts.append(line)
 
 
 def parse_qty_price_amount_blocks(text):
@@ -720,7 +821,7 @@ def parse_qty_price_amount_blocks(text):
                     cont.append(lines[k])
                     k += 1
 
-                desc = ' '.join(desc_lines + cont).strip()
+                desc = _clean_item_description(' '.join(desc_lines + cont).strip())
                 if desc and len(desc) > 3 and amount:
                     items.append({
                         'no': str(len(items) + 1),
@@ -791,10 +892,10 @@ def parse_stacked_invoice_items(text):
                     cont.append(lines[j])
                     j += 1
 
-                desc = ' '.join(desc_parts + cont).strip()
+                desc = _clean_item_description(' '.join(desc_parts + cont).strip())
                 desc_parts = []
-                if _is_skippable_desc_line(desc):
-                    desc = ' '.join(cont).strip() if cont else ''
+                if not desc and cont:
+                    desc = _clean_item_description(' '.join(cont).strip())
                 if desc and len(desc) > 2:
                     items.append({
                         'no': str(len(items) + 1),
@@ -807,8 +908,7 @@ def parse_stacked_invoice_items(text):
                 i = j
                 continue
 
-        if not _is_skippable_desc_line(line):
-            desc_parts.append(line)
+        _append_desc_part(desc_parts, line)
         i += 1
 
     return items
@@ -949,7 +1049,9 @@ def parse_invoice_items_regex(text):
             if not _is_skippable_desc_line(lines[k]):
                 cont.append(lines[k])
             k += 1
-        full_desc = ' '.join([desc] + cont).strip()
+        full_desc = _clean_item_description(' '.join([desc] + cont).strip())
+        if not full_desc:
+            continue
         items.append({
             'no': str(len(items) + 1),
             'description': full_desc,
@@ -967,7 +1069,7 @@ def _sanitize_line_items(items):
     for i, it in enumerate(items or []):
         if not it:
             continue
-        desc = str(it.get('description') or '').strip()
+        desc = _clean_item_description(str(it.get('description') or '').strip())
         if not desc:
             continue
         clean.append({
