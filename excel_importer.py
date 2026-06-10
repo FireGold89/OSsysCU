@@ -4,6 +4,7 @@ excel_importer.py — 現有Excel數據匯入SQLite工具
 """
 import openpyxl
 import os
+import re
 import sys
 from datetime import datetime
 import database as db
@@ -82,6 +83,103 @@ def sync_contract_amount_from_excel(filepath, project_id):
     })
     print(f"[SYNC] 承建金額已更新: {project['project_code']} = HK${amount:,.0f}")
     return True
+
+
+def _pct_val(val):
+    """Excel 小數或百分比 → 顯示用 0–100"""
+    v = safe_float(val)
+    if v == 0:
+        return None
+    return round(v * 100, 2) if abs(v) <= 1.5 else round(v, 2)
+
+
+def import_site_ip_period(filepath, project_id):
+    """從 Excel Summary 工作表匯入地盤糧期狀況（IP-01…）"""
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    ws = None
+    for sn in wb.sheetnames:
+        if sn == 'Summary' or sn.lower() == 'summary':
+            ws = wb[sn]
+            break
+    if not ws:
+        print('[IMPORT] 找不到 Summary 工作表，跳過糧期匯入')
+        return 0
+
+    site_period_text = None
+    for row in ws.iter_rows(min_row=1, max_row=20, values_only=True):
+        rv = list(row)
+        if rv and rv[0] and '工期' in str(rv[0]):
+            parts = [safe_str(rv[1]), safe_str(rv[2])]
+            site_period_text = ' '.join(p for p in parts if p)
+            break
+
+    header_row = None
+    for i, row in enumerate(ws.iter_rows(values_only=True), 1):
+        rv = [safe_str(c) for c in row]
+        if rv and rv[0] and 'Interim Payment' in rv[0]:
+            header_row = i
+            break
+        if any(v and '糧款期數' in str(v) for v in row if v):
+            header_row = i
+            break
+
+    if not header_row:
+        print('[IMPORT] Summary 無糧款期數表，跳過')
+        return 0
+
+    items = []
+    seq = 0
+    for i, row in enumerate(ws.iter_rows(values_only=True), 1):
+        if i <= header_row + 1:
+            continue
+        rv = list(row)
+        ip_no = safe_str(rv[0]) if len(rv) > 0 else None
+        if not ip_no or not re.match(r'^IP-\d+', ip_no, re.I):
+            continue
+        app_amt = safe_float(rv[2]) if len(rv) > 2 else 0
+        cert_amt = safe_float(rv[4]) if len(rv) > 4 else 0
+        if not app_amt and not cert_amt:
+            break
+        seq += 1
+        items.append({
+            'ip_no': ip_no.upper(),
+            'seq_no': seq,
+            'applied_date': safe_date(rv[1]) if len(rv) > 1 else None,
+            'application_amount': app_amt,
+            'application_pct': _pct_val(rv[3]) if len(rv) > 3 else None,
+            'certified_income': cert_amt,
+            'certified_income_pct': _pct_val(rv[5]) if len(rv) > 5 else None,
+            'certificate_date': safe_date(rv[6]) if len(rv) > 6 else None,
+            'subcon_paid': safe_float(rv[7]) if len(rv) > 7 else 0,
+            'subcon_paid_pct': _pct_val(rv[8]) if len(rv) > 8 else None,
+            'subcon_cert_date': safe_date(rv[9]) if len(rv) > 9 else None,
+        })
+
+    totals = {'total_income': 0, 'total_expenditure': 0, 'advance': 0}
+    for row in ws.iter_rows(min_row=header_row, max_row=header_row + 25, values_only=True):
+        rv = [safe_str(c) if c is not None else None for c in row]
+        for j, v in enumerate(rv):
+            if not v:
+                continue
+            nxt = safe_float(rv[j + 1]) if j + 1 < len(rv) else 0
+            if '總收入' in v and nxt:
+                totals['total_income'] = nxt
+            elif '總支出' in v and nxt:
+                totals['total_expenditure'] = nxt
+            elif '墊支' in v and nxt:
+                totals['advance'] = nxt
+
+    if not items:
+        return 0
+
+    db.replace_interim_payments(project_id, items, {
+        'site_period_text': site_period_text,
+        'ip_total_income': totals['total_income'],
+        'ip_total_expenditure': totals['total_expenditure'],
+        'ip_advance': totals['advance'],
+    })
+    print(f'[IMPORT] 已匯入 {len(items)} 期糧款記錄（地盤糧期狀況）')
+    return len(items)
 
 
 def import_excel(filepath, project_code=None):
@@ -398,6 +496,8 @@ def import_excel(filepath, project_code=None):
                 print(f"  [{pay_count}] #{seq_no} {sc_no} {company_en}: 已付 ${paid_amt:,.0f}")
 
         print(f"[IMPORT] 已匯入 {pay_count} 條付款記錄")
+
+    import_site_ip_period(filepath, project_id)
 
     print(f"\n[IMPORT] 完成! 項目ID: {project_id}")
     return project_id

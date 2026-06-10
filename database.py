@@ -102,6 +102,25 @@ def init_db():
             created_at       TEXT DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (payment_id) REFERENCES payment_records(id) ON DELETE SET NULL
         );
+
+        CREATE TABLE IF NOT EXISTS interim_payments (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id            INTEGER NOT NULL,
+            ip_no                 TEXT NOT NULL,
+            seq_no                INTEGER DEFAULT 0,
+            applied_date          TEXT,
+            application_amount    REAL DEFAULT 0,
+            application_pct       REAL,
+            certified_income      REAL DEFAULT 0,
+            certified_income_pct  REAL,
+            certificate_date      TEXT,
+            subcon_paid           REAL DEFAULT 0,
+            subcon_paid_pct       REAL,
+            subcon_cert_date      TEXT,
+            created_at            TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE(project_id, ip_no)
+        );
     """)
     conn.commit()
     _migrate_db(conn)
@@ -117,6 +136,34 @@ def _migrate_db(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)")}
     if 'labour_allocation' not in cols:
         conn.execute("ALTER TABLE projects ADD COLUMN labour_allocation REAL DEFAULT 0")
+    if 'site_period_text' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN site_period_text TEXT")
+    if 'ip_total_income' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN ip_total_income REAL DEFAULT 0")
+    if 'ip_total_expenditure' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN ip_total_expenditure REAL DEFAULT 0")
+    if 'ip_advance' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN ip_advance REAL DEFAULT 0")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS interim_payments (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id            INTEGER NOT NULL,
+            ip_no                 TEXT NOT NULL,
+            seq_no                INTEGER DEFAULT 0,
+            applied_date          TEXT,
+            application_amount    REAL DEFAULT 0,
+            application_pct       REAL,
+            certified_income      REAL DEFAULT 0,
+            certified_income_pct  REAL,
+            certificate_date      TEXT,
+            subcon_paid           REAL DEFAULT 0,
+            subcon_paid_pct       REAL,
+            subcon_cert_date      TEXT,
+            created_at            TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE(project_id, ip_no)
+        )
+    """)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(subcontractors)")}
     if 'oa_date' not in cols:
         conn.execute("ALTER TABLE subcontractors ADD COLUMN oa_date TEXT")
@@ -448,6 +495,67 @@ def delete_payment(payment_id):
         compact_seq_numbers(project_id)
 
 
+# ─── 地盤糧期狀況 (Interim Payments) ───────────────────────────────────
+
+def replace_interim_payments(project_id, items, meta=None):
+    """取代項目全部糧期記錄（Excel Summary 匯入）"""
+    conn = get_conn()
+    conn.execute("DELETE FROM interim_payments WHERE project_id=?", (project_id,))
+    for it in items:
+        conn.execute("""
+            INSERT INTO interim_payments (
+                project_id, ip_no, seq_no, applied_date,
+                application_amount, application_pct,
+                certified_income, certified_income_pct, certificate_date,
+                subcon_paid, subcon_paid_pct, subcon_cert_date
+            ) VALUES (
+                :project_id, :ip_no, :seq_no, :applied_date,
+                :application_amount, :application_pct,
+                :certified_income, :certified_income_pct, :certificate_date,
+                :subcon_paid, :subcon_paid_pct, :subcon_cert_date
+            )
+        """, {**it, 'project_id': project_id})
+    if meta:
+        conn.execute("""
+            UPDATE projects SET site_period_text=:site_period_text,
+                ip_total_income=:ip_total_income,
+                ip_total_expenditure=:ip_total_expenditure,
+                ip_advance=:ip_advance
+            WHERE id=:project_id
+        """, {**meta, 'project_id': project_id})
+    conn.commit()
+    conn.close()
+
+
+def get_interim_payments(project_id):
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT * FROM interim_payments WHERE project_id=?
+        ORDER BY seq_no, ip_no
+    """, (project_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_ip_period_summary(project_id):
+    """地盤糧期狀況（儀表板用）"""
+    project = get_project(project_id)
+    if not project:
+        return None
+    items = get_interim_payments(project_id)
+    if not items:
+        return None
+    return {
+        'site_period_text': project.get('site_period_text'),
+        'items': items,
+        'totals': {
+            'total_income': project.get('ip_total_income') or 0,
+            'total_expenditure': project.get('ip_total_expenditure') or 0,
+            'advance': project.get('ip_advance') or 0,
+        },
+    }
+
+
 # ─── Reports ───────────────────────────────────────────────────────────
 
 def get_project_summary(project_id):
@@ -489,12 +597,15 @@ def get_project_summary(project_id):
     profit_e = contract_a - total_d
     profit_rate = (profit_e / contract_a * 100) if contract_a else 0
 
+    ip_period = get_ip_period_summary(project_id)
+
     conn.close()
     return {
         'project': dict(project),
         'sc_stats': [dict(r) for r in sc_stats],
         'total_paid': totals['total_paid'] or 0,
         'total_remainder': totals['total_remainder'] or 0,
+        'ip_period': ip_period,
         'contract_calc': {
             'main_contract_amount': contract_a,
             'sub_total_b': sub_total_b,

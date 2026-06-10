@@ -23,6 +23,67 @@ function fmtAcct(num, decimals = 0) {
   return n < 0 ? `(HK$${abs})` : `HK$${abs}`;
 }
 
+function fmtPct(val) {
+  if (val == null || val === '') return '—';
+  const n = parseFloat(val);
+  if (isNaN(n)) return '—';
+  return n.toFixed(1) + '%';
+}
+
+function renderSiteIpPeriod(ip, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!ip || !ip.items || !ip.items.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:24px">
+      <div class="empty-sub">尚無糧期資料，請從 Excel Summary 工作表匯入</div>
+    </div>`;
+    return;
+  }
+  const t = ip.totals || {};
+  const period = ip.site_period_text
+    ? `<span class="badge badge-muted" style="margin-left:8px">工期 ${ip.site_period_text}</span>` : '';
+  const rows = ip.items.map(r => `
+    <tr>
+      <td class="td-mono" style="font-weight:600">${r.ip_no}</td>
+      <td class="td-muted">${fmtDate(r.applied_date)}</td>
+      <td class="td-amount">${fmt(r.application_amount)}</td>
+      <td class="td-muted" style="text-align:right">${fmtPct(r.application_pct)}</td>
+      <td class="td-amount positive">${fmt(r.certified_income)}</td>
+      <td class="td-muted" style="text-align:right">${fmtPct(r.certified_income_pct)}</td>
+      <td class="td-muted">${fmtDate(r.certificate_date)}</td>
+      <td class="td-amount">${r.subcon_paid ? fmt(r.subcon_paid) : '—'}</td>
+      <td class="td-muted">${fmtDate(r.subcon_cert_date)}</td>
+    </tr>`).join('');
+  const advClass = parseFloat(t.advance) < 0 ? 'negative' : '';
+  el.innerHTML = `
+    <div style="margin-bottom:12px;font-size:12px;color:var(--text-secondary)">
+      主合約糧款追蹤（則師批款）${period}
+    </div>
+    <div class="ip-period-wrap">
+      <table class="ip-period-table">
+        <thead>
+          <tr>
+            <th>糧款期數</th>
+            <th>申請日期</th>
+            <th class="th-num">申請金額</th>
+            <th class="th-num">申請%</th>
+            <th class="th-num">則師批款</th>
+            <th class="th-num">批款%</th>
+            <th>批款日期</th>
+            <th class="th-num">分包支出</th>
+            <th>分包批款日</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="ip-period-totals">
+      <div><span class="label">總收入</span><strong class="positive">${fmtAcct(t.total_income)}</strong></div>
+      <div><span class="label">總支出</span><strong class="negative">${fmtAcct(t.total_expenditure < 0 ? t.total_expenditure : -Math.abs(t.total_expenditure || 0))}</strong></div>
+      <div><span class="label">墊支</span><strong class="${advClass}">${fmtAcct(t.advance)}</strong></div>
+    </div>`;
+}
+
 function renderContractCalc(calc, containerId) {
   const el = document.getElementById(containerId);
   if (!el || !calc) return;
@@ -283,6 +344,7 @@ const Dashboard = {
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
 
     renderContractCalc(summary.contract_calc, 'dashContractCalc');
+    renderSiteIpPeriod(summary.ip_period, 'dashSiteIp');
 
     // 最近記錄
     const recent = (payments || []).slice(0, 8);

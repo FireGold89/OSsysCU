@@ -18,6 +18,7 @@ const Reports = {
     document.getElementById('rptRemainder').textContent = fmt(this.data.total_remainder);
 
     renderContractCalc(this.data.contract_calc, 'rptContractCalc');
+    renderSiteIpPeriod(this.data.ip_period, 'rptSiteIp');
 
     // 表格
     const tbody = document.getElementById('rptTableBody');

@@ -761,6 +761,49 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   font-weight: 700;
 }
 
+/* ─── 地盤糧期狀況 ─── */
+.ip-period-wrap {
+  overflow-x: auto;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.ip-period-table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ip-period-table th {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ip-period-table th.th-num { text-align: right; }
+.ip-period-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.ip-period-table tbody tr:hover td { background: var(--bg-hover); }
+.ip-period-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-top: 4px;
+  font-size: 13px;
+}
+.ip-period-totals .label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
 /* ─── 可排序表頭 ─── */
 .th-sortable {
   cursor: pointer;

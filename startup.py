@@ -29,9 +29,13 @@ def run():
             except Exception as e:
                 print(f'[初始化] Excel匯入警告: {e}')
     elif os.path.exists(excel_path):
-        from excel_importer import sync_contract_amount_from_excel
+        from excel_importer import sync_contract_amount_from_excel, import_site_ip_period
         for p in projects:
             try:
                 sync_contract_amount_from_excel(excel_path, p['id'])
             except Exception as e:
                 print(f'[初始化] 承建金額同步警告: {e}')
+            try:
+                import_site_ip_period(excel_path, p['id'])
+            except Exception as e:
+                print(f'[初始化] 糧期匯入警告: {e}')
