@@ -431,7 +431,8 @@ def parse_overseas_invoice_data(api_data, scene=SCENE_COMMERCIAL_INVOICE):
     """
     if not api_data:
         return {
-            'invoice_no': None, 'invoice_date': None, 'quotation_no': None,
+            'invoice_no': None, 'invoice_date': None,
+            'quotation_no': None, 'quotation_date': None,
             'company_name_en': None, 'company_name_zh': None,
             'description': None, 'amount': None, 'total_amount': None,
             'line_items': [], 'raw_text': '',
@@ -447,9 +448,16 @@ def parse_overseas_invoice_data(api_data, scene=SCENE_COMMERCIAL_INVOICE):
         '發票號碼', '发票号码', '單據編號', '单据编号',
     ))
     invoice_date = _normalize_date_str(_first_value(root, (
-        'invoice_date', 'invoiceDate', 'date', 'issue_date', 'IssueDate',
-        'billing_date', 'transaction_date', '開票日期', '开票日期', '日期',
+        'invoice_date', 'invoiceDate', 'issue_date', 'IssueDate',
+        'billing_date', 'transaction_date', '開票日期', '开票日期', '發票日期', '发票日期',
     )))
+    quotation_date = _normalize_date_str(_first_value(root, (
+        'quotation_date', 'quotationDate', 'quote_date', 'quoteDate', '報價日期', '报价日期',
+    )))
+    if not quotation_date:
+        quotation_date = _normalize_date_str(_first_value(root, (
+            'date', 'Date', '日期',
+        )))
     company = _first_value(root, (
         'seller_name', 'sellerName', 'vendor', 'vendor_name', 'supplier',
         'supplier_name', 'company_name', 'companyName', 'merchant_name',
@@ -486,10 +494,16 @@ def parse_overseas_invoice_data(api_data, scene=SCENE_COMMERCIAL_INVOICE):
 
     raw_text = json.dumps(api_data, ensure_ascii=False, indent=2)
 
+    if not invoice_date and quotation_date:
+        invoice_date = quotation_date
+    if not quotation_date and invoice_date:
+        quotation_date = invoice_date
+
     return {
         'invoice_no': str(invoice_no).strip() if invoice_no else None,
         'invoice_date': invoice_date,
         'quotation_no': None,
+        'quotation_date': quotation_date,
         'company_name_en': company_en,
         'company_name_zh': company_zh,
         'description': str(description).strip() if description else None,

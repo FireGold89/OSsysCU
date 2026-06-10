@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 
 from config import DB_PATH
-from sc_ref import derive_parent_sc_no
+from sc_ref import derive_parent_sc_no, suggest_next_sc_no
 
 
 def get_conn():
@@ -191,6 +191,28 @@ def _migrate_db(conn):
             "UPDATE subcontractors SET parent_sc_no=?, contract_sum=? WHERE id=?",
             (parent, cs, r['id'])
         )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sc_documents (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id          INTEGER NOT NULL,
+            sc_id               INTEGER,
+            sc_no               TEXT,
+            doc_type            TEXT NOT NULL,
+            file_path           TEXT NOT NULL,
+            original_filename   TEXT,
+            ocr_id              INTEGER,
+            created_at          TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (sc_id) REFERENCES subcontractors(id) ON DELETE SET NULL
+        )
+    """)
+    ocr_cols = {r[1] for r in conn.execute("PRAGMA table_info(ocr_extractions)")}
+    if 'project_id' not in ocr_cols:
+        conn.execute("ALTER TABLE ocr_extractions ADD COLUMN project_id INTEGER")
+    if 'sc_id' not in ocr_cols:
+        conn.execute("ALTER TABLE ocr_extractions ADD COLUMN sc_id INTEGER")
+    if 'doc_type' not in ocr_cols:
+        conn.execute("ALTER TABLE ocr_extractions ADD COLUMN doc_type TEXT")
     conn.commit()
 
 
@@ -282,7 +304,7 @@ def upsert_subcontractor(data):
     """新增或更新分判商"""
     conn = get_conn()
     existing = conn.execute(
-        "SELECT id FROM subcontractors WHERE project_id=? AND sc_no=?",
+        "SELECT * FROM subcontractors WHERE project_id=? AND sc_no=?",
         (data['project_id'], data['sc_no'])
     ).fetchone()
 
@@ -291,6 +313,14 @@ def upsert_subcontractor(data):
     data.setdefault('vo_amount', 0)
 
     if existing:
+        old = dict(existing)
+        new_pdf = data.get('quotation_saved')
+        old_pdf = old.get('quotation_saved')
+        if new_pdf and old_pdf and new_pdf != old_pdf:
+            add_sc_document(
+                data['project_id'], old['id'], data['sc_no'], 'quotation',
+                old_pdf, ocr_id=None, conn=conn,
+            )
         conn.execute("""
             UPDATE subcontractors SET
                 quotation_no=:quotation_no, company_name_en=:company_name_en,
@@ -319,7 +349,45 @@ def upsert_subcontractor(data):
 
     conn.commit()
     conn.close()
+    new_pdf = data.get('quotation_saved')
+    old_pdf = dict(existing).get('quotation_saved') if existing else None
+    if new_pdf and new_pdf != old_pdf:
+        add_sc_document(
+            data['project_id'], sc_id, data['sc_no'], 'quotation',
+            new_pdf, original_filename=data.get('original_filename'),
+            ocr_id=data.get('ocr_id'),
+        )
     return sc_id
+
+
+def add_sc_document(project_id, sc_id, sc_no, doc_type, file_path,
+                    original_filename=None, ocr_id=None, conn=None):
+    """存檔 PDF/圖片（每次掃描保留，不覆蓋舊檔）"""
+    if not file_path:
+        return None
+    own = conn is None
+    if own:
+        conn = get_conn()
+    cur = conn.execute("""
+        INSERT INTO sc_documents (
+            project_id, sc_id, sc_no, doc_type, file_path,
+            original_filename, ocr_id
+        ) VALUES (?,?,?,?,?,?,?)
+    """, (project_id, sc_id, sc_no, doc_type, file_path, original_filename, ocr_id))
+    doc_id = cur.lastrowid
+    if own:
+        conn.commit()
+        conn.close()
+    return doc_id
+
+
+def get_sc_documents(sc_id):
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT * FROM sc_documents WHERE sc_id=? ORDER BY created_at DESC, id DESC
+    """, (sc_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def delete_subcontractor(sc_id):
@@ -433,6 +501,86 @@ def get_payment(payment_id):
     return dict(row) if row else None
 
 
+def payment_invoice_exists(project_id, invoice_no, exclude_id=None):
+    """檢查項目內是否已有相同發票號"""
+    inv = (invoice_no or '').strip()
+    if not inv:
+        return None
+    conn = get_conn()
+    sql = """
+        SELECT id, invoice_no, sc_no, paid_amount, invoice_date
+        FROM payment_records
+        WHERE project_id=? AND LOWER(TRIM(invoice_no))=LOWER(TRIM(?))
+    """
+    params = [project_id, inv]
+    if exclude_id:
+        sql += " AND id<>?"
+        params.append(exclude_id)
+    row = conn.execute(sql, params).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def suggest_sc_matches(project_id, hints=None):
+    """依報價單號、公司名、金額建議關聯合同項目"""
+    hints = hints or {}
+    sc_list = get_subcontractors(project_id)
+    if not sc_list:
+        return []
+
+    q_no = (hints.get('quotation_no') or '').strip().lower()
+    company = (hints.get('company') or '').strip().lower()
+    sc_hint = (hints.get('sc_no') or '').strip().upper()
+    amount = float(hints.get('amount') or 0)
+
+    results = []
+    for sc in sc_list:
+        score = 0
+        reasons = []
+        sc_no = (sc.get('sc_no') or '').upper()
+        if sc_hint and sc_no == sc_hint:
+            score += 120
+            reasons.append('參考編號相符')
+        if q_no and sc.get('quotation_no'):
+            sq = str(sc['quotation_no']).strip().lower()
+            if q_no == sq or q_no in sq or sq in q_no:
+                score += 100
+                reasons.append('報價單號相符')
+        if company:
+            for field in ('company_name_en', 'company_name_zh'):
+                val = (sc.get(field) or '').strip().lower()
+                if not val:
+                    continue
+                if company == val or company in val or val in company:
+                    score += 40
+                    reasons.append('公司名稱相符')
+                    break
+        if amount > 0 and sc.get('contract_amount'):
+            ca = float(sc['contract_amount'] or 0)
+            if ca > 0 and abs(ca - amount) / ca < 0.05:
+                score += 25
+                reasons.append('金額接近合同')
+        if score > 0:
+            results.append({
+                'sc_id': sc['id'],
+                'sc_no': sc['sc_no'],
+                'company_name_en': sc.get('company_name_en'),
+                'company_name_zh': sc.get('company_name_zh'),
+                'quotation_no': sc.get('quotation_no'),
+                'contract_amount': sc.get('contract_amount'),
+                'score': score,
+                'reasons': reasons,
+            })
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results[:5]
+
+
+def suggest_next_sc_number(project_id, prefix='SC', company=None):
+    """建議 OCR 新建參考編號"""
+    sc_list = get_subcontractors(project_id)
+    return suggest_next_sc_no(sc_list, prefix, company)
+
+
 def create_payment(data):
     conn = get_conn()
     # 計算餘額
@@ -460,6 +608,11 @@ def create_payment(data):
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+    if data.get('pdf_path'):
+        add_sc_document(
+            data['project_id'], data.get('sc_id'), data.get('sc_no'), 'invoice',
+            data['pdf_path'], ocr_id=data.get('ocr_id'),
+        )
     return new_id
 
 
@@ -497,8 +650,30 @@ def delete_payment(payment_id):
 
 # ─── 地盤糧期狀況 (Interim Payments) ───────────────────────────────────
 
+def calc_ip_cumulative_pcts(items, contract_amount):
+    """申請% / 批款% = 累計金額 ÷ 承建金額 × 100（與 Excel Summary 一致）"""
+    base = float(contract_amount or 0)
+    cum_app = cum_cert = 0.0
+    out = []
+    for it in items:
+        row = dict(it)
+        cum_app += float(row.get('application_amount') or 0)
+        cum_cert += float(row.get('certified_income') or 0)
+        if base > 0:
+            row['application_pct'] = round(cum_app / base * 100, 2)
+            row['certified_income_pct'] = round(cum_cert / base * 100, 2)
+        else:
+            row['application_pct'] = None
+            row['certified_income_pct'] = None
+        out.append(row)
+    return out
+
+
 def replace_interim_payments(project_id, items, meta=None):
     """取代項目全部糧期記錄（Excel Summary 匯入）"""
+    project = get_project(project_id)
+    contract_amount = (project or {}).get('contract_amount') or 0
+    items = calc_ip_cumulative_pcts(items, contract_amount)
     conn = get_conn()
     conn.execute("DELETE FROM interim_payments WHERE project_id=?", (project_id,))
     for it in items:
@@ -542,9 +717,10 @@ def get_ip_period_summary(project_id):
     project = get_project(project_id)
     if not project:
         return None
-    items = get_interim_payments(project_id)
-    if not items:
-        return None
+    items = calc_ip_cumulative_pcts(
+        get_interim_payments(project_id),
+        project.get('contract_amount'),
+    )
     return {
         'site_period_text': project.get('site_period_text'),
         'items': items,
@@ -554,6 +730,106 @@ def get_ip_period_summary(project_id):
             'advance': project.get('ip_advance') or 0,
         },
     }
+
+
+def get_interim_payment(ip_id):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM interim_payments WHERE id=?", (ip_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def _recalc_and_save_ip_pcts(project_id):
+    project = get_project(project_id)
+    if not project:
+        return
+    items = get_interim_payments(project_id)
+    calc_items = calc_ip_cumulative_pcts(items, project.get('contract_amount'))
+    conn = get_conn()
+    for it in calc_items:
+        conn.execute(
+            "UPDATE interim_payments SET application_pct=?, certified_income_pct=? WHERE id=?",
+            (it.get('application_pct'), it.get('certified_income_pct'), it['id'])
+        )
+    conn.commit()
+    conn.close()
+
+
+def upsert_interim_payment(data):
+    conn = get_conn()
+    project_id = data['project_id']
+    for f in ['applied_date', 'certificate_date', 'subcon_cert_date']:
+        data.setdefault(f, None)
+    for f in ['application_amount', 'certified_income', 'subcon_paid']:
+        data.setdefault(f, 0)
+    if not data.get('seq_no'):
+        max_seq = conn.execute(
+            "SELECT COALESCE(MAX(seq_no), 0) FROM interim_payments WHERE project_id=?",
+            (project_id,)
+        ).fetchone()[0]
+        data['seq_no'] = max_seq + 1
+
+    if data.get('id'):
+        conn.execute("""
+            UPDATE interim_payments SET
+                ip_no=:ip_no, seq_no=:seq_no, applied_date=:applied_date,
+                application_amount=:application_amount,
+                certified_income=:certified_income, certificate_date=:certificate_date,
+                subcon_paid=:subcon_paid, subcon_cert_date=:subcon_cert_date
+            WHERE id=:id AND project_id=:project_id
+        """, data)
+        ip_id = data['id']
+    else:
+        cur = conn.execute("""
+            INSERT INTO interim_payments (
+                project_id, ip_no, seq_no, applied_date,
+                application_amount, certified_income, certificate_date,
+                subcon_paid, subcon_cert_date
+            ) VALUES (
+                :project_id, :ip_no, :seq_no, :applied_date,
+                :application_amount, :certified_income, :certificate_date,
+                :subcon_paid, :subcon_cert_date
+            )
+        """, data)
+        ip_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    _recalc_and_save_ip_pcts(project_id)
+    return ip_id
+
+
+def delete_interim_payment(ip_id):
+    conn = get_conn()
+    row = conn.execute("SELECT project_id FROM interim_payments WHERE id=?", (ip_id,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    project_id = row['project_id']
+    conn.execute("DELETE FROM interim_payments WHERE id=?", (ip_id,))
+    conn.commit()
+    conn.close()
+    _recalc_and_save_ip_pcts(project_id)
+    return project_id
+
+
+def update_ip_period_meta(project_id, meta):
+    conn = get_conn()
+    conn.execute("""
+        UPDATE projects SET
+            site_period_text=:site_period_text,
+            ip_total_income=:ip_total_income,
+            ip_total_expenditure=:ip_total_expenditure,
+            ip_advance=:ip_advance
+        WHERE id=:project_id
+    """, {
+        'project_id': project_id,
+        'site_period_text': meta.get('site_period_text'),
+        'ip_total_income': float(meta.get('ip_total_income') or 0),
+        'ip_total_expenditure': float(meta.get('ip_total_expenditure') or 0),
+        'ip_advance': float(meta.get('ip_advance') or 0),
+    })
+    conn.commit()
+    conn.close()
 
 
 # ─── Reports ───────────────────────────────────────────────────────────
@@ -613,7 +889,7 @@ def get_project_summary(project_id):
             'labour_allocation': labour,
             'total_d': total_d,
             'profit_e': profit_e,
-            'profit_rate': round(profit_rate, 1),
+            'profit_rate': round(profit_rate, 2),
         },
     }
 
@@ -636,16 +912,38 @@ def set_setting(key, value):
 
 # ─── OCR Records ───────────────────────────────────────────────────────
 
-def save_ocr_extraction(payment_id, filename, raw_text, extracted_json, confidence, status):
+def save_ocr_extraction(payment_id, filename, raw_text, extracted_json, confidence, status,
+                        project_id=None, sc_id=None, doc_type=None):
     conn = get_conn()
     cur = conn.execute("""
-        INSERT INTO ocr_extractions (payment_id, pdf_filename, ocr_raw_text, extracted_json, confidence, status)
-        VALUES (?,?,?,?,?,?)
-    """, (payment_id, filename, raw_text, json.dumps(extracted_json, ensure_ascii=False), confidence, status))
+        INSERT INTO ocr_extractions (
+            payment_id, pdf_filename, ocr_raw_text, extracted_json,
+            confidence, status, project_id, sc_id, doc_type
+        ) VALUES (?,?,?,?,?,?,?,?,?)
+    """, (
+        payment_id, filename, raw_text, json.dumps(extracted_json, ensure_ascii=False),
+        confidence, status, project_id, sc_id, doc_type,
+    ))
     conn.commit()
     ocr_id = cur.lastrowid
     conn.close()
     return ocr_id
+
+
+def link_ocr_extraction(ocr_id, project_id=None, sc_id=None, payment_id=None, doc_type=None):
+    if not ocr_id:
+        return
+    conn = get_conn()
+    conn.execute("""
+        UPDATE ocr_extractions SET
+            project_id=COALESCE(?, project_id),
+            sc_id=COALESCE(?, sc_id),
+            payment_id=COALESCE(?, payment_id),
+            doc_type=COALESCE(?, doc_type)
+        WHERE id=?
+    """, (project_id, sc_id, payment_id, doc_type, ocr_id))
+    conn.commit()
+    conn.close()
 
 
 if __name__ == '__main__':

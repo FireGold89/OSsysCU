@@ -157,7 +157,8 @@ def ocr_with_gemini(image_bytes, api_key):
 
 {
   "invoice_no": "發票號碼",
-  "invoice_date": "日期(YYYY-MM-DD格式)",
+  "invoice_date": "發票日期(YYYY-MM-DD格式)",
+  "quotation_date": "報價日期(YYYY-MM-DD格式)",
   "quotation_no": "報價單號碼",
   "company_name_en": "公司英文名稱",
   "company_name_zh": "公司中文名稱",
@@ -183,6 +184,74 @@ def ocr_with_gemini(image_bytes, api_key):
 
     except Exception as e:
         return None, str(e)
+
+
+# ─── 文件類型判斷（發票單 / 報價單）────────────────────────────
+
+_INVOICE_KEYWORDS = (
+    'invoice', 'tax invoice', 'inv no', 'invoice no', 'invoice number',
+    '發票', '發票號', '發票號碼', '發票編號', '付款到期', 'payment due',
+    'bill to', 'due date',
+)
+_QUOTATION_KEYWORDS = (
+    'quotation', 'quote', 'quot no', 'quotation no', 'our ref',
+    '報價', '報價單', '報價單號', '報價號', '有效期', 'validity', 'valid until',
+    'quo no', 'quo.',
+)
+
+
+def classify_document_type(text, extracted=None):
+    """判斷發票單 / 報價單，回傳 (type, confidence 0-100)"""
+    extracted = extracted or {}
+    text = text or extracted.get('raw_text') or ''
+    lower = text.lower()
+    inv_score = quot_score = 0
+
+    for kw in _INVOICE_KEYWORDS:
+        if kw in lower or kw in text:
+            inv_score += 1
+    for kw in _QUOTATION_KEYWORDS:
+        if kw in lower or kw in text:
+            quot_score += 1
+
+    if extracted.get('invoice_no'):
+        inv_score += 2
+    if extracted.get('quotation_no'):
+        quot_score += 2
+    if 'commercial invoice' in lower:
+        inv_score += 2
+    if 'quotation for' in lower or '報價內容' in text:
+        quot_score += 2
+
+    if inv_score > quot_score and inv_score >= 2:
+        return 'invoice', min(95, 45 + inv_score * 8)
+    if quot_score > inv_score and quot_score >= 2:
+        return 'quotation', min(95, 45 + quot_score * 8)
+    if inv_score and quot_score:
+        return 'unknown', 40
+    if inv_score:
+        return 'invoice', min(80, 35 + inv_score * 8)
+    if quot_score:
+        return 'quotation', min(80, 35 + quot_score * 8)
+    return 'unknown', 25
+
+
+def enrich_extracted_result(extracted, raw_text=''):
+    """附加 document_type / document_type_confidence"""
+    if not extracted:
+        extracted = _empty_result(raw_text)
+    text = raw_text or extracted.get('raw_text') or ''
+    doc_type, conf = classify_document_type(text, extracted)
+    extracted['document_type'] = doc_type
+    extracted['document_type_confidence'] = round(conf, 1)
+    # 報價單常用通用 Date 欄位，補齊 quotation_date
+    if extracted.get('invoice_date') and not extracted.get('quotation_date'):
+        if doc_type in ('quotation', 'unknown'):
+            extracted['quotation_date'] = extracted['invoice_date']
+    if extracted.get('quotation_date') and not extracted.get('invoice_date'):
+        if doc_type == 'invoice':
+            extracted['invoice_date'] = extracted['quotation_date']
+    return extracted
 
 
 # ─── 智能資料提取（規則引擎）────────────────────────────────
@@ -221,7 +290,8 @@ def extract_invoice_data(text, pdf_path=None, gemini_api_key=None):
     """從 OCR 文字中智能提取發票/報價單資料"""
     text = _normalize_ocr_text(text or '')
     result = {
-        'invoice_no': None, 'invoice_date': None, 'quotation_no': None,
+        'invoice_no': None, 'invoice_date': None,
+        'quotation_no': None, 'quotation_date': None,
         'company_name_en': None, 'company_name_zh': None,
         'description': None, 'amount': None, 'total_amount': None,
         'line_items': [],
@@ -258,23 +328,9 @@ def extract_invoice_data(text, pdf_path=None, gemini_api_key=None):
             result['quotation_no'] = m.group(1).strip()
             break
 
-    date_patterns = [
-        r'(?:Date|日期|Invoice\s*Date|發票日期|Dated|Date:)[:\s:：]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
-        r'(?:Date|日期)[:\s:：]*(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})',
-        r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日',
-        r'\b(\d{2}\/\d{2}\/\d{4})\b',
-        r'\b(\d{4}-\d{2}-\d{2})\b',
-        r'\b(\d{2}-\d{2}-\d{4})\b',
-    ]
-    for pat in date_patterns:
-        m = re.search(pat, text, re.IGNORECASE)
-        if m:
-            if '年' in pat:
-                date_str = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
-            else:
-                date_str = normalize_date(m.group(1))
-            result['invoice_date'] = date_str
-            break
+    inv_date, quot_date = _extract_dates_from_text(text)
+    result['invoice_date'] = inv_date
+    result['quotation_date'] = quot_date
 
     en_company_keywords = ['LTD', 'LIMITED', 'CO.', 'COMPANY', 'ENGINEERING',
                            'CONSTRUCTION', 'SERVICES', 'CONSULTANT', 'CONSULTANCY',
@@ -1303,6 +1359,62 @@ def _enrich_line_items(result, pdf_path, text):
                 break
 
 
+def _parse_date_from_match(m, pat):
+    if '年' in pat:
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    return normalize_date(m.group(1))
+
+
+def _extract_dates_from_text(text):
+    """從 OCR 文字提取發票日期與報價日期"""
+    invoice_date = quotation_date = None
+
+    quot_patterns = [
+        r'(?:Quotation\s*Date|Quote\s*Date|報價日期)[:\s:：]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
+        r'(?:Quotation\s*Date|Quote\s*Date|報價日期)[:\s:：]*(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})',
+    ]
+    for pat in quot_patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            quotation_date = _parse_date_from_match(m, pat)
+            break
+
+    inv_patterns = [
+        r'(?:Invoice\s*Date|發票日期)[:\s:：]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
+        r'(?:Invoice\s*Date|發票日期)[:\s:：]*(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})',
+    ]
+    for pat in inv_patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            invoice_date = _parse_date_from_match(m, pat)
+            break
+
+    generic_patterns = [
+        r'(?:Date|DATE|Dated)[:\s:：]*(?:日期)?(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
+        r'(?:Date|日期)[:\s:：]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
+        r'(?:Date|日期)[:\s:：]*(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})',
+        r'日期\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
+        r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日',
+        r'\b(\d{2}\/\d{2}\/\d{4})\b',
+        r'\b(\d{4}-\d{2}-\d{2})\b',
+        r'\b(\d{2}-\d{2}-\d{4})\b',
+    ]
+    generic_date = None
+    for pat in generic_patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            generic_date = _parse_date_from_match(m, pat)
+            break
+
+    if generic_date:
+        if not invoice_date:
+            invoice_date = generic_date
+        if not quotation_date:
+            quotation_date = generic_date
+
+    return invoice_date, quotation_date
+
+
 def normalize_date(date_str):
     date_str = date_str.strip()
     formats = [
@@ -1517,7 +1629,8 @@ def process_pdf(pdf_path, api_key=None, quark_client_id=None, quark_client_key=N
 
 def _empty_result(raw_text=''):
     return {
-        'invoice_no': None, 'invoice_date': None, 'quotation_no': None,
+        'invoice_no': None, 'invoice_date': None,
+        'quotation_no': None, 'quotation_date': None,
         'company_name_en': None, 'company_name_zh': None,
         'description': None, 'amount': None, 'total_amount': None,
         'line_items': [],

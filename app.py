@@ -157,7 +157,11 @@ def create_subcontractor():
         data['contract_amount'] = float(data.get('contract_sum') or 0) + float(data.get('vo_amount') or 0)
     from sc_ref import derive_parent_sc_no
     data.setdefault('parent_sc_no', derive_parent_sc_no(data.get('sc_no')))
+    ocr_id = data.pop('ocr_id', None)
+    data['ocr_id'] = ocr_id
     sc_id = db.upsert_subcontractor(data)
+    if ocr_id:
+        db.link_ocr_extraction(ocr_id, project_id=data['project_id'], sc_id=sc_id, doc_type='quotation')
     return resp({'id': sc_id}, status=201)
 
 
@@ -166,6 +170,7 @@ def get_subcontractor(sc_id):
     sc = db.get_subcontractor(sc_id)
     if not sc:
         return resp(error='合同項目不存在', status=404)
+    sc['documents'] = db.get_sc_documents(sc_id)
     return resp(sc)
 
 
@@ -199,7 +204,14 @@ def create_payment():
         data.setdefault(f, None)
     for f in ['contract_amount', 'paid_amount', 'remainder_amount']:
         data.setdefault(f, 0)
+    ocr_id = data.pop('ocr_id', None)
+    data['ocr_id'] = ocr_id
     new_id = db.create_payment(data)
+    if ocr_id:
+        db.link_ocr_extraction(
+            ocr_id, project_id=data['project_id'], sc_id=data.get('sc_id'),
+            payment_id=new_id, doc_type='invoice',
+        )
     return resp({'id': new_id}, status=201)
 
 
@@ -276,31 +288,144 @@ def ocr_upload():
     except Exception as e:
         return resp(error=f'OCR處理錯誤: {str(e)}', status=500)
 
-    # 儲存OCR記錄
+    project_id = request.form.get('project_id', type=int)
+
+    # 儲存OCR記錄（每次上傳均保留 PDF 路徑）
     ocr_id = db.save_ocr_extraction(
         payment_id=None,
-        filename=file.filename,
+        filename=unique_name,
         raw_text=raw_text or '',
         extracted_json=extracted or {},
         confidence='high' if method in (
             'gemini', 'quark_handwritten', 'quark_general', 'quark_invoice') else 'medium',
-        status='success' if extracted else 'failed'
+        status='success' if extracted else 'failed',
+        project_id=project_id,
+        doc_type='scan',
     )
+
+    from ocr_processor import enrich_extracted_result
+    extracted = enrich_extracted_result(extracted or {}, raw_text or '')
 
     return resp({
         'ocr_id': ocr_id,
         'method': method,
         'filename': file.filename,
         'pdf_path': unique_name,
-        'extracted': extracted or {},
+        'extracted': extracted,
         'raw_text': (raw_text or '')[:2000],  # 限制回傳長度
         'error': error,
     })
 
 
+@app.route('/api/projects/<int:project_id>/ocr/suggest-sc', methods=['POST'])
+def ocr_suggest_sc(project_id):
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    hints = request.json or {}
+    return resp(db.suggest_sc_matches(project_id, hints))
+
+
+@app.route('/api/projects/<int:project_id>/ocr/next-sc', methods=['POST'])
+def ocr_next_sc(project_id):
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    body = request.json or {}
+    prefix = (body.get('prefix') or 'SC').strip().upper()
+    company = (body.get('company') or '').strip()
+    return resp(db.suggest_next_sc_number(project_id, prefix, company))
+
+
+@app.route('/api/projects/<int:project_id>/payments/check-invoice', methods=['GET'])
+def check_invoice_duplicate(project_id):
+    invoice_no = request.args.get('invoice_no', '').strip()
+    if not invoice_no:
+        return resp({'exists': False})
+    existing = db.payment_invoice_exists(project_id, invoice_no)
+    return resp({'exists': bool(existing), 'payment': existing})
+
+
 @app.route('/api/uploads/<filename>')
 def serve_upload(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+    """提供上傳文件（PDF/圖片），供瀏覽器內嵌預覽"""
+    safe = os.path.basename(filename)
+    if safe != filename or '..' in filename:
+        return jsonify({'success': False, 'error': '無效文件名'}), 400
+    path = os.path.join(UPLOAD_DIR, safe)
+    if not os.path.isfile(path):
+        return jsonify({'success': False, 'error': '文件不存在'}), 404
+    ext = safe.rsplit('.', 1)[-1].lower() if '.' in safe else ''
+    mime = {
+        'pdf': 'application/pdf',
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+    }.get(ext, 'application/octet-stream')
+    return send_file(path, mimetype=mime, as_attachment=False, download_name=safe)
+
+
+@app.route('/api/projects/<int:project_id>/interim-payments', methods=['GET'])
+def get_interim_payments_api(project_id):
+    summary = db.get_ip_period_summary(project_id)
+    if summary is None:
+        return resp(error='項目不存在', status=404)
+    return resp(summary)
+
+
+@app.route('/api/projects/<int:project_id>/interim-payments/meta', methods=['PUT'])
+def update_ip_meta(project_id):
+    data = request.json or {}
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    db.update_ip_period_meta(project_id, data)
+    return resp(db.get_ip_period_summary(project_id))
+
+
+@app.route('/api/interim-payments', methods=['POST'])
+def create_interim_payment():
+    data = request.json or {}
+    if not data.get('project_id') or not data.get('ip_no'):
+        return resp(error='缺少 project_id 或 ip_no', status=400)
+    for f in ['applied_date', 'certificate_date', 'subcon_cert_date']:
+        data.setdefault(f, None)
+    for f in ['application_amount', 'certified_income', 'subcon_paid']:
+        data.setdefault(f, 0)
+    data.setdefault('seq_no', 0)
+    ip_id = db.upsert_interim_payment(data)
+    return resp({'id': ip_id, 'summary': db.get_ip_period_summary(data['project_id'])}, status=201)
+
+
+@app.route('/api/interim-payments/<int:ip_id>', methods=['GET'])
+def get_interim_payment_api(ip_id):
+    row = db.get_interim_payment(ip_id)
+    if not row:
+        return resp(error='糧期記錄不存在', status=404)
+    return resp(row)
+
+
+@app.route('/api/interim-payments/<int:ip_id>', methods=['PUT'])
+def update_interim_payment(ip_id):
+    data = request.json or {}
+    existing = db.get_interim_payment(ip_id)
+    if not existing:
+        return resp(error='糧期記錄不存在', status=404)
+    data['id'] = ip_id
+    data['project_id'] = existing['project_id']
+    if not data.get('ip_no'):
+        data['ip_no'] = existing['ip_no']
+    for f in ['applied_date', 'certificate_date', 'subcon_cert_date']:
+        data.setdefault(f, None)
+    for f in ['application_amount', 'certified_income', 'subcon_paid', 'seq_no']:
+        data.setdefault(f, existing.get(f) or 0)
+    db.upsert_interim_payment(data)
+    return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
+
+
+@app.route('/api/interim-payments/<int:ip_id>', methods=['DELETE'])
+def delete_interim_payment_api(ip_id):
+    project_id = db.delete_interim_payment(ip_id)
+    if not project_id:
+        return resp(error='糧期記錄不存在', status=404)
+    return resp({'summary': db.get_ip_period_summary(project_id)})
 
 
 # ─── Reports API ────────────────────────────────────────────────────────

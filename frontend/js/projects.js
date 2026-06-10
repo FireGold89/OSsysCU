@@ -19,7 +19,7 @@ const Projects = {
                           p.status === 'Completed' ? '已完成' : '暫停';
       const paid = p.total_paid || 0;
       const contractAmt = p.contract_amount || 0;
-      const progress = contractAmt > 0 ? Math.min(100, (paid / contractAmt * 100)).toFixed(0) : 0;
+      const progress = contractAmt > 0 ? Math.min(100, (paid / contractAmt * 100)).toFixed(FMT_DECIMALS) : '0.00';
 
       return `
         <div class="card" style="cursor:pointer" onclick="App.selectProject(${p.id});App.navigate('dashboard')">
@@ -135,6 +135,162 @@ const Projects = {
 
 /* ─── sc.js (在同一文件) — 分判商管理 ─────────────────────── */
 const SC = {
+  _descItems: [],
+  _editSc: null,
+
+  _esc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+  },
+
+  _loadDescFromText(text) {
+    const parsed = parseDescriptionItems(text);
+    if (parsed.items.length) {
+      this._descItems = parsed.items.map((it, i) => ({
+        no: it.no || String(i + 1),
+        description: it.description || '',
+        qty: it.qty != null ? String(it.qty) : '',
+        unit: it.unit || '',
+        unit_price: it.unit_price != null ? String(it.unit_price) : '',
+        amount: it.amount != null ? String(it.amount) : '',
+      }));
+      document.getElementById('scDescTitle').value = parsed.title || '';
+    } else {
+      this._descItems = [];
+      document.getElementById('scDescTitle').value = parsed.plain || parsed.title || '';
+    }
+    this.renderDescItems();
+  },
+
+  renderDescItems() {
+    const tbody = document.getElementById('scItemsBody');
+    const totalEl = document.getElementById('scItemsTotal');
+    if (!tbody) return;
+
+    if (!this._descItems.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="ocr-items-empty">尚無明細，可新增項目或於摘要填寫簡述</td></tr>';
+      if (totalEl) totalEl.innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = this._descItems.map((it, idx) => `
+      <tr data-idx="${idx}">
+        <td><input type="text" value="${this._esc(it.no)}" data-field="no" oninput="SC.onDescItemChange(${idx})"></td>
+        <td><input type="text" value="${this._esc(it.description)}" data-field="description" oninput="SC.onDescItemChange(${idx})"></td>
+        <td><input type="text" value="${this._esc(it.qty)}" data-field="qty" oninput="SC.onDescItemChange(${idx})"></td>
+        <td><input type="text" value="${this._esc(it.unit)}" data-field="unit" oninput="SC.onDescItemChange(${idx})"></td>
+        <td><input type="number" value="${it.unit_price}" data-field="unit_price" step="0.01" oninput="SC.onDescItemChange(${idx})"></td>
+        <td><input type="number" value="${it.amount}" data-field="amount" step="0.01" oninput="SC.onDescItemChange(${idx})"></td>
+        <td><button type="button" class="btn-del" onclick="SC.removeDescItem(${idx})" title="刪除">×</button></td>
+      </tr>
+    `).join('');
+
+    let sum = 0;
+    this._descItems.forEach(it => {
+      const a = parseFloat(it.amount);
+      if (!isNaN(a)) sum += a;
+    });
+    if (totalEl) {
+      totalEl.innerHTML = `明細合計: <strong>${fmt(sum)}</strong> (${this._descItems.length} 項)`;
+    }
+  },
+
+  readDescItemsFromDom() {
+    const rows = document.querySelectorAll('#scItemsBody tr[data-idx]');
+    const items = [];
+    rows.forEach((row, i) => {
+      const get = (field) => row.querySelector(`[data-field="${field}"]`)?.value?.trim() ?? '';
+      const desc = get('description');
+      if (!desc && !get('amount')) return;
+      items.push({
+        no: get('no') || String(i + 1), description: desc,
+        qty: get('qty'), unit: get('unit'),
+        unit_price: get('unit_price'), amount: get('amount'),
+      });
+    });
+    this._descItems = items;
+    return items;
+  },
+
+  onDescItemChange() {
+    this.readDescItemsFromDom();
+    this.renderDescItems();
+  },
+
+  addDescItem() {
+    const tbody = document.getElementById('scItemsBody');
+    if (tbody?.querySelector('.ocr-items-empty')) tbody.innerHTML = '';
+    const n = this._descItems.length + 1;
+    this._descItems.push({ no: String(n), description: '', qty: '', unit: '', unit_price: '', amount: '' });
+    this.renderDescItems();
+  },
+
+  removeDescItem(idx) {
+    this._descItems.splice(idx, 1);
+    this.renderDescItems();
+  },
+
+  buildDescText() {
+    this.readDescItemsFromDom();
+    const title = document.getElementById('scDescTitle')?.value?.trim() || '';
+    if (!this._descItems.length) return title || null;
+    return buildDescriptionText(this._descItems, title);
+  },
+
+  _renderDocToolbar(s) {
+    const bar = document.getElementById('scDocToolbar');
+    if (!bar) return;
+    if (!s) {
+      bar.innerHTML = '';
+      return;
+    }
+    const docs = s.documents || [];
+    const items = [];
+    const seen = new Set();
+    const push = (file_path, label, when) => {
+      if (!file_path || seen.has(file_path)) return;
+      seen.add(file_path);
+      items.push({ file_path, label, when });
+    };
+    if (s.quotation_saved) {
+      push(s.quotation_saved, '報價 PDF', s.quotation_date);
+    }
+    docs.forEach(d => {
+      const kind = { quotation: '報價', invoice: '發票', scan: '掃描' }[d.doc_type] || '存證';
+      push(d.file_path, `${kind} PDF`, d.created_at);
+    });
+    if (!items.length) {
+      bar.innerHTML = '<span class="sc-doc-none">尚無 PDF 存證</span>';
+      return;
+    }
+    bar.innerHTML = items.map(d => {
+      const when = d.when ? fmtDate(d.when) : '';
+      const title = `${d.label}${when ? ` · ${when}` : ''}`;
+      return `<button type="button" class="sc-pdf-chip"
+        data-path="${this._esc(d.file_path)}"
+        data-title="${this._esc(title)}"
+        title="預覽 ${this._esc(d.label)}">
+        <span class="sc-pdf-icon">📄</span>
+        <span class="sc-pdf-label">${this._esc(d.label)}${when ? ` · ${when}` : ''}</span>
+      </button>`;
+    }).join('');
+
+    if (!bar.dataset.docBound) {
+      bar.dataset.docBound = '1';
+      bar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.sc-pdf-chip');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const path = btn.getAttribute('data-path');
+        const title = btn.getAttribute('data-title') || '文件預覽';
+        if (path) DocViewer.open(path, title);
+      });
+    }
+  },
+
   data: [],
   filtered: [],
   _payModalSc: null,
@@ -262,9 +418,9 @@ const SC = {
     const totalPaid = g.items.reduce((s, x) => s + (parseFloat(x.total_paid) || 0), 0);
     const company = g.items[0].company_name_en || g.items[0].company_name_zh || '';
     const collapsed = this.isGroupCollapsed(g.parent);
-    const parentJson = JSON.stringify(g.parent);
+    const parentAttr = (g.parent || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     return `
-      <tr class="sc-group-header" onclick="SC.toggleGroup(${parentJson}, event)" title="點擊收合/展開">
+      <tr class="sc-group-header" data-group-parent="${parentAttr}" onclick="SC.toggleGroup(this.getAttribute('data-group-parent'), event)" title="點擊收合/展開">
         <td colspan="2">
           <span class="sc-group-toggle" aria-hidden="true">${collapsed ? '▶' : '▼'}</span>
           ${fmtRefNo(g.parent)}
@@ -283,13 +439,15 @@ const SC = {
     const oaBadge = s.oa_status === 'OK' ? '<span class="badge badge-success">OK</span>' :
                     s.oa_status === '-'  ? '<span class="badge badge-muted">—</span>' :
                     s.oa_status          ? `<span class="badge badge-warning">${s.oa_status}</span>` : '—';
-    const oaDateStr = (s.oa_date || s.quotation_date) ? fmtDate(s.oa_date || s.quotation_date) : '';
+    const quotDateStr = s.quotation_date ? fmtDate(s.quotation_date) : '';
+    const oaDateStr = s.oa_date ? fmtDate(s.oa_date) : '';
     const voHint = (parseFloat(s.vo_amount) || 0) !== 0
       ? `<div style="font-size:10px;color:var(--text-muted)">H ${fmt(s.contract_sum)} + VO ${fmt(s.vo_amount)}</div>` : '';
     const scNoEsc = (s.sc_no || '').replace(/'/g, "\\'");
+    const excludedCls = s.is_excluded ? ' sc-row-excluded' : '';
     return `
-      <tr class="row-clickable${isChild ? ' sc-group-child' : ''}" onclick="SC.showPayments(${s.id})" title="點擊查看付款記錄">
-        <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">Excluded (C)</span>' : ''}</td>
+      <tr class="row-clickable${isChild ? ' sc-group-child' : ''}${excludedCls}" onclick="SC.showPayments(${s.id})" title="點擊查看付款記錄">
+        <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">除外 (C)</span>' : ''}</td>
         <td>
           <div style="font-weight:600">${s.company_name_en || '—'}</div>
           <div style="font-size:11px;color:var(--text-muted)">${s.company_name_zh || ''}</div>
@@ -297,10 +455,13 @@ const SC = {
         <td class="td-muted">${s.description || '—'}</td>
         <td class="td-amount">${fmt(s.contract_amount)}${voHint}</td>
         <td class="td-amount positive">${fmt(s.total_paid)}</td>
-        <td style="font-size:11px;color:var(--text-secondary)">${s.quotation_no || '—'}</td>
+        <td style="font-size:11px;color:var(--text-secondary)">
+          <div>${s.quotation_no || '—'}</div>
+          ${quotDateStr ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">報價 ${quotDateStr}</div>` : ''}
+        </td>
         <td>
           <div>${oaBadge}</div>
-          ${oaDateStr ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">${oaDateStr}</div>` : ''}
+          ${oaDateStr ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">OA ${oaDateStr}</div>` : ''}
         </td>
         <td onclick="event.stopPropagation()">
           <div style="display:flex;gap:4px">
@@ -330,7 +491,7 @@ const SC = {
   calcRevised() {
     const h = parseFloat(document.getElementById('scContractSum').value) || 0;
     const v = parseFloat(document.getElementById('scVoAmt').value) || 0;
-    document.getElementById('scAmt').value = (h + v).toFixed(2);
+    document.getElementById('scAmt').value = fmtInputNum(h + v);
     const paidStr = document.getElementById('scPaidAmt').value;
     if (paidStr) {
       const paid = parseFloat(paidStr.replace(/[^0-9.-]/g, '')) || 0;
@@ -339,9 +500,13 @@ const SC = {
   },
 
   openAdd() {
+    this._editSc = null;
     document.getElementById('scModalTitle').textContent = '新增合同項目';
     document.getElementById('scModalId').value = '';
-    ['scNo','scQuotNo','scCompanyEn','scCompanyZh','scDesc','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
+    ['scNo','scQuotNo','scQuotDate','scCompanyEn','scCompanyZh','scDescTitle','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
+    this._descItems = [];
+    this.renderDescItems();
+    this._renderDocToolbar(null);
     document.getElementById('scContractSum').value = '';
     document.getElementById('scVoAmt').value = '';
     document.getElementById('scAmt').value = '';
@@ -362,21 +527,24 @@ const SC = {
       }
     }
     if (!s) return;
+    this._editSc = s;
     document.getElementById('scModalTitle').textContent = '編輯合同項目';
     document.getElementById('scModalId').value = s.id;
     document.getElementById('scNo').value = s.sc_no || '';
     document.getElementById('scQuotNo').value = s.quotation_no || '';
     document.getElementById('scCompanyEn').value = s.company_name_en || '';
     document.getElementById('scCompanyZh').value = s.company_name_zh || '';
-    document.getElementById('scDesc').value = s.description || '';
-    document.getElementById('scContractSum').value = s.contract_sum ?? s.contract_amount ?? '';
-    document.getElementById('scVoAmt').value = s.vo_amount ?? '';
-    document.getElementById('scAmt').value = s.contract_amount || '';
+    this._loadDescFromText(s.description || '');
+    this._renderDocToolbar(s);
+    document.getElementById('scContractSum').value = fmtInputNum(s.contract_sum ?? s.contract_amount);
+    document.getElementById('scVoAmt').value = fmtInputNum(s.vo_amount);
+    document.getElementById('scAmt').value = fmtInputNum(s.contract_amount);
     const paid = parseFloat(s.total_paid) || 0;
     const ca = parseFloat(s.contract_amount) || 0;
     document.getElementById('scPaidAmt').value = fmt(paid);
     document.getElementById('scRemainAmt').value = fmt(ca - paid);
-    document.getElementById('scOaDate').value = s.oa_date || s.quotation_date || '';
+    document.getElementById('scQuotDate').value = s.quotation_date || '';
+    document.getElementById('scOaDate').value = s.oa_date || '';
     document.getElementById('scOaStatus').value = s.oa_status || '';
     document.getElementById('scOaNo').value = s.oa_no || '';
     document.getElementById('scPayNote').value = s.payment_note || '';
@@ -386,6 +554,7 @@ const SC = {
 
   closeModal() {
     document.getElementById('scModal').classList.remove('open');
+    this._editSc = null;
   },
 
   async showPayments(id) {
@@ -457,7 +626,7 @@ const SC = {
                       r.oa_ref === '-'  ? '<span class="badge badge-muted">—</span>' :
                       r.oa_ref          ? `<span class="badge badge-warning">${r.oa_ref}</span>` : '—';
       const pdfBtn = r.pdf_path
-        ? `<button class="btn btn-icon btn-secondary btn-sm" title="查看原PDF" onclick="event.stopPropagation();Payments.viewPdf(${JSON.stringify(r.pdf_path)})">📄</button>`
+        ? `<button type="button" class="btn btn-icon btn-secondary btn-sm btn-view-pdf" title="查看原PDF" data-pdf-path="${String(r.pdf_path).replace(/"/g, '&quot;')}">📄</button>`
         : '';
       return `
         <tr class="row-clickable" onclick="SC.openPayEdit(${r.id})" title="點擊編輯">
@@ -513,16 +682,16 @@ const SC = {
       quotation_no: document.getElementById('scQuotNo').value || null,
       company_name_en: document.getElementById('scCompanyEn').value || null,
       company_name_zh: document.getElementById('scCompanyZh').value || null,
-      description: document.getElementById('scDesc').value || null,
+      description: this.buildDescText(),
       contract_sum: parseFloat(document.getElementById('scContractSum').value) || 0,
       vo_amount: parseFloat(document.getElementById('scVoAmt').value) || 0,
       contract_amount: parseFloat(document.getElementById('scAmt').value) || 0,
-      quotation_date: null,
+      quotation_date: document.getElementById('scQuotDate').value || null,
       oa_date: document.getElementById('scOaDate').value || null,
       oa_status: document.getElementById('scOaStatus').value || null,
       oa_ref: null,
       oa_no: document.getElementById('scOaNo').value || null,
-      quotation_saved: null,
+      quotation_saved: this._editSc?.quotation_saved || null,
       payment_note: document.getElementById('scPayNote').value || null,
       is_excluded: document.getElementById('scExcluded').checked ? 1 : 0,
     };

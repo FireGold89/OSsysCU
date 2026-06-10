@@ -18,7 +18,7 @@ const Reports = {
     document.getElementById('rptRemainder').textContent = fmt(this.data.total_remainder);
 
     renderContractCalc(this.data.contract_calc, 'rptContractCalc');
-    renderSiteIpPeriod(this.data.ip_period, 'rptSiteIp');
+    renderSiteIpPeriod(this.data.ip_period, 'rptSiteIp', { editable: false });
 
     // 表格
     const tbody = document.getElementById('rptTableBody');
@@ -32,7 +32,7 @@ const Reports = {
       const ca = parseFloat(s.contract_amount) || 0;
       const paid = parseFloat(s.total_paid) || 0;
       const rem = ca - paid;
-      const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(0) : 0;
+      const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(FMT_DECIMALS) : '0.00';
       const remClass = rem > 0 ? 'negative' : rem < 0 ? '' : '';
 
       return `
@@ -87,13 +87,14 @@ const Reports = {
       const ca = parseFloat(s.contract_amount) || 0;
       const paid = parseFloat(s.total_paid) || 0;
       const rem = ca - paid;
-      const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(1) : 0;
-      return [s.sc_no, s.company_name_en, s.description, ca, paid, rem, s.payment_count, progress];
+      const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(FMT_DECIMALS) : '0.00';
+      return [s.sc_no, s.company_name_en, s.description,
+        fmtNumPlain(ca), fmtNumPlain(paid), fmtNumPlain(rem), s.payment_count, progress];
     });
     // 加合計行
     rows.push(['合計', '', '',
-      this.data.sc_stats.reduce((s, r) => s + (parseFloat(r.contract_amount) || 0), 0),
-      this.data.total_paid, this.data.total_remainder,
+      fmtNumPlain(this.data.sc_stats.reduce((s, r) => s + (parseFloat(r.contract_amount) || 0), 0)),
+      fmtNumPlain(this.data.total_paid), fmtNumPlain(this.data.total_remainder),
       this.data.sc_stats.reduce((s, r) => s + (r.payment_count || 0), 0), ''
     ]);
     downloadCsv([headers, ...rows],

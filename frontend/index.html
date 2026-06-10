@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QS付款管理系統 — Mepork Engineering</title>
-  <meta name="description" content="QS部門工程付款管理系統，支援PDF OCR自動識別、付款記錄追蹤及財務報表">
+  <meta name="description" content="QS部門工程付款管理系統，支援發票單、報價單自動識別、付款記錄追蹤及財務報表">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -49,8 +49,11 @@
       <div class="nav-item" data-page="subcontractors" onclick="App.navigate('subcontractors')">
         <span class="nav-icon">🏢</span> 合同項目
       </div>
+      <div class="nav-item" data-page="ip-period" onclick="App.navigate('ip-period')">
+        <span class="nav-icon">🏗️</span> 糧期狀況
+      </div>
       <div class="nav-item" data-page="ocr" onclick="App.navigate('ocr')">
-        <span class="nav-icon">📄</span> PDF OCR識別
+        <span class="nav-icon">📄</span> 發票·報價識別
       </div>
       <div class="nav-item" data-page="reports" onclick="App.navigate('reports')">
         <span class="nav-icon">📈</span> 財務報表
@@ -105,36 +108,88 @@
           <button class="btn btn-primary" onclick="App.navigate('projects')">管理項目</button>
         </div>
         <div id="dashboardContent">
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">承建金額</div>
-              <div class="stat-value small" id="dashContractAmt">—</div>
-              <div class="stat-sub">Main Contract Amount</div>
+          <!-- 項目標題區 -->
+          <div class="dash-project-hero" id="dashProjectHero">
+            <div class="dash-hero-top">
+              <div class="dash-hero-title-block">
+                <div class="dash-hero-code-row">
+                  <div class="dash-hero-code" id="dashProjCode">—</div>
+                  <div id="dashProjStatus"></div>
+                </div>
+                <h2 class="dash-hero-name" id="dashProjName">—</h2>
+              </div>
+              <div class="dash-hero-amount">
+                <div class="dash-hero-meta-label">承建金額</div>
+                <div class="dash-hero-amount-value" id="dashHeroContractAmt">—</div>
+                <div class="dash-hero-amount-sub">Main Contract Amount</div>
+              </div>
             </div>
-            <div class="stat-card success">
-              <div class="stat-label">累計已付</div>
-              <div class="stat-value small" id="dashTotalPaid">—</div>
-              <div class="stat-sub">Total Paid</div>
+            <div class="dash-hero-meta">
+              <div class="dash-hero-meta-item">
+                <div class="dash-hero-meta-label">工期</div>
+                <div class="dash-hero-meta-value" id="dashProjPeriod">—</div>
+              </div>
+              <div class="dash-hero-meta-item">
+                <div class="dash-hero-meta-label">主承建商 (MC)</div>
+                <div class="dash-hero-meta-value" id="dashProjMc">—</div>
+              </div>
+              <div class="dash-hero-meta-item">
+                <div class="dash-hero-meta-label">狀態</div>
+                <div class="dash-hero-meta-value" id="dashProjStatusMeta">—</div>
+              </div>
             </div>
-            <div class="stat-card warning">
-              <div class="stat-label">未付餘額</div>
-              <div class="stat-value small" id="dashRemainder">—</div>
-              <div class="stat-sub">Remainder</div>
+          </div>
+
+          <div class="dashboard-stats">
+            <div class="stats-block">
+              <div class="stats-block-title">🏗️ 地盤糧期狀況</div>
+              <div class="stats-grid stats-grid-3">
+                <div class="stat-card success">
+                  <div class="stat-label">總收入</div>
+                  <div class="stat-value small" id="dashIpIncome">—</div>
+                  <div class="stat-sub">Total Income</div>
+                </div>
+                <div class="stat-card danger">
+                  <div class="stat-label">總支出</div>
+                  <div class="stat-value small" id="dashIpExpenditure">—</div>
+                  <div class="stat-sub">Total Expenditure</div>
+                </div>
+                <div class="stat-card warning">
+                  <div class="stat-label">墊支</div>
+                  <div class="stat-value small" id="dashIpAdvance">—</div>
+                  <div class="stat-sub">Advance</div>
+                </div>
+              </div>
             </div>
-            <div class="stat-card info">
-              <div class="stat-label">付款記錄數</div>
-              <div class="stat-value" id="dashPayCount">—</div>
-              <div class="stat-sub">Payment Records</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">合同項目數</div>
-              <div class="stat-value" id="dashScCount">—</div>
-              <div class="stat-sub">Contract Items</div>
-            </div>
-            <div class="stat-card danger">
-              <div class="stat-label">付款進度</div>
-              <div class="stat-value" id="dashProgress">—</div>
-              <div class="stat-sub">Payment Progress</div>
+            <div class="stats-block">
+              <div class="stats-block-title">📊 項目概況</div>
+              <div class="stats-grid stats-grid-3">
+                <div class="stat-card success">
+                  <div class="stat-label">累計已付</div>
+                  <div class="stat-value small" id="dashTotalPaid">—</div>
+                  <div class="stat-sub">Total Paid</div>
+                </div>
+                <div class="stat-card warning">
+                  <div class="stat-label">未付餘額</div>
+                  <div class="stat-value small" id="dashRemainder">—</div>
+                  <div class="stat-sub">Remainder</div>
+                </div>
+                <div class="stat-card danger">
+                  <div class="stat-label">付款進度</div>
+                  <div class="stat-value" id="dashProgress">—</div>
+                  <div class="stat-sub">Payment Progress</div>
+                </div>
+                <div class="stat-card info">
+                  <div class="stat-label">付款記錄數</div>
+                  <div class="stat-value" id="dashPayCount">—</div>
+                  <div class="stat-sub">Payment Records</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label">合同項目數</div>
+                  <div class="stat-value" id="dashScCount">—</div>
+                  <div class="stat-sub">Contract Items</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -204,6 +259,25 @@
                   <tr><td colspan="6" class="empty-state" style="padding:32px">載入中...</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 糧期狀況（手動編輯）──────────────────────── -->
+      <div class="page" id="page-ip-period">
+        <div id="ipPeriodNoProject" class="empty-state" style="display:none;padding:64px">
+          <div class="empty-icon">📁</div>
+          <div class="empty-title">請先選擇項目</div>
+          <div class="empty-sub">在左側選擇項目後，可手動新增或編輯糧期記錄</div>
+        </div>
+        <div id="ipPeriodContent">
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <div class="card-title">🏗️ 糧期狀況 <span style="font-size:11px;color:var(--text-muted);font-weight:400">手動編輯 · IP 糧款</span></div>
+            </div>
+            <div class="card-body" id="ipPeriodMain">
+              <div class="empty-state" style="padding:24px">載入中...</div>
             </div>
           </div>
         </div>
@@ -290,21 +364,21 @@
         </div>
       </div>
 
-      <!-- ─── PDF OCR ───────────────────────── -->
+      <!-- ─── 發票·報價識別 ───────────────────────── -->
       <div class="page" id="page-ocr">
         <div class="form-row" style="align-items:flex-start">
           <!-- 上傳區 -->
           <div>
             <div class="card">
               <div class="card-header">
-                <div class="card-title">📄 上傳PDF發票/報價單</div>
+                <div class="card-title">📄 上傳發票單 / 報價單</div>
               </div>
               <div class="card-body">
                 <div class="drop-zone" id="dropZone" ondragover="OCR.onDragOver(event)" ondragleave="OCR.onDragLeave(event)" ondrop="OCR.onDrop(event)">
                   <input type="file" id="pdfFileInput" accept=".pdf,.png,.jpg,.jpeg" onchange="OCR.onFileSelect(event)">
                   <div class="drop-icon">📁</div>
-                  <div class="drop-title">拖拽PDF或點擊選擇</div>
-                  <div class="drop-sub">支援 PDF / PNG / JPG，建議上傳發票或報價單</div>
+                  <div class="drop-title">拖拽文件或點擊選擇</div>
+                  <div class="drop-sub">支援 PDF / PNG / JPG · 發票單、報價單均可</div>
                 </div>
                 <div id="ocrProgress" style="display:none;margin-top:16px">
                   <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -333,13 +407,37 @@
                 <div class="card-title">✍️ 識別結果（請確認後儲存）</div>
               </div>
               <div class="card-body">
+                <div class="ocr-doc-type-bar" id="ocrDocTypeBar" style="display:none">
+                  <div class="ocr-doc-type-left">
+                    <span class="form-label" style="margin:0">文件類型</span>
+                    <span id="ocrDocTypeBadge" class="badge badge-muted">—</span>
+                    <span id="ocrDocTypeConf" class="ocr-doc-conf"></span>
+                  </div>
+                  <div class="ocr-doc-type-pick">
+                    <label class="ocr-type-opt"><input type="radio" name="ocrDocType" value="quotation" onchange="OCR.onDocTypeChange()"> 報價單</label>
+                    <label class="ocr-type-opt"><input type="radio" name="ocrDocType" value="invoice" onchange="OCR.onDocTypeChange()"> 發票單</label>
+                  </div>
+                </div>
+                <div id="ocrScSuggest" class="ocr-sc-suggest" style="display:none"></div>
                 <div class="form-group">
-                  <label class="form-label">關聯參考編號</label>
-                  <select class="form-input" id="ocrScNo">
+                  <label class="form-label">關聯參考編號 <span class="form-hint-inline">（發票必填 · 報價可選現有或新建）</span></label>
+                  <select class="form-input" id="ocrScNo" onchange="OCR.onScChange()">
                     <option value="">— 選擇參考編號 —</option>
                   </select>
                 </div>
-                <div class="form-row">
+                <div class="form-group" id="ocrNewScGroup" style="display:none">
+                  <label class="form-label">新建參考編號 <span class="required">*</span></label>
+                  <div class="ocr-new-sc-row">
+                    <select class="form-input ocr-sc-prefix" id="ocrScPrefix" onchange="OCR.onScPrefixChange()">
+                      <option value="SC">SC — 分包</option>
+                      <option value="M">M — 材料/設備</option>
+                      <option value="O">O — 其他</option>
+                    </select>
+                    <input type="text" class="form-input" id="ocrNewScNo" placeholder="自動建議編號" oninput="OCR._newScManual=true">
+                  </div>
+                  <div class="form-hint" id="ocrNewScHint">依公司名稱與分類自動建議；可手動修改</div>
+                </div>
+                <div class="form-row" id="ocrInvoiceRow">
                   <div class="form-group">
                     <label class="form-label">發票號碼</label>
                     <input type="text" class="form-input" id="ocrInvoiceNo" placeholder="系統自動識別">
@@ -349,16 +447,20 @@
                     <input type="date" class="form-input" id="ocrInvoiceDate">
                   </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row" id="ocrQuotationRow">
                   <div class="form-group">
                     <label class="form-label">報價單號</label>
                     <input type="text" class="form-input" id="ocrQuotationNo" placeholder="系統自動識別">
                   </div>
                   <div class="form-group">
-                    <label class="form-label">付款金額 (HK$)</label>
-                    <div class="amount-input-wrap">
-                      <input type="number" class="form-input" id="ocrAmount" placeholder="0.00" step="0.01">
-                    </div>
+                    <label class="form-label">報價日期</label>
+                    <input type="date" class="form-input" id="ocrQuotationDate">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">付款金額 (HK$)</label>
+                  <div class="amount-input-wrap">
+                    <input type="number" class="form-input" id="ocrAmount" placeholder="0.00" step="0.01">
                   </div>
                 </div>
                 <div class="form-group">
@@ -381,7 +483,7 @@
                         </tr>
                       </thead>
                       <tbody id="ocrItemsBody">
-                        <tr><td colspan="7" class="ocr-items-empty">上傳 PDF 後自動識別項目明細</td></tr>
+                        <tr><td colspan="7" class="ocr-items-empty">上傳發票單或報價單後自動識別項目明細</td></tr>
                       </tbody>
                     </table>
                   </div>
@@ -389,17 +491,25 @@
                     <button type="button" class="btn btn-secondary btn-sm" onclick="OCR.addLineItem()">+ 新增項目</button>
                     <span id="ocrItemsTotal" class="ocr-items-total"></span>
                   </div>
+                  <div id="ocrAmountWarn" class="ocr-amount-warn" style="display:none"></div>
                   <textarea class="form-input" id="ocrDescription" rows="2" placeholder="摘要（自動由項目明細生成）" style="margin-top:10px;font-size:12px"></textarea>
                 </div>
                 <div class="form-group">
                   <label class="form-label">備注</label>
                   <input type="text" class="form-input" id="ocrRemark" placeholder="選填">
                 </div>
-                <div style="display:flex;gap:10px;margin-top:8px">
-                  <button class="btn btn-success" onclick="OCR.saveRecord()" id="ocrSaveBtn" disabled>
-                    💾 確認儲存為付款記錄
+                <div id="ocrDupWarn" class="ocr-dup-warn" style="display:none"></div>
+                <div class="ocr-save-actions">
+                  <button type="button" class="btn btn-primary" onclick="OCR.saveAsQuotation()" id="ocrSaveQuotBtn" disabled>
+                    📋 儲存為報價（合同項目）
                   </button>
-                  <button class="btn btn-secondary" onclick="OCR.reset()">重置</button>
+                  <button type="button" class="btn btn-success" onclick="OCR.saveAsInvoice()" id="ocrSaveInvBtn" disabled>
+                    🧾 儲存為發票（付款記錄）
+                  </button>
+                  <button type="button" class="btn btn-secondary" onclick="OCR.reset()">重置</button>
+                </div>
+                <div class="form-hint" style="margin-top:10px">
+                  報價單 → 更新/新建合同項目 · 發票單 → 新增付款記錄（須關聯參考編號）
                 </div>
               </div>
             </div>
@@ -738,14 +848,14 @@
 
 <!-- ─── 模態框：新增分判商 ────────────────────────────────────── -->
 <div class="modal-backdrop" id="scModal">
-  <div class="modal">
+  <div class="modal modal-lg">
     <div class="modal-header">
       <div class="modal-title" id="scModalTitle">新增合同項目</div>
       <button class="modal-close" onclick="SC.closeModal()">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="scModalId">
-      <div class="form-row">
+      <div class="form-row-3">
         <div class="form-group">
           <label class="form-label">參考編號 <span class="required">*</span></label>
           <input type="text" class="form-input" id="scNo" placeholder="M-011 / SC-019 / O-012">
@@ -753,6 +863,11 @@
         <div class="form-group">
           <label class="form-label">報價單號</label>
           <input type="text" class="form-input" id="scQuotNo" placeholder="Q-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">報價日期</label>
+          <input type="date" class="form-input" id="scQuotDate">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">報價單上的日期</div>
         </div>
       </div>
       <div class="form-row">
@@ -765,9 +880,34 @@
           <input type="text" class="form-input" id="scCompanyZh">
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">工程描述</label>
-        <input type="text" class="form-input" id="scDesc">
+      <div class="form-group sc-desc-block">
+        <div class="sc-desc-head">
+          <label class="form-label" style="margin:0">工程 / 服務項目明細</label>
+          <div class="sc-doc-toolbar" id="scDocToolbar"></div>
+        </div>
+        <input type="text" class="form-input sc-desc-title" id="scDescTitle" placeholder="項目摘要（選填，如：EL - Material）">
+        <div class="table-wrap ocr-items-wrap sc-items-wrap">
+          <table class="ocr-items-table sc-items-table">
+            <thead>
+              <tr>
+                <th style="width:44px">項次</th>
+                <th>項目描述</th>
+                <th style="width:64px">數量</th>
+                <th style="width:64px">單位</th>
+                <th style="width:88px">單價</th>
+                <th style="width:88px">金額</th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody id="scItemsBody">
+              <tr><td colspan="7" class="ocr-items-empty">尚無明細，可新增項目或於摘要填寫簡述</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="sc-desc-foot">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="SC.addDescItem()">+ 新增項目</button>
+          <span id="scItemsTotal" class="ocr-items-total"></span>
+        </div>
       </div>
       <div class="section-title" style="margin-top:8px">合約金額（Excel H / I / J）</div>
       <div class="form-row-3">
@@ -905,10 +1045,129 @@
   </div>
 </div>
 
+<!-- ─── 模態框：糧期匯總 ───────────────────────────────────────── -->
+<div class="modal-backdrop" id="ipMetaModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">編輯糧期匯總</div>
+      <button type="button" class="modal-close" onclick="IpPeriod.closeMetaModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">工期</label>
+        <input type="text" class="form-input" id="ipMetaPeriod" placeholder="例：2023/04 – 2026/03">
+        <div class="form-hint">顯示於項目標題區及糧期表上方</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">總收入</label>
+        <input type="number" step="0.01" class="form-input" id="ipMetaIncome" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">總支出</label>
+        <input type="number" step="0.01" class="form-input" id="ipMetaExpenditure" placeholder="0.00">
+        <div class="form-hint">輸入正數，顯示時會以括號負數格式呈現</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">墊支</label>
+        <input type="number" step="0.01" class="form-input" id="ipMetaAdvance" placeholder="0.00">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="IpPeriod.closeMetaModal()">取消</button>
+      <button type="button" class="btn btn-primary" onclick="IpPeriod.saveMetaModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：糧期記錄 ───────────────────────────────────────── -->
+<div class="modal-backdrop" id="ipModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="ipModalTitle">新增糧期</div>
+      <button type="button" class="modal-close" onclick="IpPeriod.closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ipModalId">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">糧款期數 <span class="required">*</span></label>
+          <input type="text" class="form-input" id="ipNo" placeholder="IP-01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">排序</label>
+          <input type="number" class="form-input" id="ipSeqNo" placeholder="自動">
+          <div class="form-hint">留空則自動遞增</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">申請日期</label>
+          <input type="date" class="form-input" id="ipAppliedDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">批款日期</label>
+          <input type="date" class="form-input" id="ipCertDate">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">申請金額</label>
+          <input type="number" step="0.01" class="form-input" id="ipAppAmt" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">則師批款</label>
+          <input type="number" step="0.01" class="form-input" id="ipCertAmt" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">分包支出</label>
+          <input type="number" step="0.01" class="form-input" id="ipSubconPaid" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">分包批款日</label>
+          <input type="date" class="form-input" id="ipSubconCertDate">
+        </div>
+      </div>
+      <div id="ipPctHint" class="form-hint" style="margin-top:4px"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="IpPeriod.closeModal()">取消</button>
+      <button type="button" class="btn btn-primary" onclick="IpPeriod.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 文件預覽（PDF / 圖片）──────────────────────────────── -->
+<div class="doc-viewer-backdrop" id="docViewerModal" onclick="DocViewer.onBackdrop(event)">
+  <div class="doc-viewer-panel" onclick="event.stopPropagation()">
+    <div class="doc-viewer-header">
+      <div class="doc-viewer-title" id="docViewerTitle">文件預覽</div>
+      <div class="doc-viewer-actions">
+        <a class="btn btn-secondary btn-sm" id="docViewerOpenTab" href="#" target="_blank" rel="noopener">新分頁開啟</a>
+        <a class="btn btn-secondary btn-sm" id="docViewerDownload" href="#" download>下載</a>
+        <button type="button" class="modal-close" onclick="DocViewer.close()" title="關閉">✕</button>
+      </div>
+    </div>
+    <div class="doc-viewer-body" id="docViewerBody">
+      <div class="doc-viewer-loading" id="docViewerLoading">載入文件中...</div>
+      <iframe id="docViewerFrame" class="doc-viewer-frame" title="PDF 預覽"></iframe>
+      <img id="docViewerImg" class="doc-viewer-img" alt="圖片預覽">
+      <div class="doc-viewer-error" id="docViewerError" style="display:none">
+        <div class="empty-icon">📄</div>
+        <div class="empty-title">無法載入文件</div>
+        <div class="empty-sub" id="docViewerErrorMsg">文件可能未上傳至伺服器，或已被清除</div>
+        <a class="btn btn-primary btn-sm" id="docViewerErrorLink" href="#" target="_blank" rel="noopener" style="margin-top:12px">嘗試新分頁開啟</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
 <script src="js/main.js"></script>
 <script src="js/payments.js"></script>
 <script src="js/projects.js"></script>
+<script src="js/ip_period.js"></script>
 <script src="js/ocr.js"></script>
 <script src="js/reports.js"></script>
 </body>

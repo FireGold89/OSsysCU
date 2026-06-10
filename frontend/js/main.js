@@ -6,8 +6,96 @@ function uploadUrl(filename) {
   return `${window.location.origin}/api/uploads/${encodeURIComponent(filename)}`;
 }
 
+/** 應用內文件預覽（PDF / 圖片） */
+const DocViewer = {
+  async open(filePath, title = '文件預覽') {
+    const url = uploadUrl(filePath);
+    if (!url) {
+      toast('此記錄沒有 PDF', 'warning');
+      return;
+    }
+    const modal = document.getElementById('docViewerModal');
+    const frame = document.getElementById('docViewerFrame');
+    const img = document.getElementById('docViewerImg');
+    const loading = document.getElementById('docViewerLoading');
+    const errBox = document.getElementById('docViewerError');
+    const errMsg = document.getElementById('docViewerErrorMsg');
+    const errLink = document.getElementById('docViewerErrorLink');
+    const openTab = document.getElementById('docViewerOpenTab');
+    const download = document.getElementById('docViewerDownload');
+
+    document.getElementById('docViewerTitle').textContent = title;
+    if (openTab) openTab.href = url;
+    if (download) { download.href = url; download.download = filePath.split('/').pop(); }
+    if (errLink) errLink.href = url;
+
+    frame.style.display = 'none';
+    frame.src = 'about:blank';
+    img.style.display = 'none';
+    img.removeAttribute('src');
+    errBox.style.display = 'none';
+    loading.style.display = '';
+    modal.classList.add('open');
+    this._onKey = (e) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this._onKey);
+
+    const ext = (filePath.split('.').pop() || '').toLowerCase();
+    const showError = (msg) => {
+      loading.style.display = 'none';
+      if (errMsg) errMsg.textContent = msg;
+      errBox.style.display = '';
+    };
+
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+      img.onload = () => { loading.style.display = 'none'; };
+      img.onerror = () => {
+        img.style.display = 'none';
+        showError('無法載入圖片，請用「新分頁開啟」或「下載」');
+      };
+      img.style.display = 'block';
+      img.src = url;
+      return;
+    }
+
+    frame.onload = () => { loading.style.display = 'none'; };
+    frame.onerror = () => showError('無法載入 PDF，請用「新分頁開啟」');
+    frame.style.display = 'block';
+    frame.src = `${url}#view=FitH`;
+
+    // 輕量檢查（不阻擋預覽；部分伺服器不支援 HEAD）
+    try {
+      const r = await fetch(url, { method: 'HEAD' });
+      if (!r.ok) {
+        loading.style.display = 'none';
+        if (errMsg) {
+          errMsg.textContent = r.status === 404
+            ? '文件不在伺服器（Zeabur 需掛載 Volume）'
+            : `伺服器回應 ${r.status}，可嘗試新分頁開啟`;
+        }
+        errBox.style.display = '';
+      }
+    } catch (e) { /* 仍嘗試 iframe 載入 */ }
+  },
+
+  close() {
+    if (this._onKey) document.removeEventListener('keydown', this._onKey);
+    const modal = document.getElementById('docViewerModal');
+    if (modal) modal.classList.remove('open');
+    const frame = document.getElementById('docViewerFrame');
+    if (frame) frame.src = 'about:blank';
+    const img = document.getElementById('docViewerImg');
+    if (img) img.removeAttribute('src');
+  },
+
+  onBackdrop(e) {
+    if (e.target.id === 'docViewerModal') this.close();
+  },
+};
+
 // ─── 工具函數 ──────────────────────────────────────────────
-function fmt(num, decimals = 0) {
+const FMT_DECIMALS = 2;
+
+function fmt(num, decimals = FMT_DECIMALS) {
   if (num == null || num === '') return '—';
   const n = parseFloat(num);
   if (isNaN(n)) return '—';
@@ -15,7 +103,7 @@ function fmt(num, decimals = 0) {
 }
 
 /** Excel 會計格式：負數用括號 (1,500) */
-function fmtAcct(num, decimals = 0) {
+function fmtAcct(num, decimals = FMT_DECIMALS) {
   if (num == null || num === '') return '—';
   const n = parseFloat(num);
   if (isNaN(n)) return '—';
@@ -27,61 +115,93 @@ function fmtPct(val) {
   if (val == null || val === '') return '—';
   const n = parseFloat(val);
   if (isNaN(n)) return '—';
-  return n.toFixed(1) + '%';
+  return n.toFixed(FMT_DECIMALS) + '%';
 }
 
-function renderSiteIpPeriod(ip, containerId) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  if (!ip || !ip.items || !ip.items.length) {
-    el.innerHTML = `<div class="empty-state" style="padding:24px">
-      <div class="empty-sub">尚無糧期資料，請從 Excel Summary 工作表匯入</div>
-    </div>`;
+function fmtNumPlain(num, decimals = FMT_DECIMALS) {
+  if (num == null || num === '') return '';
+  const n = parseFloat(num);
+  if (isNaN(n)) return '';
+  return n.toLocaleString('en-HK', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+/** 表單輸入框用（無千分位） */
+function fmtInputNum(num, decimals = FMT_DECIMALS) {
+  if (num == null || num === '') return '';
+  const n = parseFloat(num);
+  if (isNaN(n)) return '';
+  return n.toFixed(decimals);
+}
+
+function fmtIpExpenditure(val) {
+  const n = parseFloat(val);
+  if (isNaN(n) || n === 0) return fmtAcct(0);
+  return fmtAcct(n < 0 ? n : -Math.abs(n));
+}
+
+function projectStatusInfo(status) {
+  const map = {
+    Active: { label: '進行中', badge: 'success', en: 'Active' },
+    Completed: { label: '已完成', badge: 'info', en: 'Completed' },
+    'On Hold': { label: '暫停', badge: 'warning', en: 'On Hold' },
+  };
+  return map[status] || { label: status || '—', badge: 'muted', en: status || '' };
+}
+
+function projectStatusBadgeHtml(status) {
+  const m = projectStatusInfo(status);
+  const pulse = status === 'Active' ? ' is-active' : '';
+  return `<span class="badge badge-${m.badge} dash-hero-status-badge${pulse}"><span class="dash-status-dot"></span>${m.label}</span>`;
+}
+
+function updateDashProjectHero(project, ipPeriod) {
+  const proj = project || {};
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val || '—';
+  };
+  set('dashProjCode', proj.project_code);
+  set('dashProjName', proj.project_name || proj.project_code);
+  const period = ipPeriod?.site_period_text || proj.site_period_text;
+  set('dashProjPeriod', period);
+  set('dashProjMc', proj.main_contractor);
+  const statusTop = document.getElementById('dashProjStatus');
+  const statusMeta = document.getElementById('dashProjStatusMeta');
+  if (statusTop) statusTop.innerHTML = proj.status ? projectStatusBadgeHtml(proj.status) : '';
+  if (statusMeta) {
+    statusMeta.innerHTML = proj.status
+      ? `<div class="dash-hero-status-detail">${projectStatusBadgeHtml(proj.status)}<span class="dash-hero-status-detail-en">${projectStatusInfo(proj.status).en}</span></div>`
+      : '—';
+  }
+  const amt = parseFloat(proj.contract_amount);
+  const amtEl = document.getElementById('dashHeroContractAmt');
+  if (amtEl) amtEl.textContent = !isNaN(amt) && amt !== 0 ? fmt(amt) : '—';
+}
+
+function updateDashIpTotals(ip) {
+  const t = ip?.totals || {};
+  const incomeEl = document.getElementById('dashIpIncome');
+  const expEl = document.getElementById('dashIpExpenditure');
+  const advEl = document.getElementById('dashIpAdvance');
+  if (!incomeEl || !expEl || !advEl) return;
+  const hasAny = ip && (
+    ip.items?.length ||
+    parseFloat(t.total_income) ||
+    parseFloat(t.total_expenditure) ||
+    parseFloat(t.advance)
+  );
+  if (!hasAny) {
+    incomeEl.textContent = expEl.textContent = advEl.textContent = '—';
     return;
   }
-  const t = ip.totals || {};
-  const period = ip.site_period_text
-    ? `<span class="badge badge-muted" style="margin-left:8px">工期 ${ip.site_period_text}</span>` : '';
-  const rows = ip.items.map(r => `
-    <tr>
-      <td class="td-mono" style="font-weight:600">${r.ip_no}</td>
-      <td class="td-muted">${fmtDate(r.applied_date)}</td>
-      <td class="td-amount">${fmt(r.application_amount)}</td>
-      <td class="td-muted" style="text-align:right">${fmtPct(r.application_pct)}</td>
-      <td class="td-amount positive">${fmt(r.certified_income)}</td>
-      <td class="td-muted" style="text-align:right">${fmtPct(r.certified_income_pct)}</td>
-      <td class="td-muted">${fmtDate(r.certificate_date)}</td>
-      <td class="td-amount">${r.subcon_paid ? fmt(r.subcon_paid) : '—'}</td>
-      <td class="td-muted">${fmtDate(r.subcon_cert_date)}</td>
-    </tr>`).join('');
-  const advClass = parseFloat(t.advance) < 0 ? 'negative' : '';
-  el.innerHTML = `
-    <div style="margin-bottom:12px;font-size:12px;color:var(--text-secondary)">
-      主合約糧款追蹤（則師批款）${period}
-    </div>
-    <div class="ip-period-wrap">
-      <table class="ip-period-table">
-        <thead>
-          <tr>
-            <th>糧款期數</th>
-            <th>申請日期</th>
-            <th class="th-num">申請金額</th>
-            <th class="th-num">申請%</th>
-            <th class="th-num">則師批款</th>
-            <th class="th-num">批款%</th>
-            <th>批款日期</th>
-            <th class="th-num">分包支出</th>
-            <th>分包批款日</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="ip-period-totals">
-      <div><span class="label">總收入</span><strong class="positive">${fmtAcct(t.total_income)}</strong></div>
-      <div><span class="label">總支出</span><strong class="negative">${fmtAcct(t.total_expenditure < 0 ? t.total_expenditure : -Math.abs(t.total_expenditure || 0))}</strong></div>
-      <div><span class="label">墊支</span><strong class="${advClass}">${fmtAcct(t.advance)}</strong></div>
-    </div>`;
+  incomeEl.textContent = fmtAcct(t.total_income);
+  expEl.textContent = fmtIpExpenditure(t.total_expenditure);
+  advEl.textContent = fmtAcct(t.advance);
+  const advCard = advEl.closest('.stat-card');
+  if (advCard) {
+    advCard.classList.toggle('danger', parseFloat(t.advance) < 0);
+    advCard.classList.toggle('warning', parseFloat(t.advance) >= 0);
+  }
 }
 
 function renderContractCalc(calc, containerId) {
@@ -97,7 +217,7 @@ function renderContractCalc(calc, containerId) {
         <tr><td class="calc-label">財務會作調撥（人工分攤）</td><td class="calc-value highlight">${fmtAcct(calc.labour_allocation)}</td></tr>
         <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+調撥</td><td class="calc-value">${fmtAcct(calc.total_d)}</td></tr>
         <tr><td class="calc-label">(E) = (A)−(D) 預計利潤</td><td class="calc-value ${rateClass}">${fmtAcct(calc.profit_e)}</td></tr>
-        <tr><td class="calc-label">預計利潤率</td><td class="calc-value ${rateClass}">${calc.profit_rate}%</td></tr>
+        <tr><td class="calc-label">預計利潤率</td><td class="calc-value ${rateClass}">${fmtPct(calc.profit_rate)}</td></tr>
       </tbody>
     </table>
   `;
@@ -118,6 +238,77 @@ function deriveParentScNo(scNo) {
   const m = s.match(/^(.+?)([A-Z]\d*)$/);
   if (m && m[1] !== s && m[2].length <= 3) return m[1];
   return s;
+}
+
+/** 解析工程描述（OCR 表格文字 → 明細列） */
+function parseDescriptionItems(text) {
+  if (!text || !String(text).trim()) {
+    return { title: '', items: [], plain: '' };
+  }
+  const raw = String(text).replace(/\r\n/g, '\n');
+  const norm = raw.replace(/项次/g, '項次').replace(/项目描述/g, '項目描述');
+  const headerRe = /項次[\s\t]*項目描述[\s\t]*數量[\s\t]*單位[\s\t]*單價[\s\S]*?金額/;
+  const headerMatch = norm.match(headerRe);
+  if (headerMatch) {
+    const headerStart = norm.indexOf(headerMatch[0]);
+    const title = norm.slice(0, headerStart).replace(/\s+/g, ' ').trim();
+    const after = norm.slice(headerStart + headerMatch[0].length).trim();
+    const items = [];
+    const rowRe = /(\d+)\s+([^\t\n]+?)\s+(\d+(?:\.\d+)?)\s+([^\t\n\d]+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)/g;
+    let m;
+    while ((m = rowRe.exec(after)) !== null) {
+      items.push({
+        no: m[1], description: m[2].trim(), qty: m[3], unit: m[4].trim(),
+        unit_price: m[5].replace(/,/g, ''), amount: m[6].replace(/,/g, ''),
+      });
+    }
+    if (!items.length) {
+      after.split('\n').forEach((line, i) => {
+        const parts = line.split('\t');
+        if (parts.length >= 2 && parts[1]) {
+          items.push({
+            no: parts[0] || String(i + 1), description: parts[1],
+            qty: parts[2] || '', unit: parts[3] || '',
+            unit_price: parts[4] || '', amount: parts[5] || '',
+          });
+        }
+      });
+    }
+    if (items.length) return { title, items, plain: '' };
+  }
+  const lines = norm.split('\n').map(l => l.trim()).filter(l => l !== '');
+  const headerIdx = lines.findIndex(l => l.includes('項目描述') && l.includes('\t'));
+  if (headerIdx >= 0) {
+    const title = lines.slice(0, headerIdx).filter(Boolean).join(' ').trim();
+    const items = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const parts = lines[i].split('\t');
+      if (parts.length < 2 || !parts[1]) continue;
+      items.push({
+        no: parts[0] || String(items.length + 1), description: parts[1],
+        qty: parts[2] || '', unit: parts[3] || '',
+        unit_price: parts[4] || '', amount: parts[5] || '',
+      });
+    }
+    return { title, items, plain: '' };
+  }
+  return { title: '', items: [], plain: raw.trim() };
+}
+
+/** 明細列 → 工程描述文字（與 OCR 格式一致） */
+function buildDescriptionText(items, title) {
+  const rows = (items || []).filter(it => it.description || it.amount);
+  if (!rows.length) return (title || '').trim();
+  const head = (title || '').trim()
+    || (rows.length === 1 ? rows[0].description : `工程/服務項目（共 ${rows.length} 項）`);
+  const lines = [head, '', '項次\t項目描述\t數量\t單位\t單價(HK$)\t金額(HK$)'];
+  rows.forEach((it, i) => {
+    lines.push([
+      it.no || String(i + 1), it.description || '', it.qty || '', it.unit || '',
+      fmtNumPlain(it.unit_price), fmtNumPlain(it.amount),
+    ].join('\t'));
+  });
+  return lines.join('\n');
 }
 
 /** M-/SC-/O- 參考編號類型（對應 Excel 灰色提示） */
@@ -188,6 +379,15 @@ const App = {
   scList: [],
 
   async init() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-view-pdf');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const path = btn.getAttribute('data-pdf-path');
+      if (path) DocViewer.open(path, '付款單據 PDF');
+    });
+
     await this.loadProjects();
     const saved = localStorage.getItem('qs_project_id');
     if (saved && this.projects.find(p => p.id == saved)) {
@@ -256,7 +456,8 @@ const App = {
       dashboard: ['儀表板', '項目財務總覽'],
       payments: ['付款記錄', '管理所有付款'],
       subcontractors: ['合同項目', 'M=物料 · SC=分判 · O=其他'],
-      ocr: ['PDF OCR識別', '自動提取發票資料'],
+      'ip-period': ['糧期狀況', '地盤糧期手動編輯'],
+      ocr: ['發票·報價識別', '上傳發票單、報價單，自動提取並建立付款記錄'],
       reports: ['財務報表', '付款統計分析'],
       projects: ['項目管理', '管理所有工程項目'],
       settings: ['系統設定', 'OCR與系統配置'],
@@ -268,6 +469,7 @@ const App = {
     // 載入頁面數據
     if (page === 'payments') Payments.load();
     else if (page === 'subcontractors') SC.load();
+    else if (page === 'ip-period') IpPeriod.load();
     else if (page === 'reports') Reports.load();
     else if (page === 'settings') Settings.load();
   },
@@ -330,12 +532,15 @@ const Dashboard = {
     const totalPaid = summary.total_paid || 0;
     const totalRem = summary.total_remainder || 0;
     const contractAmt = summary.project?.contract_amount || p.contract_amount || 0;
-    const progress = contractAmt > 0 ? ((totalPaid / contractAmt) * 100).toFixed(1) : '—';
+    const progress = contractAmt > 0 ? ((totalPaid / contractAmt) * 100).toFixed(FMT_DECIMALS) : '—';
 
-    document.getElementById('dashContractAmt').textContent = fmt(contractAmt);
+    updateDashProjectHero(summary.project || p, summary.ip_period);
+
     document.getElementById('dashTotalPaid').textContent = fmt(totalPaid);
     document.getElementById('dashRemainder').textContent = fmt(totalRem);
     document.getElementById('dashProgress').textContent = progress !== '—' ? `${progress}%` : '—';
+
+    updateDashIpTotals(summary.ip_period);
 
     // 付款記錄統計
     const payments = await api('GET', `/projects/${p.id}/payments`);
@@ -344,7 +549,7 @@ const Dashboard = {
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
 
     renderContractCalc(summary.contract_calc, 'dashContractCalc');
-    renderSiteIpPeriod(summary.ip_period, 'dashSiteIp');
+    renderSiteIpPeriod(summary.ip_period, 'dashSiteIp', { editable: false });
 
     // 最近記錄
     const recent = (payments || []).slice(0, 8);
@@ -392,9 +597,16 @@ const Dashboard = {
       options: {
         indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+        plugins: {
+          legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: HK$${fmtNumPlain(ctx.raw)}`
+            }
+          }
+        },
         scales: {
-          x: { stacked: true, ticks: { color: '#8b949e', font: { size: 10 }, callback: v => 'HK$' + (v/1000).toFixed(0) + 'K' }, grid: { color: '#21262d' } },
+          x: { stacked: true, ticks: { color: '#8b949e', font: { size: 10 }, callback: v => 'HK$' + (v / 1000).toFixed(FMT_DECIMALS) + 'K' }, grid: { color: '#21262d' } },
           y: { stacked: true, ticks: { color: '#e6edf3', font: { size: 11 } }, grid: { display: false } },
         }
       }
@@ -423,7 +635,7 @@ const Dashboard = {
         plugins: {
           legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 11 }, padding: 12 } },
           tooltip: {
-            callbacks: { label: ctx => `${ctx.label}: HK$${ctx.raw.toLocaleString()}` }
+            callbacks: { label: ctx => `${ctx.label}: HK$${fmtNumPlain(ctx.raw)}` }
           }
         }
       }

@@ -141,7 +141,7 @@ const Payments = {
           <td>${oaBadge}</td>
           <td onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px">
-              ${r.pdf_path ? `<button class="btn btn-icon btn-secondary btn-sm" title="查看原PDF" onclick="Payments.viewPdf(${JSON.stringify(r.pdf_path)})">📄</button>` : ''}
+              ${r.pdf_path ? `<button type="button" class="btn btn-icon btn-secondary btn-sm btn-view-pdf" title="查看原PDF" data-pdf-path="${String(r.pdf_path).replace(/"/g, '&quot;')}">📄</button>` : ''}
               <button class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="Payments.openEdit(${r.id})">✏️</button>
               <button class="btn btn-icon btn-danger btn-sm" title="刪除" onclick="Payments.delete(${r.id})">🗑️</button>
             </div>
@@ -215,16 +215,11 @@ const Payments = {
   calcRemainder() {
     const ca = parseFloat(document.getElementById('fContractAmt').value) || 0;
     const pa = parseFloat(document.getElementById('fPaidAmt').value) || 0;
-    document.getElementById('fRemAmt').value = (ca - pa).toFixed(2);
+    document.getElementById('fRemAmt').value = fmtInputNum(ca - pa);
   },
 
-  viewPdf(pdfPath) {
-    const url = uploadUrl(pdfPath);
-    if (!url) {
-      toast('此記錄沒有 PDF', 'warning');
-      return;
-    }
-    window.open(url, '_blank', 'noopener');
+  viewPdf(pdfPath, title) {
+    DocViewer.open(pdfPath, title || '付款單據 PDF');
   },
 
   viewModalPdf() {
@@ -276,9 +271,9 @@ const Payments = {
     document.getElementById('fCompanyEn').value = r.company_name_en || '';
     document.getElementById('fCompanyZh').value = r.company_name_zh || '';
     document.getElementById('fDesc').value = r.description || '';
-    document.getElementById('fContractAmt').value = r.contract_amount || '';
-    document.getElementById('fPaidAmt').value = r.paid_amount || '';
-    document.getElementById('fRemAmt').value = r.remainder_amount || '';
+    document.getElementById('fContractAmt').value = fmtInputNum(r.contract_amount);
+    document.getElementById('fPaidAmt').value = fmtInputNum(r.paid_amount);
+    document.getElementById('fRemAmt').value = fmtInputNum(r.remainder_amount);
     document.getElementById('fOaRef').value = r.oa_ref || '';
     document.getElementById('fOaNo').value = r.oa_no || '';
     document.getElementById('fMcIpNo').value = r.mc_ip_no || '';
@@ -352,7 +347,7 @@ const Payments = {
     const headers = ['序號','發票日期','發票號碼','參考編號','公司名稱(英)','公司名稱(中)','描述','合約金額','已付金額','餘額','OA參考','OA編號','MC IP No.','Sub-IP No.','備注'];
     const rows = this.filtered.map(r => [
       r.seq_no, r.invoice_date, r.invoice_no, r.sc_no, r.company_name_en, r.company_name_zh,
-      r.description, r.contract_amount, r.paid_amount, r.remainder_amount,
+      r.description, fmtNumPlain(r.contract_amount), fmtNumPlain(r.paid_amount), fmtNumPlain(r.remainder_amount),
       r.oa_ref, r.oa_no, r.mc_ip_no, r.sub_ip_no, r.remark
     ]);
     downloadCsv([headers, ...rows], `payments_${App.currentProject?.project_code}_${new Date().toISOString().slice(0,10)}.csv`);
