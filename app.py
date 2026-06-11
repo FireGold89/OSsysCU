@@ -505,6 +505,37 @@ def restore_database():
     })
 
 
+@app.route('/api/system/sync-excel', methods=['POST'])
+def sync_excel_api():
+    """從內建 Excel 同步合同、付款、糧期（需 SYNC_TOKEN 或空庫）"""
+    expected = os.environ.get('SYNC_TOKEN', os.environ.get('RESTORE_TOKEN', '')).strip()
+    token = (request.headers.get('X-Sync-Token') or request.form.get('token') or '').strip()
+    if expected:
+        if token != expected:
+            return resp(error='未授權', status=403)
+
+    excel_name = 'MS_Q1241_24 - Main contract Works Payment Status Table - R4.xlsx'
+    excel_path = os.path.join(BASE_DIR, excel_name)
+    if not os.path.exists(excel_path):
+        return resp(error=f'找不到 Excel: {excel_name}', status=404)
+
+    project_id = request.json.get('project_id') if request.is_json else None
+    if project_id is None:
+        project_id = request.form.get('project_id', type=int)
+
+    try:
+        from excel_importer import sync_excel_data
+        pid = sync_excel_data(excel_path, project_id)
+        ip = db.get_ip_period_summary(pid)
+        return resp({
+            'project_id': pid,
+            'message': 'Excel 同步完成',
+            'ip_periods': len((ip or {}).get('items') or []),
+        })
+    except Exception as e:
+        return resp(error=f'同步失敗: {str(e)}', status=500)
+
+
 # ─── Excel Import API ───────────────────────────────────────────────────
 @app.route('/api/import/excel', methods=['POST'])
 def import_excel_api():

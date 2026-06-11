@@ -321,6 +321,11 @@ def upsert_subcontractor(data):
                 data['project_id'], old['id'], data['sc_no'], 'quotation',
                 old_pdf, ocr_id=None, conn=conn,
             )
+        # Excel 同步時保留 OCR 已填入的報價日期 / PDF
+        if not data.get('quotation_date') and old.get('quotation_date'):
+            data['quotation_date'] = old['quotation_date']
+        if not data.get('quotation_saved') and old.get('quotation_saved'):
+            data['quotation_saved'] = old['quotation_saved']
         conn.execute("""
             UPDATE subcontractors SET
                 quotation_no=:quotation_no, company_name_en=:company_name_en,
@@ -646,6 +651,14 @@ def delete_payment(payment_id):
     conn.close()
     if project_id:
         compact_seq_numbers(project_id)
+
+
+def replace_payments_for_project(project_id):
+    """清除項目付款記錄（Excel 重新同步用）"""
+    conn = get_conn()
+    conn.execute("DELETE FROM payment_records WHERE project_id=?", (project_id,))
+    conn.commit()
+    conn.close()
 
 
 # ─── 地盤糧期狀況 (Interim Payments) ───────────────────────────────────

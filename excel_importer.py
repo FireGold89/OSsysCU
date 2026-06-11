@@ -501,6 +501,195 @@ def import_excel(filepath, project_code=None):
     return project_id
 
 
+def sync_excel_data(filepath, project_id=None):
+    """同步 Excel → 合同項目、付款、糧期（保留 OCR 報價日期/PDF）"""
+    print(f"\n[SYNC] 開始同步: {filepath}")
+    db.init_db()
+
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(filepath)
+
+    if not project_id:
+        projects = db.get_all_projects()
+        if not projects:
+            print('[SYNC] 無項目，改為完整匯入')
+            return import_excel(filepath)
+        project_id = projects[0]['id']
+        print(f"[SYNC] 使用項目 ID={project_id} ({projects[0].get('project_code')})")
+
+    sync_contract_amount_from_excel(filepath, project_id)
+    db.replace_payments_for_project(project_id)
+    print('[SYNC] 已清除舊付款記錄，重新匯入...')
+
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    sheets = wb.sheetnames
+    sc_map = {}
+
+    if 'Project Summary' in sheets:
+        ws_ps = wb['Project Summary']
+        print('[SYNC] 同步合同項目...')
+        sc_count = 0
+        header_row = None
+        for i, row in enumerate(ws_ps.iter_rows(values_only=True)):
+            row_vals = list(row)
+            if header_row is None:
+                row_strs = [safe_str(c) for c in row_vals]
+                if any(v and ('No.' in v or 'SC' in v or 'Company' in v.lower()) for v in row_strs if v):
+                    header_row = i
+                    continue
+            if header_row is not None and i > header_row:
+                if len(row_vals) < 4:
+                    continue
+                sc_no = safe_str(row_vals[1])
+                if not sc_no or sc_no.startswith('(') or sc_no in ('M-0XX', 'SC-0XX', 'O-0XX'):
+                    continue
+                company_en = safe_str(row_vals[3]) if len(row_vals) > 3 else None
+                company_zh = safe_str(row_vals[4]) if len(row_vals) > 4 else None
+                description = safe_str(row_vals[5]) if len(row_vals) > 5 else None
+                contract_charge = safe_str(row_vals[6]) if len(row_vals) > 6 else None
+                h_raw = safe_float(row_vals[7]) if len(row_vals) > 7 else 0
+                vo_raw = safe_float(row_vals[8]) if len(row_vals) > 8 else 0
+                j_raw = safe_float(row_vals[9]) if len(row_vals) > 9 else 0
+                contract_sum, vo_amount, contract_amt = resolve_contract_amounts(
+                    h_raw, vo_raw, j_raw if j_raw > 0 else None)
+                is_excluded = 1 if contract_charge == '*' else 0
+                quotation_no = safe_str(row_vals[2]) if len(row_vals) > 2 else None
+                oa_status = safe_str(row_vals[11]) if len(row_vals) > 11 else None
+                oa_ref = safe_str(row_vals[12]) if len(row_vals) > 12 else None
+                oa_no = safe_str(row_vals[13]) if len(row_vals) > 13 else None
+                oa_date = safe_date(row_vals[14]) if len(row_vals) > 14 else None
+                quotation_saved = safe_str(row_vals[15]) if len(row_vals) > 15 else None
+                payment_note = safe_str(row_vals[10]) if len(row_vals) > 10 else None
+                if not company_en and not company_zh:
+                    continue
+                sc_id = db.upsert_subcontractor({
+                    'project_id': project_id,
+                    'sc_no': sc_no,
+                    'parent_sc_no': derive_parent_sc_no(sc_no),
+                    'quotation_no': quotation_no,
+                    'company_name_en': company_en,
+                    'company_name_zh': company_zh,
+                    'description': description,
+                    'contract_sum': contract_sum,
+                    'vo_amount': vo_amount,
+                    'contract_amount': contract_amt,
+                    'payment_note': payment_note,
+                    'oa_status': oa_status,
+                    'oa_ref': oa_ref,
+                    'oa_no': oa_no,
+                    'quotation_saved': quotation_saved,
+                    'quotation_date': None,
+                    'oa_date': oa_date,
+                    'is_excluded': is_excluded,
+                })
+                sc_map[sc_no] = sc_id
+                sc_count += 1
+        print(f'[SYNC] 已同步 {sc_count} 個合同項目')
+
+    payment_sheet = None
+    for sname in sheets:
+        if any(kw in sname for kw in ['分判', '付款', '工程']) or 'payment' in sname.lower():
+            payment_sheet = sname
+            break
+    if not payment_sheet and len(sheets) >= 2:
+        payment_sheet = sheets[1]
+
+    pay_count = 0
+    if payment_sheet:
+        ws_pay = wb[payment_sheet]
+        print(f'[SYNC] 同步付款記錄 ({payment_sheet})...')
+        header_row = None
+        col_map = {}
+        for i, row in enumerate(ws_pay.iter_rows(values_only=True)):
+            row_vals = list(row)
+            if header_row is None:
+                row_strs = [safe_str(c) for c in row_vals]
+                if any(v and 'Invoice' in v for v in row_strs if v):
+                    header_row = i
+                    for j, v in enumerate(row_strs):
+                        if not v:
+                            continue
+                        v_lower = v.lower().strip()
+                        if 'invoice date' in v_lower:
+                            col_map['invoice_date'] = j
+                        elif 'invoice no' in v_lower:
+                            col_map['invoice_no'] = j
+                        elif 'quotation' in v_lower:
+                            col_map['quotation_no'] = j
+                        elif "sub-contractor" in v_lower and 'no' in v_lower:
+                            col_map['sc_no'] = j
+                        elif 'company name' in v_lower and 'chinese' in v_lower:
+                            col_map['company_name_zh'] = j
+                        elif 'company name' in v_lower:
+                            col_map['company_name_en'] = j
+                        elif 'description' in v_lower:
+                            col_map['description'] = j
+                        elif 'contract amount' in v_lower:
+                            col_map['contract_amount'] = j
+                        elif 'paid amount' in v_lower:
+                            col_map['paid_amount'] = j
+                        elif 'remainder' in v_lower:
+                            col_map['remainder_amount'] = j
+                        elif 'oa' in v_lower and '狀' in v_lower:
+                            col_map['oa_ref'] = j
+                        elif 'oa' in v_lower and '編' in v_lower:
+                            col_map['oa_no'] = j
+                        elif 'mc ip' in v_lower:
+                            col_map['mc_ip_no'] = j
+                        elif 'b/c' in v_lower or 'bc' in v_lower:
+                            col_map['bc_to_sub'] = j
+                        elif 'sub-ip' in v_lower or 'sub ip' in v_lower:
+                            col_map['sub_ip_no'] = j
+                        elif 'remark' in v_lower or 'remrk' in v_lower:
+                            col_map['remark'] = j
+                    continue
+            if header_row is not None and i > header_row:
+                if len(row_vals) < 6:
+                    continue
+                seq_no = safe_str(row_vals[0])
+                if not seq_no or seq_no in ('No.', 'Link'):
+                    continue
+
+                def get_col(key, default=None):
+                    idx = col_map.get(key)
+                    return row_vals[idx] if idx is not None and idx < len(row_vals) else default
+
+                sc_no = safe_str(get_col('sc_no'))
+                company_en = safe_str(get_col('company_name_en'))
+                if not sc_no and not company_en:
+                    continue
+                sc_id = sc_map.get(sc_no) if sc_no else None
+                db.create_payment({
+                    'project_id': project_id,
+                    'sc_id': sc_id,
+                    'seq_no': seq_no,
+                    'invoice_date': safe_date(get_col('invoice_date')),
+                    'invoice_no': safe_str(get_col('invoice_no')),
+                    'quotation_no': safe_str(get_col('quotation_no')),
+                    'sc_no': sc_no,
+                    'company_name_en': company_en,
+                    'company_name_zh': safe_str(get_col('company_name_zh')),
+                    'description': safe_str(get_col('description')),
+                    'contract_amount': safe_float(get_col('contract_amount')),
+                    'paid_amount': safe_float(get_col('paid_amount')),
+                    'remainder_amount': safe_float(get_col('remainder_amount')),
+                    'oa_ref': safe_str(get_col('oa_ref')),
+                    'oa_no': safe_str(get_col('oa_no')),
+                    'mc_ip_no': safe_str(get_col('mc_ip_no')),
+                    'bc_to_sub': safe_str(get_col('bc_to_sub')),
+                    'sub_ip_no': safe_str(get_col('sub_ip_no')),
+                    'remark': safe_str(get_col('remark')),
+                    'pdf_path': None,
+                    'ocr_status': None,
+                })
+                pay_count += 1
+        print(f'[SYNC] 已匯入 {pay_count} 條付款記錄')
+
+    ip_count = import_site_ip_period(filepath, project_id)
+    print(f'[SYNC] 完成! 項目ID={project_id}, 付款={pay_count}, 糧期={ip_count}')
+    return project_id
+
+
 if __name__ == '__main__':
     db.init_db()
     excel_path = os.path.join(os.path.dirname(__file__), 'MS_Q1241_24 - Main contract Works Payment Status Table - R4.xlsx')
