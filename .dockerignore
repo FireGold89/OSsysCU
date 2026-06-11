@@ -5,7 +5,8 @@ __pycache__/
 uploads/
 .git/
 .gitignore
-*.xlsx
+# 保留主資料 Excel（糧期/合同同步需要）
+# *.xlsx
 啟動系統.bat
 .env
 .env.*
