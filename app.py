@@ -457,6 +457,7 @@ def system_status():
         'payment_count': payment_count,
         'upload_count': upload_count,
         'volume_mounted': DATA_DIR == '/data',
+        'restore_token_configured': bool(os.environ.get('RESTORE_TOKEN', '').strip()),
     })
 
 
