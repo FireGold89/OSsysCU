@@ -499,6 +499,7 @@ def system_status():
         'upload_count': upload_count,
         'volume_mounted': DATA_DIR == '/data',
         'restore_token_configured': bool(os.environ.get('RESTORE_TOKEN', '').strip()),
+        'app_version': os.environ.get('APP_VERSION', '2026-06-12-sc-pdf-edit'),
     })
 
 

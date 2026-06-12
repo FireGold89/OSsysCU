@@ -408,10 +408,27 @@ def attach_quotation_pdf(sc_id, file_path, original_filename=None, ocr_id=None):
     sc = get_subcontractor(sc_id)
     if not sc:
         return None
-    data = dict(sc)
-    data['quotation_saved'] = file_path
-    data['original_filename'] = original_filename
-    data['ocr_id'] = ocr_id
+    data = {
+        'project_id': sc['project_id'],
+        'sc_no': sc['sc_no'],
+        'quotation_no': sc.get('quotation_no'),
+        'company_name_en': sc.get('company_name_en'),
+        'company_name_zh': sc.get('company_name_zh'),
+        'description': sc.get('description'),
+        'contract_sum': sc.get('contract_sum'),
+        'vo_amount': sc.get('vo_amount'),
+        'contract_amount': sc.get('contract_amount'),
+        'payment_note': sc.get('payment_note'),
+        'oa_status': sc.get('oa_status'),
+        'oa_ref': sc.get('oa_ref'),
+        'oa_no': sc.get('oa_no'),
+        'quotation_saved': file_path,
+        'quotation_date': sc.get('quotation_date'),
+        'oa_date': sc.get('oa_date'),
+        'is_excluded': sc.get('is_excluded') or 0,
+        'original_filename': original_filename,
+        'ocr_id': ocr_id,
+    }
     return upsert_subcontractor(data)
 
 

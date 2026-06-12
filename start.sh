@@ -5,5 +5,4 @@ exec gunicorn \
   --workers 1 \
   --threads 4 \
   --timeout 180 \
-  --preload \
   wsgi:app
