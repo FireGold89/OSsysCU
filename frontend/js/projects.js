@@ -140,6 +140,7 @@ const SC = {
   _quotationPdfRemoved: false,
   _pendingQuotationPdf: null,
   _pendingQuotationFilename: null,
+  _pendingOcrId: null,
 
   _esc(s) {
     return String(s ?? '')
@@ -319,9 +320,80 @@ const SC = {
     this._quotationPdfRemoved = true;
     this._pendingQuotationPdf = null;
     this._pendingQuotationFilename = null;
+    this._pendingOcrId = null;
     if (this._editSc) this._editSc.quotation_saved = null;
     this._renderDocToolbar(this._editSc);
     toast('報價 PDF 已標記移除，請按儲存', 'info');
+  },
+
+  _resolveOcrLineItems(ex, rawText) {
+    if (!ex) return [];
+    const items = ex.line_items || [];
+    if (items.length) return items;
+    if (ex.description && ex.description.includes('\t')) {
+      const parsed = OCR.parseDescriptionTable(ex.description);
+      if (parsed.length) return parsed;
+    }
+    return OCR.parseRawLineItems(rawText || '');
+  },
+
+  applyOcrExtracted(ex, rawText) {
+    if (!ex) return 0;
+    const quotNo = (ex.quotation_no || '').trim();
+    if (quotNo) document.getElementById('scQuotNo').value = quotNo;
+    const quotDate = ex.quotation_date || ex.invoice_date || '';
+    if (quotDate) document.getElementById('scQuotDate').value = quotDate;
+
+    const companyEn = (ex.company_name_en || '').trim();
+    const companyZh = (ex.company_name_zh || '').trim();
+    const fallback = companyEn || companyZh;
+    if (companyEn) {
+      document.getElementById('scCompanyEn').value = companyEn;
+    } else if (fallback && !/[\u4e00-\u9fff]/.test(fallback)) {
+      document.getElementById('scCompanyEn').value = fallback;
+    }
+    if (companyZh) {
+      document.getElementById('scCompanyZh').value = companyZh;
+    } else if (fallback && /[\u4e00-\u9fff]/.test(fallback)) {
+      document.getElementById('scCompanyZh').value = fallback;
+    }
+
+    const items = this._resolveOcrLineItems(ex, rawText);
+    if (items.length) {
+      this._descItems = items.map((it, i) => ({
+        no: it.no || String(i + 1),
+        description: it.description || '',
+        qty: it.qty != null ? String(it.qty) : '',
+        unit: it.unit || '',
+        unit_price: it.unit_price != null ? String(it.unit_price) : '',
+        amount: it.amount != null ? String(it.amount) : '',
+      }));
+      const titleEl = document.getElementById('scDescTitle');
+      if (titleEl) {
+        titleEl.value = items.length === 1
+          ? (items[0].description || '')
+          : ((ex.description || '').split('\n')[0] || '').trim();
+      }
+      this.renderDescItems();
+    } else if (ex.description) {
+      this._loadDescFromText(ex.description);
+    }
+
+    let amount = parseFloat(ex.total_amount || ex.amount) || 0;
+    if (!amount && items.length) {
+      amount = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+    }
+    if (amount) {
+      const vo = parseFloat(document.getElementById('scVoAmt').value) || 0;
+      document.getElementById('scContractSum').value = fmtInputNum(amount);
+      document.getElementById('scAmt').value = fmtInputNum(amount + vo);
+      const paidStr = document.getElementById('scPaidAmt').value;
+      if (paidStr) {
+        const paid = parseFloat(paidStr.replace(/[^0-9.-]/g, '')) || 0;
+        document.getElementById('scRemainAmt').value = fmt(amount + vo - paid);
+      }
+    }
+    return items.length;
   },
 
   pickQuotationPdf() {
@@ -340,16 +412,14 @@ const SC = {
       return;
     }
 
-    const scId = document.getElementById('scModalId').value;
-    showLoading('上傳 PDF 中...');
+    const p = App.currentProject;
+    if (!p) { toast('請先選擇項目', 'warning'); return; }
+    showLoading('OCR 識別中...');
     try {
       const formData = new FormData();
       formData.append('file', file);
-      let pdfPath;
-      const uploadUrl = scId
-        ? `${API}/subcontractors/${scId}/quotation-pdf`
-        : `${API}/files/upload`;
-      const r = await fetch(uploadUrl, { method: 'POST', body: formData });
+      formData.append('project_id', p.id);
+      const r = await fetch(`${API}/ocr/upload`, { method: 'POST', body: formData });
       const text = await r.text();
       let json;
       try {
@@ -358,17 +428,39 @@ const SC = {
         throw new Error(
           r.ok
             ? '伺服器回應格式錯誤'
-            : `上傳失敗 (${r.status})：伺服器尚未更新，請稍後再試或聯絡管理員部署最新版本`
+            : `OCR 失敗 (${r.status})，請稍後再試`
         );
       }
-      if (!json.success) throw new Error(json.error || '上傳失敗');
-      pdfPath = json.data.pdf_path;
-      toast(scId ? '報價 PDF 已上傳' : 'PDF 已上傳，請按儲存以附加至新合同', 'success');
+      if (!json.success) throw new Error(json.error || 'OCR 失敗');
+      const data = json.data;
+      const pdfPath = data.pdf_path;
+      const itemCount = this.applyOcrExtracted(data.extracted, data.raw_text);
       this._pendingQuotationPdf = pdfPath;
       this._pendingQuotationFilename = file.name;
+      this._pendingOcrId = data.ocr_id || null;
       this._quotationPdfRemoved = false;
       if (this._editSc) this._editSc.quotation_saved = pdfPath;
       this._renderDocToolbar(this._editSc);
+      const methodLabels = {
+        gemini: 'Gemini',
+        quark_handwritten: '夸克手寫',
+        quark_general: '夸克通用',
+        quark_invoice: '夸克發票',
+        rapidocr: 'RapidOCR',
+        pymupdf: 'PDF 文字',
+        pdfplumber: 'PDF 文字',
+      };
+      const method = methodLabels[data.method] || data.method || 'OCR';
+      if (itemCount) {
+        toast(`${method} 完成，已識別 ${itemCount} 項明細，請確認後儲存`, 'success');
+      } else if (data.extracted?.total_amount || data.extracted?.amount) {
+        toast(`${method} 完成，已填入金額，請確認後儲存`, 'success');
+      } else if (data.extracted) {
+        toast(`${method} 完成，部分欄位已填入，請確認後儲存`, 'info');
+      } else {
+        toast('PDF 已上傳，未能識別內容，請手動填寫', 'warning');
+      }
+      if (data.error) toast(data.error, 'warning');
     } catch (e) {
       toast(e.message || '上傳失敗', 'error');
     } finally {
@@ -590,6 +682,7 @@ const SC = {
     this._quotationPdfRemoved = false;
     this._pendingQuotationPdf = null;
     this._pendingQuotationFilename = null;
+    this._pendingOcrId = null;
     document.getElementById('scModalTitle').textContent = '新增合同項目';
     document.getElementById('scModalId').value = '';
     ['scNo','scQuotNo','scQuotDate','scCompanyEn','scCompanyZh','scDescTitle','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
@@ -620,6 +713,7 @@ const SC = {
     this._quotationPdfRemoved = false;
     this._pendingQuotationPdf = null;
     this._pendingQuotationFilename = null;
+    this._pendingOcrId = null;
     document.getElementById('scModalTitle').textContent = '編輯合同項目';
     document.getElementById('scModalId').value = s.id;
     document.getElementById('scNo').value = s.sc_no || '';
@@ -650,6 +744,7 @@ const SC = {
     this._quotationPdfRemoved = false;
     this._pendingQuotationPdf = null;
     this._pendingQuotationFilename = null;
+    this._pendingOcrId = null;
   },
 
   async showPayments(id) {
@@ -791,6 +886,7 @@ const SC = {
         : (this._pendingQuotationPdf || this._editSc?.quotation_saved || null),
       clear_quotation_pdf: this._quotationPdfRemoved || undefined,
       original_filename: this._pendingQuotationFilename || undefined,
+      ocr_id: this._pendingOcrId || undefined,
       payment_note: document.getElementById('scPayNote').value || null,
       is_excluded: document.getElementById('scExcluded').checked ? 1 : 0,
     };

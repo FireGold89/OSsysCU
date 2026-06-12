@@ -885,7 +885,7 @@
           <label class="form-label" style="margin:0">工程 / 服務項目明細</label>
           <div class="sc-doc-actions">
             <div class="sc-doc-toolbar" id="scDocToolbar"></div>
-            <button type="button" class="btn btn-secondary btn-sm sc-pdf-upload-btn" id="scPdfUploadBtn" onclick="SC.pickQuotationPdf()">+ 上傳 PDF</button>
+            <button type="button" class="btn btn-secondary btn-sm sc-pdf-upload-btn" id="scPdfUploadBtn" onclick="SC.pickQuotationPdf()" title="上傳後自動 OCR 識別並填入表單">+ 上傳並識別</button>
             <input type="file" id="scPdfInput" accept=".pdf,.png,.jpg,.jpeg" hidden onchange="SC.onQuotationPdfSelected(this)">
           </div>
         </div>
