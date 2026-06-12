@@ -835,15 +835,51 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .sc-items-wrap {
   max-height: 240px;
 }
+.sc-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
 .sc-doc-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
 }
+.sc-pdf-upload-btn {
+  white-space: nowrap;
+}
 .sc-doc-none {
   font-size: 11px;
   color: var(--text-muted);
+}
+.sc-pdf-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.sc-pdf-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition), border-color var(--transition);
+}
+.sc-pdf-remove:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
 }
 .sc-pdf-chip {
   display: inline-flex;

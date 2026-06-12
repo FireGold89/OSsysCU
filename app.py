@@ -174,6 +174,47 @@ def get_subcontractor(sc_id):
     return resp(sc)
 
 
+@app.route('/api/files/upload', methods=['POST'])
+def upload_file():
+    """上傳 PDF/圖片至伺服器（不跑 OCR）"""
+    if 'file' not in request.files:
+        return resp(error='沒有文件', status=400)
+    file = request.files['file']
+    if not file.filename or not allowed_file(file.filename):
+        return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
+
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(UPLOAD_DIR, unique_name)
+    file.save(save_path)
+    return resp({'pdf_path': unique_name, 'filename': file.filename})
+
+
+@app.route('/api/subcontractors/<int:sc_id>/quotation-pdf', methods=['POST'])
+def upload_sc_quotation_pdf(sc_id):
+    """編輯合同時直接上傳報價 PDF（不跑 OCR）"""
+    sc = db.get_subcontractor(sc_id)
+    if not sc:
+        return resp(error='合同項目不存在', status=404)
+    if 'file' not in request.files:
+        return resp(error='沒有文件', status=400)
+    file = request.files['file']
+    if not file.filename or not allowed_file(file.filename):
+        return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
+
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(UPLOAD_DIR, unique_name)
+    file.save(save_path)
+
+    db.attach_quotation_pdf(sc_id, unique_name, original_filename=file.filename)
+    return resp({
+        'pdf_path': unique_name,
+        'filename': file.filename,
+        'message': '報價 PDF 已上傳',
+    })
+
+
 @app.route('/api/subcontractors/<int:sc_id>', methods=['DELETE'])
 def delete_subcontractor(sc_id):
     db.delete_subcontractor(sc_id)

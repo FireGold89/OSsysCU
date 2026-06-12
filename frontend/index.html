@@ -883,7 +883,11 @@
       <div class="form-group sc-desc-block">
         <div class="sc-desc-head">
           <label class="form-label" style="margin:0">工程 / 服務項目明細</label>
-          <div class="sc-doc-toolbar" id="scDocToolbar"></div>
+          <div class="sc-doc-actions">
+            <div class="sc-doc-toolbar" id="scDocToolbar"></div>
+            <button type="button" class="btn btn-secondary btn-sm sc-pdf-upload-btn" id="scPdfUploadBtn" onclick="SC.pickQuotationPdf()">+ 上傳 PDF</button>
+            <input type="file" id="scPdfInput" accept=".pdf,.png,.jpg,.jpeg" hidden onchange="SC.onQuotationPdfSelected(this)">
+          </div>
         </div>
         <input type="text" class="form-input sc-desc-title" id="scDescTitle" placeholder="項目摘要（選填，如：EL - Material）">
         <div class="table-wrap ocr-items-wrap sc-items-wrap">

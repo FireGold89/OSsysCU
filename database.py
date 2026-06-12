@@ -312,11 +312,19 @@ def upsert_subcontractor(data):
     data.setdefault('contract_sum', data.get('contract_amount') or 0)
     data.setdefault('vo_amount', 0)
 
+    clear_pdf = bool(data.pop('clear_quotation_pdf', False))
+
     if existing:
         old = dict(existing)
         new_pdf = data.get('quotation_saved')
         old_pdf = old.get('quotation_saved')
-        if new_pdf and old_pdf and new_pdf != old_pdf:
+        if clear_pdf and old_pdf:
+            add_sc_document(
+                data['project_id'], old['id'], data['sc_no'], 'quotation',
+                old_pdf, ocr_id=None, conn=conn,
+            )
+            data['quotation_saved'] = None
+        elif new_pdf and old_pdf and new_pdf != old_pdf:
             add_sc_document(
                 data['project_id'], old['id'], data['sc_no'], 'quotation',
                 old_pdf, ocr_id=None, conn=conn,
@@ -324,7 +332,7 @@ def upsert_subcontractor(data):
         # Excel 同步時保留 OCR 已填入的報價日期 / PDF
         if not data.get('quotation_date') and old.get('quotation_date'):
             data['quotation_date'] = old['quotation_date']
-        if not data.get('quotation_saved') and old.get('quotation_saved'):
+        if not clear_pdf and not data.get('quotation_saved') and old.get('quotation_saved'):
             data['quotation_saved'] = old['quotation_saved']
         conn.execute("""
             UPDATE subcontractors SET
@@ -393,6 +401,18 @@ def get_sc_documents(sc_id):
     """, (sc_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def attach_quotation_pdf(sc_id, file_path, original_filename=None, ocr_id=None):
+    """將 PDF/圖片設為合同報價存證（舊檔自動存入 sc_documents）"""
+    sc = get_subcontractor(sc_id)
+    if not sc:
+        return None
+    data = dict(sc)
+    data['quotation_saved'] = file_path
+    data['original_filename'] = original_filename
+    data['ocr_id'] = ocr_id
+    return upsert_subcontractor(data)
 
 
 def delete_subcontractor(sc_id):

@@ -137,6 +137,9 @@ const Projects = {
 const SC = {
   _descItems: [],
   _editSc: null,
+  _quotationPdfRemoved: false,
+  _pendingQuotationPdf: null,
+  _pendingQuotationFilename: null,
 
   _esc(s) {
     return String(s ?? '')
@@ -242,44 +245,61 @@ const SC = {
   _renderDocToolbar(s) {
     const bar = document.getElementById('scDocToolbar');
     if (!bar) return;
-    if (!s) {
-      bar.innerHTML = '';
+    if (!s && !this._pendingQuotationPdf && !this._quotationPdfRemoved) {
+      bar.innerHTML = '<span class="sc-doc-none">尚無 PDF 存證</span>';
       return;
     }
-    const docs = s.documents || [];
+    const docs = s?.documents || [];
     const items = [];
     const seen = new Set();
-    const push = (file_path, label, when) => {
+    const push = (file_path, label, when, removable = false) => {
       if (!file_path || seen.has(file_path)) return;
       seen.add(file_path);
-      items.push({ file_path, label, when });
+      items.push({ file_path, label, when, removable });
     };
-    if (s.quotation_saved) {
-      push(s.quotation_saved, '報價 PDF', s.quotation_date);
+    const activePdf = this._pendingQuotationPdf
+      || (s?.quotation_saved && !this._quotationPdfRemoved ? s.quotation_saved : null);
+    if (activePdf) {
+      const when = this._pendingQuotationPdf
+        ? (document.getElementById('scQuotDate')?.value || s?.quotation_date)
+        : s?.quotation_date;
+      push(activePdf, '報價 PDF', when, true);
     }
     docs.forEach(d => {
       const kind = { quotation: '報價', invoice: '發票', scan: '掃描' }[d.doc_type] || '存證';
-      push(d.file_path, `${kind} PDF`, d.created_at);
+      push(d.file_path, `${kind} PDF`, d.created_at, false);
     });
     if (!items.length) {
-      bar.innerHTML = '<span class="sc-doc-none">尚無 PDF 存證</span>';
+      const hint = this._quotationPdfRemoved
+        ? '報價 PDF 已移除（可按「上傳 PDF」或儲存後再處理）'
+        : '尚無 PDF 存證';
+      bar.innerHTML = `<span class="sc-doc-none">${hint}</span>`;
       return;
     }
     bar.innerHTML = items.map(d => {
       const when = d.when ? fmtDate(d.when) : '';
       const title = `${d.label}${when ? ` · ${when}` : ''}`;
-      return `<button type="button" class="sc-pdf-chip"
+      const removeBtn = d.removable
+        ? `<button type="button" class="sc-pdf-remove" title="移除報價 PDF">×</button>`
+        : '';
+      return `<span class="sc-pdf-chip-wrap"><button type="button" class="sc-pdf-chip"
         data-path="${this._esc(d.file_path)}"
         data-title="${this._esc(title)}"
         title="預覽 ${this._esc(d.label)}">
         <span class="sc-pdf-icon">📄</span>
         <span class="sc-pdf-label">${this._esc(d.label)}${when ? ` · ${when}` : ''}</span>
-      </button>`;
+      </button>${removeBtn}</span>`;
     }).join('');
 
     if (!bar.dataset.docBound) {
       bar.dataset.docBound = '1';
       bar.addEventListener('click', (e) => {
+        if (e.target.closest('.sc-pdf-remove')) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.removeQuotationPdf();
+          return;
+        }
         const btn = e.target.closest('.sc-pdf-chip');
         if (!btn) return;
         e.preventDefault();
@@ -288,6 +308,72 @@ const SC = {
         const title = btn.getAttribute('data-title') || '文件預覽';
         if (path) DocViewer.open(path, title);
       });
+    }
+  },
+
+  removeQuotationPdf() {
+    const hasPdf = this._pendingQuotationPdf
+      || (this._editSc?.quotation_saved && !this._quotationPdfRemoved);
+    if (!hasPdf) return;
+    if (!confirm('移除報價 PDF 連結？\n\n已上傳的編輯中檔案會取消；已儲存檔案須按「儲存」才會正式移除。\n\n確定移除？')) return;
+    this._quotationPdfRemoved = true;
+    this._pendingQuotationPdf = null;
+    this._pendingQuotationFilename = null;
+    if (this._editSc) this._editSc.quotation_saved = null;
+    this._renderDocToolbar(this._editSc);
+    toast('報價 PDF 已標記移除，請按儲存', 'info');
+  },
+
+  pickQuotationPdf() {
+    const input = document.getElementById('scPdfInput');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  },
+
+  async onQuotationPdfSelected(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
+      toast('請上傳 PDF、PNG 或 JPG', 'warning');
+      return;
+    }
+
+    const scId = document.getElementById('scModalId').value;
+    showLoading('上傳 PDF 中...');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      let pdfPath;
+      const uploadUrl = scId
+        ? `${API}/subcontractors/${scId}/quotation-pdf`
+        : `${API}/files/upload`;
+      const r = await fetch(uploadUrl, { method: 'POST', body: formData });
+      const text = await r.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        throw new Error(
+          r.ok
+            ? '伺服器回應格式錯誤'
+            : `上傳失敗 (${r.status})：伺服器尚未更新，請稍後再試或聯絡管理員部署最新版本`
+        );
+      }
+      if (!json.success) throw new Error(json.error || '上傳失敗');
+      pdfPath = json.data.pdf_path;
+      toast(scId ? '報價 PDF 已上傳' : 'PDF 已上傳，請按儲存以附加至新合同', 'success');
+      this._pendingQuotationPdf = pdfPath;
+      this._pendingQuotationFilename = file.name;
+      this._quotationPdfRemoved = false;
+      if (this._editSc) this._editSc.quotation_saved = pdfPath;
+      this._renderDocToolbar(this._editSc);
+    } catch (e) {
+      toast(e.message || '上傳失敗', 'error');
+    } finally {
+      hideLoading();
+      if (input) input.value = '';
     }
   },
 
@@ -501,6 +587,9 @@ const SC = {
 
   openAdd() {
     this._editSc = null;
+    this._quotationPdfRemoved = false;
+    this._pendingQuotationPdf = null;
+    this._pendingQuotationFilename = null;
     document.getElementById('scModalTitle').textContent = '新增合同項目';
     document.getElementById('scModalId').value = '';
     ['scNo','scQuotNo','scQuotDate','scCompanyEn','scCompanyZh','scDescTitle','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
@@ -528,6 +617,9 @@ const SC = {
     }
     if (!s) return;
     this._editSc = s;
+    this._quotationPdfRemoved = false;
+    this._pendingQuotationPdf = null;
+    this._pendingQuotationFilename = null;
     document.getElementById('scModalTitle').textContent = '編輯合同項目';
     document.getElementById('scModalId').value = s.id;
     document.getElementById('scNo').value = s.sc_no || '';
@@ -555,6 +647,9 @@ const SC = {
   closeModal() {
     document.getElementById('scModal').classList.remove('open');
     this._editSc = null;
+    this._quotationPdfRemoved = false;
+    this._pendingQuotationPdf = null;
+    this._pendingQuotationFilename = null;
   },
 
   async showPayments(id) {
@@ -691,7 +786,11 @@ const SC = {
       oa_status: document.getElementById('scOaStatus').value || null,
       oa_ref: null,
       oa_no: document.getElementById('scOaNo').value || null,
-      quotation_saved: this._editSc?.quotation_saved || null,
+      quotation_saved: this._quotationPdfRemoved
+        ? null
+        : (this._pendingQuotationPdf || this._editSc?.quotation_saved || null),
+      clear_quotation_pdf: this._quotationPdfRemoved || undefined,
+      original_filename: this._pendingQuotationFilename || undefined,
       payment_note: document.getElementById('scPayNote').value || null,
       is_excluded: document.getElementById('scExcluded').checked ? 1 : 0,
     };
