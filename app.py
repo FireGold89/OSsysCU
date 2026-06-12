@@ -325,6 +325,7 @@ def ocr_upload():
             quark_client_key=quark_key,
             quark_api_key=quark_scene_key,
             ocr_mode=ocr_mode,
+            original_filename=file.filename,
         )
     except Exception as e:
         return resp(error=f'OCR處理錯誤: {str(e)}', status=500)
@@ -499,7 +500,7 @@ def system_status():
         'upload_count': upload_count,
         'volume_mounted': DATA_DIR == '/data',
         'restore_token_configured': bool(os.environ.get('RESTORE_TOKEN', '').strip()),
-        'app_version': os.environ.get('APP_VERSION', '2026-06-12-sc-ocr-fill'),
+        'app_version': os.environ.get('APP_VERSION', '2026-06-12-ocr-vendor-parse'),
     })
 
 

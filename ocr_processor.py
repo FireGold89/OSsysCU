@@ -286,7 +286,7 @@ def structure_line_items_with_gemini(text, api_key):
         return None
 
 
-def extract_invoice_data(text, pdf_path=None, gemini_api_key=None):
+def extract_invoice_data(text, pdf_path=None, gemini_api_key=None, original_filename=None):
     """從 OCR 文字中智能提取發票/報價單資料"""
     text = _normalize_ocr_text(text or '')
     result = {
@@ -332,37 +332,37 @@ def extract_invoice_data(text, pdf_path=None, gemini_api_key=None):
     result['invoice_date'] = inv_date
     result['quotation_date'] = quot_date
 
-    en_company_keywords = ['LTD', 'LIMITED', 'CO.', 'COMPANY', 'ENGINEERING',
-                           'CONSTRUCTION', 'SERVICES', 'CONSULTANT', 'CONSULTANCY',
-                           'BROKERS', 'INSTITUTE', 'COUNCIL', 'BOARD', 'DEPARTMENT',
-                           'INSPECTION', 'LIGHTING', 'ELECTRICAL']
-    for line in lines:
-        line_upper = line.upper()
-        if (any(kw in line_upper for kw in en_company_keywords) and
-                len(line) > 8 and re.search(r'[A-Z]', line)):
-            if not re.match(r'^(?:Company|公司|From|To|Bill|Issued)', line, re.IGNORECASE):
-                result['company_name_en'] = line.strip()
-                break
+    vendor_en, vendor_zh = _extract_vendor_companies(text, original_filename)
+    if vendor_en:
+        result['company_name_en'] = vendor_en
+    if vendor_zh:
+        result['company_name_zh'] = vendor_zh
 
     if not result['company_name_en']:
-        m = re.search(
-            r'(?:Company\s*Name|From|Bill\s*To|Issued\s*By)[:\s:：]+([A-Za-z][A-Za-z\s&\.\,\-\']+(?:Ltd\.?|Limited|Co\.?|Inc\.?))',
-            text, re.IGNORECASE)
-        if m:
-            result['company_name_en'] = m.group(1).strip()
-
-    zh_suffixes = ['有限公司', '工程公司', '建設公司', '顧問公司', '服務公司',
-                   '貿易公司', '工業公司', '建築公司', '機電公司', '保險', '議會',
-                   '基金會', '基金', '協會', '學院', '中心']
-    for line in lines:
-        for suffix in zh_suffixes:
-            if suffix in line:
-                m = re.search(r'([^\s\n:：]{2,25}' + re.escape(suffix) + r')', line)
-                if m:
-                    result['company_name_zh'] = m.group(1).strip()
+        en_company_keywords = ['LTD', 'LIMITED', 'CO.', 'COMPANY', 'ENGINEERING',
+                               'CONSTRUCTION', 'SERVICES', 'ELECTRICAL']
+        for line in lines:
+            line_upper = line.upper()
+            if (any(kw in line_upper for kw in en_company_keywords) and
+                    len(line) > 8 and re.search(r'[A-Z]', line)):
+                if not re.match(r'^(?:Company|公司|From|To|Bill|Issued|RECEIVER)', line, re.I):
+                    result['company_name_en'] = line.strip()
                     break
-        if result['company_name_zh']:
-            break
+
+    if not result['company_name_zh']:
+        zh_suffixes = ['有限公司', '工程公司', '建設公司', '顧問公司', '服務公司',
+                       '貿易公司', '工業公司', '建築公司', '機電公司']
+        for line in lines:
+            if re.match(r'^(TO|RECEIVER|FROM|收件人|寄件人)', line, re.I):
+                continue
+            for suffix in zh_suffixes:
+                if suffix in line:
+                    m = re.search(r'([^\s\n:：]{2,25}' + re.escape(suffix) + r')', line)
+                    if m:
+                        result['company_name_zh'] = m.group(1).strip()
+                        break
+            if result['company_name_zh']:
+                break
 
     # 先嘗試從合計行提取（避免把明細金額當總計，或 $ 誤識為 8）
     total = _extract_total_amount(text)
@@ -824,6 +824,151 @@ def _append_desc_part(parts, line):
     parts.append(line)
 
 
+def _parse_ocr_qty_line(line):
+    """解析 OCR 數量行：140個、[40T.、l40 等"""
+    if not line:
+        return None
+    s = line.strip()
+    m = re.match(r'^(\d+)\s*(個|个|pcs|pc|units?|nos?|套|件|台)\.?$', s, re.I)
+    if m:
+        return m.group(1)
+    m = re.match(r'^\[(\d{2})[Tt\.]', s)
+    if m:
+        return '1' + m.group(1)
+    m = re.match(r'^[\[\(]?[lI1]?(\d{1,3})[Tt\.]?\]?\.?$', s)
+    if m:
+        q = int(m.group(1))
+        if q < 100 and ('T' in s.upper() or '[' in s):
+            return str(q * 10)
+        return str(q)
+    digits = re.sub(r'\D', '', s)
+    if digits and 1 <= len(digits) <= 4:
+        return digits
+    return None
+
+
+def _fix_amount_with_qty_price(qty, unit_price, amount):
+    """用 數量×單價 修正 OCR 漏字金額（如 5577→55720）"""
+    if not qty or not unit_price:
+        return amount
+    try:
+        q = float(qty)
+        p = float(unit_price)
+    except (TypeError, ValueError):
+        return amount
+    if q <= 0 or p <= 0:
+        return amount
+    expected = round(q * p, 2)
+    if not amount:
+        return expected
+    try:
+        a = float(amount)
+    except (TypeError, ValueError):
+        return amount
+    if abs(a - expected) <= max(1, expected * 0.02):
+        return expected
+    for candidate in (a * 10, a * 100, float(f'{int(a)}0'), float(f'{int(a)}00')):
+        if abs(candidate - expected) <= max(1, expected * 0.02):
+            return candidate
+    return amount
+
+
+def _vendor_header_lines(text):
+    """報價單頂部（TO:/DATE 之前）視為供應商抬頭"""
+    lines = [l.strip() for l in (text or '').split('\n') if l.strip()]
+    vendor = []
+    for line in lines:
+        if re.match(r'^(TO|DATE|FROM|RECEIVER|OUOTATION|QUOTATION|價軍|報價)\b', line, re.I):
+            break
+        vendor.append(line)
+    return vendor
+
+
+def _extract_vendor_companies(text, original_filename=None):
+    """優先取供應商抬頭公司名，避免誤用 TO/收件人"""
+    en, zh = None, None
+    en_keywords = ['LTD', 'LIMITED', 'CO.', 'COMPANY', 'ENGINEERING', 'ELECTRICAL']
+    zh_suffixes = ['有限公司', '工程公司', '建設公司', '顧問公司', '服務公司',
+                   '貿易公司', '工業公司', '建築公司', '機電公司']
+
+    for line in _vendor_header_lines(text):
+        if not en:
+            line_upper = line.upper()
+            if (any(kw in line_upper for kw in en_keywords) and len(line) > 8
+                    and re.search(r'[A-Z]', line)):
+                en = line.strip()
+        if not zh:
+            for suffix in zh_suffixes:
+                if suffix in line:
+                    m = re.search(r'([^\s\n:：]{2,30}' + re.escape(suffix) + r')', line)
+                    if m:
+                        zh = m.group(1).strip()
+                        break
+
+    if original_filename:
+        base = os.path.splitext(os.path.basename(original_filename))[0]
+        for suffix in zh_suffixes:
+            if suffix in base and not zh:
+                zh = base if suffix in base else base
+                break
+        if not en and re.search(r'[A-Za-z]{3,}', base):
+            pass
+    return en, zh
+
+
+def parse_reverse_column_quotation(text):
+    """
+    信成等直向報價單：表頭為 AMOUNT→UNIT PRICE→QUANTITY→DESCRIPTION，
+    數值常為 描述→單價→金額→數量（自上而下）
+    """
+    if not text or not _has_invoice_table_headers(text):
+        return []
+    lines = _ocr_text_lines(text)
+    start = None
+    for i, ln in enumerate(lines):
+        if '貨品' in ln or 'DESCRIP' in ln.upper() or '品名' in ln:
+            start = i + 1
+            break
+    if start is None:
+        return []
+
+    while start < len(lines) and (_is_invoice_col_header(lines[start]) or len(lines[start]) <= 1):
+        start += 1
+
+    items = []
+    i = start
+    while i + 3 < len(lines):
+        if _is_total_line(lines[i]):
+            break
+        desc_line, price_line, amt_line, qty_line = lines[i:i + 4]
+        if _is_skippable_desc_line(desc_line) or re.match(r'^\d+[\-\.]*$', desc_line):
+            i += 1
+            continue
+        unit_price = _parse_number(re.sub(r'[^\d.]', '', price_line))
+        amount = _parse_number(re.sub(r'[^\d.]', '', amt_line))
+        qty = _parse_ocr_qty_line(qty_line)
+        if not qty or not unit_price:
+            i += 1
+            continue
+        amount = round(float(qty) * float(unit_price), 2)
+        if amount <= 0:
+            amount = _fix_amount_with_qty_price(qty, unit_price, amount)
+        desc = _clean_item_description(desc_line)
+        if desc and amount and amount > 0:
+            items.append({
+                'no': str(len(items) + 1),
+                'description': desc,
+                'qty': qty,
+                'unit': '個',
+                'unit_price': unit_price,
+                'amount': amount,
+            })
+            i += 4
+        else:
+            i += 1
+    return items
+
+
 def parse_qty_price_amount_blocks(text):
     """
     不依表頭，掃描「數量 → 單價 → 金額」三行區塊（夸克垂直表格最穩定特徵）
@@ -1146,6 +1291,10 @@ def parse_line_items_from_text(text):
 
     text = _normalize_ocr_text(text)
 
+    reverse = parse_reverse_column_quotation(text)
+    if reverse:
+        return _sanitize_line_items(reverse)
+
     blocks = parse_qty_price_amount_blocks(text)
     if blocks:
         return _sanitize_line_items(blocks)
@@ -1347,6 +1496,9 @@ def _enrich_line_items(result, pdf_path, text):
                 if (result.get('total_amount') or 0) > item_sum * 2:
                     result['total_amount'] = item_sum
                     result['amount'] = item_sum
+                elif not result.get('total_amount'):
+                    result['total_amount'] = item_sum
+                    result['amount'] = item_sum
             elif not result.get('total_amount'):
                 result['total_amount'] = item_sum
                 result['amount'] = item_sum
@@ -1436,13 +1588,13 @@ def normalize_date(date_str):
 # ─── 主處理函數 ──────────────────────────────────────────────
 
 def process_pdf(pdf_path, api_key=None, quark_client_id=None, quark_client_key=None,
-                quark_api_key=None, ocr_mode='auto'):
+                quark_api_key=None, ocr_mode='auto', original_filename=None):
     """
     主 OCR 處理
     ocr_mode: auto | local | quark_handwritten | quark_general | quark_invoice
     返回: (extracted_data, raw_text, method_used, error)
     """
-    filename = os.path.basename(pdf_path)
+    filename = original_filename or os.path.basename(pdf_path)
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     _log(f"\n[OCR] Processing: {filename}")
 
@@ -1453,7 +1605,8 @@ def process_pdf(pdf_path, api_key=None, quark_client_id=None, quark_client_key=N
         _log("[OCR] Step 1: PDF text layer (pdfplumber + pymupdf)...")
         raw_text, text_method = extract_pdf_text_combined(pdf_path)
         if raw_text and len(raw_text.strip()) > 50:
-            extracted = extract_invoice_data(raw_text, pdf_path)
+            extracted = extract_invoice_data(
+                raw_text, pdf_path, original_filename=original_filename)
             if _text_layer_usable(extracted):
                 _log(f"[OCR] Text layer OK via {text_method} ({len(raw_text)} chars)")
                 return extracted, raw_text, text_method, None
@@ -1568,7 +1721,8 @@ def process_pdf(pdf_path, api_key=None, quark_client_id=None, quark_client_key=N
             if q_text and len(q_text.strip()) > 10:
                 _log(f"[OCR] Quark OK ({len(q_text)} chars)")
                 extracted = extract_invoice_data(
-                    q_text, pdf_path if ext == 'pdf' else None, gemini_api_key=api_key)
+                    q_text, pdf_path if ext == 'pdf' else None,
+                    gemini_api_key=api_key, original_filename=original_filename)
                 if not extracted.get('line_items'):
                     _log('[OCR] No line items from rules, retry parse on raw text')
                     retry_items = parse_line_items_from_text(q_text)
@@ -1593,7 +1747,8 @@ def process_pdf(pdf_path, api_key=None, quark_client_id=None, quark_client_key=N
         if rapid_text and len(rapid_text.strip()) > 10:
             _log(f"[OCR] RapidOCR OK ({len(rapid_text)} chars)")
             extracted = extract_invoice_data(
-                rapid_text, pdf_path if ext == 'pdf' else None, gemini_api_key=api_key)
+                rapid_text, pdf_path if ext == 'pdf' else None,
+                gemini_api_key=api_key, original_filename=original_filename)
             warn = None
             if quark_fatal and q_err:
                 warn = f'{q_err}（已改用 RapidOCR，建議同步系統時間或檢查夸克憑證）'
