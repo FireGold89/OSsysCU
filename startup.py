@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '2026-06-13-pdf-chinese-font-v2'
+APP_VERSION = '2026-06-13-pdf-chinese-font-v3'
 
 
 def _preload_pdf_font():

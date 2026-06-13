@@ -41,16 +41,18 @@ def _esc(text) -> str:
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
-def _linux_noto_font() -> str | None:
-    patterns = [
-        '/usr/share/fonts/opentype/noto/NotoSansCJK*.ttc',
-        '/usr/share/fonts/truetype/noto/NotoSansCJK*.ttc',
-        '/usr/share/fonts/**/NotoSansCJK*.ttc',
+def _linux_cjk_font() -> str | None:
+    """Linux 容器用 WQY 正黑體（ReportLab 相容的 TrueType 集合）"""
+    candidates = [
+        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+        '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
     ]
-    for pattern in patterns:
-        for path in sorted(glob.glob(pattern, recursive=True)):
-            if os.path.isfile(path):
-                return path
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    for path in sorted(glob.glob('/usr/share/fonts/**/NotoSansCJK-Regular.ttc', recursive=True)):
+        if os.path.isfile(path):
+            return path
     return None
 
 
@@ -59,7 +61,7 @@ def _resolve_font_path() -> str:
     candidates = [
         os.path.join(win, 'Fonts', 'msjh.ttc'),
         os.path.join(win, 'Fonts', 'msjhbd.ttc'),
-        _linux_noto_font(),
+        _linux_cjk_font(),
         os.path.join(BASE_DIR, 'assets', 'fonts', 'NotoSansCJKtc-Regular.ttf'),
         os.path.join(DATA_DIR, 'fonts', 'NotoSansCJKtc-Regular.ttf'),
         '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
@@ -69,7 +71,7 @@ def _resolve_font_path() -> str:
         if path and os.path.isfile(path):
             return path
     raise FileNotFoundError(
-        '找不到繁體中文字型。Windows 需有 msjh.ttc，Linux/Docker 需安裝 fonts-noto-cjk。'
+        '找不到繁體中文字型。Windows 需有 msjh.ttc，Linux/Docker 需安裝 fonts-wqy-zenhei。'
     )
 
 
