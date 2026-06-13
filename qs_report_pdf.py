@@ -1,6 +1,7 @@
 """QS 地盤財務匯報 PDF（A4 · 老細版）"""
 from __future__ import annotations
 
+import glob
 import os
 import re
 from datetime import datetime
@@ -24,10 +25,6 @@ from reportlab.platypus import (
 from config import BASE_DIR, DATA_DIR
 
 FONT = 'NotoSansTC'
-FONT_URL = (
-    'https://github.com/googlefonts/noto-cjk/raw/main/Sans/TTF/TraditionalChinese/'
-    'NotoSansCJKtc-Regular.ttf'
-)
 _FONT_READY = False
 PAGE_W, PAGE_H = A4
 MARGIN = 15 * mm
@@ -44,11 +41,25 @@ def _esc(text) -> str:
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+def _linux_noto_font() -> str | None:
+    patterns = [
+        '/usr/share/fonts/opentype/noto/NotoSansCJK*.ttc',
+        '/usr/share/fonts/truetype/noto/NotoSansCJK*.ttc',
+        '/usr/share/fonts/**/NotoSansCJK*.ttc',
+    ]
+    for pattern in patterns:
+        for path in sorted(glob.glob(pattern, recursive=True)):
+            if os.path.isfile(path):
+                return path
+    return None
+
+
 def _resolve_font_path() -> str:
     win = os.environ.get('WINDIR', r'C:\Windows')
     candidates = [
         os.path.join(win, 'Fonts', 'msjh.ttc'),
         os.path.join(win, 'Fonts', 'msjhbd.ttc'),
+        _linux_noto_font(),
         os.path.join(BASE_DIR, 'assets', 'fonts', 'NotoSansCJKtc-Regular.ttf'),
         os.path.join(DATA_DIR, 'fonts', 'NotoSansCJKtc-Regular.ttf'),
         '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
@@ -57,13 +68,9 @@ def _resolve_font_path() -> str:
     for path in candidates:
         if path and os.path.isfile(path):
             return path
-    dest = os.path.join(DATA_DIR, 'fonts', 'NotoSansCJKtc-Regular.ttf')
-    if os.path.isfile(dest):
-        return dest
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    import urllib.request
-    urllib.request.urlretrieve(FONT_URL, dest)
-    return dest
+    raise FileNotFoundError(
+        '找不到繁體中文字型。Windows 需有 msjh.ttc，Linux/Docker 需安裝 fonts-noto-cjk。'
+    )
 
 
 def ensure_pdf_font() -> str:
