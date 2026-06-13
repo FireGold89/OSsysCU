@@ -5,7 +5,16 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '2026-06-13-qs-report-pdf'
+APP_VERSION = '2026-06-13-pdf-chinese-font'
+
+
+def _preload_pdf_font():
+    try:
+        from qs_report_pdf import ensure_pdf_font
+        ensure_pdf_font()
+        print('[STARTUP] PDF 中文字型已就緒')
+    except Exception as e:
+        print(f'[STARTUP] PDF 字型預載警告: {e}')
 
 
 def _sync_excel_background():
@@ -48,4 +57,9 @@ def run():
         target=_sync_excel_background,
         daemon=True,
         name='excel-sync',
+    ).start()
+    threading.Thread(
+        target=_preload_pdf_font,
+        daemon=True,
+        name='pdf-font-preload',
     ).start()
