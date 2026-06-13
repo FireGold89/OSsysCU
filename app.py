@@ -6,6 +6,8 @@ app.py — QS付款管理系統 Flask API主程式
 import os
 import json
 import uuid
+from io import BytesIO
+from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -481,6 +483,37 @@ def project_summary(project_id):
     if not summary:
         return resp(error='項目不存在', status=404)
     return resp(summary)
+
+
+@app.route('/api/reports/boss-pdf/<int:project_id>', methods=['GET'])
+def boss_report_pdf(project_id):
+    """一鍵生成老細 QS 匯報 PDF（A4）"""
+    summary = db.get_project_summary(project_id)
+    if not summary:
+        return resp(error='項目不存在', status=404)
+    sc_list = db.get_subcontractors(project_id)
+    company = db.get_setting('company_name') or 'Mepork Engineering Services Limited'
+    conn = db.get_conn()
+    payment_count = conn.execute(
+        'SELECT COUNT(*) FROM payment_records WHERE project_id=?', (project_id,)
+    ).fetchone()[0]
+    conn.close()
+    try:
+        from qs_report_pdf import generate_boss_qs_report
+        pdf_bytes = generate_boss_qs_report(
+            summary, sc_list, company_name=company, payment_count=payment_count,
+        )
+    except Exception as e:
+        return resp(error=f'PDF 生成失敗: {e}', status=500)
+    code = summary['project'].get('project_code') or str(project_id)
+    date_str = datetime.now().strftime('%Y%m%d')
+    filename = f'QS匯報_{code}_{date_str}.pdf'
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 # ─── System API ───────────────────────────────────────────────────────────

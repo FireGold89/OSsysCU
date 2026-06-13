@@ -197,6 +197,7 @@
           <div class="card" style="margin-bottom:20px">
             <div class="card-header">
               <div class="card-title">📋 合約金額結算 <span style="font-size:11px;color:var(--text-muted);font-weight:400">參考 Excel Project Summary</span></div>
+              <button class="btn btn-primary btn-sm" onclick="Reports.exportBossPdf()" title="一鍵生成 A4 QS 匯報表 PDF">📄 QS 匯報表</button>
             </div>
             <div class="card-body" id="dashContractCalc">
               <div class="empty-state" style="padding:24px">載入中...</div>
@@ -519,6 +520,14 @@
 
       <!-- ─── 財務報表 ──────────────────────── -->
       <div class="page" id="page-reports">
+        <div class="toolbar" style="margin-bottom:16px">
+          <button class="btn btn-primary" onclick="Reports.exportBossPdf()" id="btnBossPdf">
+            📄 QS 匯報表 PDF（A4）
+          </button>
+          <span style="font-size:11px;color:var(--text-muted);align-self:center">
+            一鍵生成：利潤結算 · 糧期 · 分判明細 · 關注事項
+          </span>
+        </div>
         <div class="card" style="margin-bottom:20px">
           <div class="card-header">
             <div class="card-title">📋 合約金額結算</div>

@@ -99,5 +99,51 @@ const Reports = {
     ]);
     downloadCsv([headers, ...rows],
       `report_${App.currentProject?.project_code}_${new Date().toISOString().slice(0,10)}.csv`);
+  },
+
+  async exportBossPdf() {
+    const p = App.currentProject;
+    if (!p) { toast('請先選擇項目', 'warning'); return; }
+    const btn = document.getElementById('btnBossPdf');
+    if (btn) btn.disabled = true;
+    showLoading('正在生成 QS 匯報表 PDF…');
+    try {
+      const r = await fetch(`${API}/reports/boss-pdf/${p.id}`);
+      const ct = r.headers.get('Content-Type') || '';
+      if (!r.ok) {
+        let msg = `生成失敗（HTTP ${r.status}）`;
+        if (r.status === 404) {
+          msg = 'QS 匯報表功能尚未就緒，請稍後再試或聯絡管理員更新系統';
+        } else if (ct.includes('application/json')) {
+          try {
+            const j = await r.json();
+            if (j.error) msg = j.error;
+          } catch (e) { /* ignore */ }
+        }
+        throw new Error(msg);
+      }
+      if (!ct.includes('application/pdf')) {
+        throw new Error('伺服器回應格式錯誤，請重新整理後再試');
+      }
+      const blob = await r.blob();
+      const cd = r.headers.get('Content-Disposition') || '';
+      let filename = `QS匯報_${p.project_code}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const m = cd.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+      if (m) filename = decodeURIComponent(m[1].replace(/"/g, ''));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast('QS 匯報表 PDF 已下載', 'success');
+    } catch (e) {
+      toast(e.message || 'PDF 生成失敗', 'error');
+    } finally {
+      hideLoading();
+      if (btn) btn.disabled = false;
+    }
   }
 };
