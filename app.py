@@ -94,6 +94,8 @@ def create_project():
         if not data.get(field):
             return resp(error=f'缺少必填欄位: {field}', status=400)
     data.setdefault('project_name', data['project_code'])
+    data.setdefault('project_name_en', '')
+    data.setdefault('project_name_zh', '')
     data.setdefault('client', '')
     data.setdefault('main_contractor', '')
     data.setdefault('contract_amount', 0)
@@ -110,6 +112,8 @@ def update_project(project_id):
     data = request.json or {}
     data.setdefault('project_code', '')
     data.setdefault('project_name', '')
+    data.setdefault('project_name_en', '')
+    data.setdefault('project_name_zh', '')
     data.setdefault('client', '')
     data.setdefault('main_contractor', '')
     data.setdefault('contract_amount', 0)

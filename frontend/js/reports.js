@@ -82,7 +82,7 @@ const Reports = {
 
   exportCsv() {
     if (!this.data?.sc_stats) { toast('暫無數據', 'warning'); return; }
-    const headers = ['參考編號','公司名稱','描述','合約金額','累計已付','未付餘額','付款次數','進度%'];
+    const headers = ['判項編號','公司名稱','工程描述','判項金額(J)','累計已付','未付餘額','付款次數','進度%'];
     const rows = this.data.sc_stats.map(s => {
       const ca = parseFloat(s.contract_amount) || 0;
       const paid = parseFloat(s.total_paid) || 0;

@@ -1,4 +1,4 @@
-/* ─── projects.js — 項目管理 ──────────────────────────── */
+/* ─── projects.js — 工程項目 ──────────────────────────── */
 const Projects = {
   render(projects) {
     const container = document.getElementById('projectCards');
@@ -27,8 +27,8 @@ const Projects = {
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
               <div>
                 <div style="font-size:12px;color:var(--text-muted);font-family:monospace">${p.project_code}</div>
-                <div style="font-size:14px;font-weight:700;margin-top:2px;line-height:1.3">
-                  ${p.project_name ? p.project_name.substring(0, 50) + (p.project_name.length > 50 ? '...' : '') : p.project_code}
+                <div class="proj-name-block">
+                  ${projectNameHtml(p)}
                 </div>
               </div>
               <span class="badge badge-${statusClass}">${statusLabel}</span>
@@ -47,7 +47,7 @@ const Projects = {
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
               <div style="font-size:11px;color:var(--text-muted)">
-                📋 ${p.sc_count || 0} 個合同項目
+                📋 ${p.sc_count || 0} 個判項/支出項
               </div>
               <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="Projects.openEdit(${p.id})">✏️ 編輯</button>
@@ -63,7 +63,7 @@ const Projects = {
   openAdd() {
     document.getElementById('projModalTitle').textContent = '新增項目';
     document.getElementById('projModalId').value = '';
-    ['pCode','pName','pClient','pMc','pNotes'].forEach(id => document.getElementById(id).value = '');
+    ['pCode','pNameEn','pNameZh','pClient','pMc','pNotes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('pAmt').value = '';
     document.getElementById('pLabour').value = '';
     document.getElementById('pStartDate').value = '';
@@ -77,7 +77,13 @@ const Projects = {
     document.getElementById('projModalTitle').textContent = '編輯項目';
     document.getElementById('projModalId').value = p.id;
     document.getElementById('pCode').value = p.project_code || '';
-    document.getElementById('pName').value = p.project_name || '';
+    document.getElementById('pNameEn').value = p.project_name_en || '';
+    document.getElementById('pNameZh').value = p.project_name_zh || '';
+    if (!p.project_name_en && !p.project_name_zh && p.project_name) {
+      const parts = projectNameParts(p);
+      document.getElementById('pNameEn').value = parts.en;
+      document.getElementById('pNameZh').value = parts.zh;
+    }
     document.getElementById('pClient').value = p.client || '';
     document.getElementById('pMc').value = p.main_contractor || '';
     document.getElementById('pAmt').value = p.contract_amount || '';
@@ -96,7 +102,8 @@ const Projects = {
     const id = document.getElementById('projModalId').value;
     const data = {
       project_code: document.getElementById('pCode').value.trim(),
-      project_name: document.getElementById('pName').value.trim(),
+      project_name_en: document.getElementById('pNameEn').value.trim(),
+      project_name_zh: document.getElementById('pNameZh').value.trim(),
       client: document.getElementById('pClient').value.trim(),
       main_contractor: document.getElementById('pMc').value.trim(),
       contract_amount: parseFloat(document.getElementById('pAmt').value) || 0,
@@ -122,7 +129,7 @@ const Projects = {
   },
 
   async delete(id, code) {
-    if (!confirm(`確認刪除項目「${code}」？\n此操作將同時刪除所有相關合同項目及付款記錄！`)) return;
+    if (!confirm(`確認刪除項目「${code}」？\n此操作將同時刪除所有相關判項及付款登記！`)) return;
     await api('DELETE', `/projects/${id}`);
     toast('項目已刪除', 'success');
     if (App.currentProject?.id == id) {
@@ -133,7 +140,7 @@ const Projects = {
   }
 };
 
-/* ─── sc.js (在同一文件) — 分判商管理 ─────────────────────── */
+/* ─── sc.js (在同一文件) — 分判及支出管理 ─────────────────────── */
 const SC = {
   _descItems: [],
   _editSc: null,
@@ -624,7 +631,7 @@ const SC = {
     const scNoEsc = (s.sc_no || '').replace(/'/g, "\\'");
     const excludedCls = s.is_excluded ? ' sc-row-excluded' : '';
     return `
-      <tr class="row-clickable${isChild ? ' sc-group-child' : ''}${excludedCls}" onclick="SC.showPayments(${s.id})" title="點擊查看付款記錄">
+      <tr class="row-clickable${isChild ? ' sc-group-child' : ''}${excludedCls}" onclick="SC.showPayments(${s.id})" title="點擊查看付款登記">
         <td>${fmtRefNo(s.sc_no)}${s.is_excluded ? ' <span class="badge badge-warning" style="font-size:10px">除外 (C)</span>' : ''}</td>
         <td>
           <div style="font-weight:600">${s.company_name_en || '—'}</div>
@@ -653,7 +660,7 @@ const SC = {
   render() {
     const tbody = document.getElementById('scTableBody');
     if (this.filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:48px"><div class="empty-icon">🏢</div><div class="empty-title">暫無合同項目</div></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:48px"><div class="empty-icon">🏢</div><div class="empty-title">暫無判項/支出項</div></div></td></tr>`;
       return;
     }
     const html = [];
@@ -683,7 +690,7 @@ const SC = {
     this._pendingQuotationPdf = null;
     this._pendingQuotationFilename = null;
     this._pendingOcrId = null;
-    document.getElementById('scModalTitle').textContent = '新增合同項目';
+    document.getElementById('scModalTitle').textContent = '新增判項';
     document.getElementById('scModalId').value = '';
     ['scNo','scQuotNo','scQuotDate','scCompanyEn','scCompanyZh','scDescTitle','scOaStatus','scOaNo','scPayNote'].forEach(id => document.getElementById(id).value = '');
     this._descItems = [];
@@ -714,7 +721,7 @@ const SC = {
     this._pendingQuotationPdf = null;
     this._pendingQuotationFilename = null;
     this._pendingOcrId = null;
-    document.getElementById('scModalTitle').textContent = '編輯合同項目';
+    document.getElementById('scModalTitle').textContent = '編輯判項';
     document.getElementById('scModalId').value = s.id;
     document.getElementById('scNo').value = s.sc_no || '';
     document.getElementById('scQuotNo').value = s.quotation_no || '';
@@ -766,16 +773,16 @@ const SC = {
     const hvoLine = (h || vo)
       ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Contract Sum ${fmt(h)} + VO ${fmt(vo)} = 修訂 ${fmt(ca)}</div>` : '';
 
-    document.getElementById('scPayModalTitle').textContent = `${s.sc_no} — 付款記錄`;
+    document.getElementById('scPayModalTitle').textContent = `${s.sc_no} — 付款登記`;
     const subParts = [s.company_name_en, s.company_name_zh].filter(Boolean);
     document.getElementById('scPayModalSub').textContent =
       subParts.join(' / ') || s.description || '';
     document.getElementById('scPaySummary').innerHTML = `
       <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px">
-        <div><span style="color:var(--text-muted)">修訂合約金額 (J)</span><br><strong>${fmt(ca)}</strong></div>
+        <div><span style="color:var(--text-muted)">修訂判項金額 (J)</span><br><strong>${fmt(ca)}</strong></div>
         <div><span style="color:var(--text-muted)">累計已付</span><br><strong style="color:var(--success)">${fmt(paid)}</strong></div>
         <div><span style="color:var(--text-muted)">待付金額</span><br><strong style="color:${pending > 0 ? 'var(--warning)' : 'var(--text-primary)'}">${fmt(pending)}</strong></div>
-        <div><span style="color:var(--text-muted)">付款記錄</span><br><strong id="scPayCount">載入中...</strong></div>
+        <div><span style="color:var(--text-muted)">付款登記</span><br><strong id="scPayCount">載入中...</strong></div>
       </div>${hvoLine}`;
 
     document.getElementById('scPayTableBody').innerHTML =
@@ -796,9 +803,9 @@ const SC = {
       const pendingFmt = fmt(Math.max(0, pending != null ? pending : ca - paid));
       tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state" style="padding:40px">
         <div class="empty-icon">💰</div>
-        <div class="empty-title">尚無付款記錄</div>
+        <div class="empty-title">尚無付款登記</div>
         <div class="empty-sub" style="margin-top:8px">待付金額：<strong style="color:var(--warning)">${pendingFmt}</strong></div>
-        <div class="empty-sub" style="margin-top:4px">此項目已在合同清單立約，尚未錄入付款</div>
+        <div class="empty-sub" style="margin-top:4px">此判項已建立，尚未錄入付款</div>
       </div></td></tr>`;
       return;
     }
@@ -864,7 +871,7 @@ const SC = {
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     const id = document.getElementById('scModalId').value;
     const scNo = document.getElementById('scNo').value.trim();
-    if (!scNo) { toast('請輸入參考編號', 'warning'); return; }
+    if (!scNo) { toast('請輸入判項編號', 'warning'); return; }
 
     const data = {
       project_id: p.id,
@@ -893,9 +900,9 @@ const SC = {
 
     try {
       await api('POST', '/subcontractors', data);
-      toast('合同項目已儲存', 'success');
+      toast('判項已儲存', 'success');
       this.closeModal();
-      // 刷新分判商列表
+      // 刷新分判及支出清單
       App.scList = await api('GET', `/projects/${p.id}/subcontractors`) || [];
       await this.load();
       Payments.populateScFilter();
@@ -904,7 +911,7 @@ const SC = {
   },
 
   async delete(id, scNo) {
-    if (!confirm(`確認刪除合同項目 ${scNo}？`)) return;
+    if (!confirm(`確認刪除判項 ${scNo}？`)) return;
     await api('DELETE', `/subcontractors/${id}`);
     toast('已刪除', 'success');
     const p = App.currentProject;

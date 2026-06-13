@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QS付款管理系統 — Mepork Engineering</title>
-  <meta name="description" content="QS部門工程付款管理系統，支援發票單、報價單自動識別、付款記錄追蹤及財務報表">
+  <meta name="description" content="QS部門工程付款管理系統，支援發票單、報價單自動識別、付款登記追蹤及財務報表">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -43,17 +43,17 @@
         <span class="nav-icon">📊</span> 儀表板
       </div>
       <div class="nav-item" data-page="payments" onclick="App.navigate('payments')">
-        <span class="nav-icon">💰</span> 付款記錄
+        <span class="nav-icon">💰</span> 付款登記
         <span class="nav-badge" id="payBadge">0</span>
       </div>
       <div class="nav-item" data-page="subcontractors" onclick="App.navigate('subcontractors')">
-        <span class="nav-icon">🏢</span> 合同項目
+        <span class="nav-icon">🏢</span> 分判及支出
       </div>
       <div class="nav-item" data-page="ip-period" onclick="App.navigate('ip-period')">
         <span class="nav-icon">🏗️</span> 糧期狀況
       </div>
       <div class="nav-item" data-page="ocr" onclick="App.navigate('ocr')">
-        <span class="nav-icon">📄</span> 發票·報價識別
+        <span class="nav-icon">📄</span> 發票 / 報價上傳
       </div>
       <div class="nav-item" data-page="reports" onclick="App.navigate('reports')">
         <span class="nav-icon">📈</span> 財務報表
@@ -61,7 +61,7 @@
 
       <div class="nav-section-title" style="margin-top:12px">管理</div>
       <div class="nav-item" data-page="projects" onclick="App.navigate('projects')">
-        <span class="nav-icon">📁</span> 項目管理
+        <span class="nav-icon">📁</span> 工程項目
       </div>
       <div class="nav-item" data-page="settings" onclick="App.navigate('settings')">
         <span class="nav-icon">⚙️</span> 系統設定
@@ -103,7 +103,7 @@
         <div id="dashboardNoProject" class="empty-state" style="display:none">
           <div class="empty-icon">📁</div>
           <div class="empty-title">請先選擇項目</div>
-          <div class="empty-sub">在左側選擇一個項目，或前往「項目管理」新增項目</div>
+          <div class="empty-sub">在左側選擇一個項目，或前往「工程項目」新增地盤</div>
           <br>
           <button class="btn btn-primary" onclick="App.navigate('projects')">管理項目</button>
         </div>
@@ -180,14 +180,14 @@
                   <div class="stat-sub">Payment Progress</div>
                 </div>
                 <div class="stat-card info">
-                  <div class="stat-label">付款記錄數</div>
+                  <div class="stat-label">付款登記數</div>
                   <div class="stat-value" id="dashPayCount">—</div>
                   <div class="stat-sub">Payment Records</div>
                 </div>
                 <div class="stat-card">
-                  <div class="stat-label">合同項目數</div>
+                  <div class="stat-label">判項/支出項數</div>
                   <div class="stat-value" id="dashScCount">—</div>
-                  <div class="stat-sub">Contract Items</div>
+                  <div class="stat-sub">Sub-Contract & Expenditure</div>
                 </div>
               </div>
             </div>
@@ -217,7 +217,7 @@
           <div class="form-row" style="gap:20px">
             <div class="card">
               <div class="card-header">
-                <div class="card-title">💰 合同項目付款狀況</div>
+                <div class="card-title">💰 分判及支出狀況</div>
               </div>
               <div class="card-body">
                 <div class="chart-wrap">
@@ -237,10 +237,10 @@
             </div>
           </div>
 
-          <!-- 最近付款記錄 -->
+          <!-- 最近付款登記 -->
           <div class="card">
             <div class="card-header">
-              <div class="card-title">🕐 最近付款記錄</div>
+              <div class="card-title">🕐 最近付款登記</div>
               <button class="btn btn-secondary btn-sm" onclick="App.navigate('payments')">查看全部</button>
             </div>
             <div class="table-wrap" style="border:none">
@@ -248,9 +248,9 @@
                 <thead>
                   <tr>
                     <th>日期</th>
-                    <th>參考編號</th>
+                    <th>判項編號</th>
                     <th>公司</th>
-                    <th>描述</th>
+                    <th>工程描述</th>
                     <th style="text-align:right">已付金額</th>
                     <th>發票號碼</th>
                   </tr>
@@ -283,7 +283,7 @@
         </div>
       </div>
 
-      <!-- ─── 付款記錄 ──────────────────────── -->
+      <!-- ─── 付款登記 ──────────────────────── -->
       <div class="page" id="page-payments">
         <div class="toolbar">
           <div class="search-wrap">
@@ -291,7 +291,7 @@
             <input type="text" id="paySearch" placeholder="搜尋公司名、發票號、描述..." oninput="Payments.search(this.value)">
           </div>
           <select class="form-input" id="payFilterSc" style="width:auto;min-width:160px" onchange="Payments.filterBySc(this.value)">
-            <option value="">全部參考編號</option>
+            <option value="">全部判項編號</option>
           </select>
           <button class="btn btn-primary" onclick="Payments.openAdd()">➕ 新增記錄</button>
           <button class="btn btn-secondary" onclick="Payments.exportCsv()">📤 匯出CSV</button>
@@ -299,7 +299,7 @@
 
         <div class="card" style="margin-bottom:0">
           <div class="card-header">
-            <div class="card-title">💰 付款記錄
+            <div class="card-title">💰 付款登記
               <span class="badge badge-muted" id="payCount">0 條</span>
             </div>
             <div style="font-size:12px;color:var(--text-secondary)">
@@ -313,10 +313,10 @@
                   <th class="th-sortable" data-sort="seq_no" onclick="Payments.sortBy('seq_no')">#<span class="sort-icon">↕</span></th>
                   <th class="th-sortable" data-sort="invoice_date" onclick="Payments.sortBy('invoice_date')">發票日期<span class="sort-icon">↕</span></th>
                   <th class="th-sortable" data-sort="invoice_no" onclick="Payments.sortBy('invoice_no')">發票號碼<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="sc_no" onclick="Payments.sortBy('sc_no')">參考編號<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="sc_no" onclick="Payments.sortBy('sc_no')">判項編號<span class="sort-icon">↕</span></th>
                   <th class="th-sortable" data-sort="company" onclick="Payments.sortBy('company')">公司名稱<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="description" onclick="Payments.sortBy('description')">描述<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable th-num" data-sort="contract_amount" onclick="Payments.sortBy('contract_amount')">合約金額<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable" data-sort="description" onclick="Payments.sortBy('description')">工程描述<span class="sort-icon">↕</span></th>
+                  <th class="th-sortable th-num" data-sort="contract_amount" onclick="Payments.sortBy('contract_amount')">判項金額<span class="sort-icon">↕</span></th>
                   <th class="th-sortable th-num" data-sort="paid_amount" onclick="Payments.sortBy('paid_amount')">已付金額<span class="sort-icon">↕</span></th>
                   <th class="th-sortable th-num" data-sort="remainder_amount" onclick="Payments.sortBy('remainder_amount')">餘額<span class="sort-icon">↕</span></th>
                   <th class="th-sortable" data-sort="oa_ref" onclick="Payments.sortBy('oa_ref')">OA狀態<span class="sort-icon">↕</span></th>
@@ -331,26 +331,26 @@
         </div>
       </div>
 
-      <!-- ─── 分判商 ───────────────────────── -->
+      <!-- ─── 分判及支出 ───────────────────────── -->
       <div class="page" id="page-subcontractors">
         <div class="toolbar">
           <div class="search-wrap">
             <span class="search-icon">🔍</span>
-            <input type="text" id="scSearch" placeholder="搜尋參考編號、公司名..." oninput="SC.search(this.value)">
+            <input type="text" id="scSearch" placeholder="搜尋判項編號、公司名..." oninput="SC.search(this.value)">
           </div>
-          <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合同項目</button>
+          <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增判項</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="SC.expandAllGroups()">展開全部</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="SC.collapseAllGroups()">收合全部</button>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M-0XX = 物料 · SC-0XX = 分判 · O-0XX = 其他 · 點擊分組列（如 M-011）可收合/展開 · 點擊子項可查看付款記錄</p>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M = 物料 · SC = 分判 · O = 其他支出 · 點擊分組列（如 M-011）可收合/展開 · 點擊子項可查看付款登記</p>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>參考編號</th>
+                <th>判項編號</th>
                 <th>公司名稱</th>
-                <th>描述</th>
-                <th style="text-align:right">修訂合約金額</th>
+                <th>工程描述</th>
+                <th style="text-align:right">修訂判項金額 (J)</th>
                 <th style="text-align:right">累計已付</th>
                 <th>報價單</th>
                 <th>OA 狀態/日期</th>
@@ -420,18 +420,18 @@
                 </div>
                 <div id="ocrScSuggest" class="ocr-sc-suggest" style="display:none"></div>
                 <div class="form-group">
-                  <label class="form-label">關聯參考編號 <span class="form-hint-inline">（發票必填 · 報價可選現有或新建）</span></label>
+                  <label class="form-label">關聯判項編號 <span class="form-hint-inline">（發票必填 · 報價可選現有或新建）</span></label>
                   <select class="form-input" id="ocrScNo" onchange="OCR.onScChange()">
-                    <option value="">— 選擇參考編號 —</option>
+                    <option value="">— 選擇判項編號 —</option>
                   </select>
                 </div>
                 <div class="form-group" id="ocrNewScGroup" style="display:none">
-                  <label class="form-label">新建參考編號 <span class="required">*</span></label>
+                  <label class="form-label">新建判項編號 <span class="required">*</span></label>
                   <div class="ocr-new-sc-row">
                     <select class="form-input ocr-sc-prefix" id="ocrScPrefix" onchange="OCR.onScPrefixChange()">
                       <option value="SC">SC — 分包</option>
                       <option value="M">M — 材料/設備</option>
-                      <option value="O">O — 其他</option>
+                      <option value="O">O — 其他支出</option>
                     </select>
                     <input type="text" class="form-input" id="ocrNewScNo" placeholder="自動建議編號" oninput="OCR._newScManual=true">
                   </div>
@@ -501,15 +501,15 @@
                 <div id="ocrDupWarn" class="ocr-dup-warn" style="display:none"></div>
                 <div class="ocr-save-actions">
                   <button type="button" class="btn btn-primary" onclick="OCR.saveAsQuotation()" id="ocrSaveQuotBtn" disabled>
-                    📋 儲存為報價（合同項目）
+                    📋 儲存為報價（判項）
                   </button>
                   <button type="button" class="btn btn-success" onclick="OCR.saveAsInvoice()" id="ocrSaveInvBtn" disabled>
-                    🧾 儲存為發票（付款記錄）
+                    🧾 儲存為發票（付款登記）
                   </button>
                   <button type="button" class="btn btn-secondary" onclick="OCR.reset()">重置</button>
                 </div>
                 <div class="form-hint" style="margin-top:10px">
-                  報價單 → 更新/新建合同項目 · 發票單 → 新增付款記錄（須關聯參考編號）
+                  報價單 → 更新/新建判項 · 發票單 → 新增付款登記（須關聯判項編號）
                 </div>
               </div>
             </div>
@@ -537,7 +537,7 @@
         </div>
         <div class="stats-grid" id="reportStats">
           <div class="stat-card">
-            <div class="stat-label">合同項目數</div>
+            <div class="stat-label">判項/支出項數</div>
             <div class="stat-value" id="rptScCount">—</div>
           </div>
           <div class="stat-card success">
@@ -551,17 +551,17 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <div class="card-title">📊 合同項目付款明細</div>
+            <div class="card-title">📊 分判及支出明細</div>
             <button class="btn btn-secondary btn-sm" onclick="Reports.exportCsv()">📤 匯出</button>
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
               <thead>
                 <tr>
-                  <th>參考編號</th>
+                  <th>判項編號</th>
                   <th>公司名稱</th>
-                  <th>描述</th>
-                  <th style="text-align:right">合約金額</th>
+                  <th>工程描述</th>
+                  <th style="text-align:right">判項金額 (J)</th>
                   <th style="text-align:right">累計已付</th>
                   <th style="text-align:right">未付餘額</th>
                   <th>付款次數</th>
@@ -576,7 +576,7 @@
         </div>
       </div>
 
-      <!-- ─── 項目管理 ──────────────────────── -->
+      <!-- ─── 工程項目 ──────────────────────── -->
       <div class="page" id="page-projects">
         <div class="toolbar">
           <button class="btn btn-primary" onclick="Projects.openAdd()">➕ 新增項目</button>
@@ -661,11 +661,11 @@
   </div><!-- /main -->
 </div><!-- /layout -->
 
-<!-- ─── 模態框：新增/編輯付款記錄 ───────────────────────────── -->
+<!-- ─── 模態框：新增/編輯付款登記 ───────────────────────────── -->
 <div class="modal-backdrop" id="payModal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title" id="payModalTitle">新增付款記錄</div>
+      <div class="modal-title" id="payModalTitle">新增付款登記</div>
       <button class="modal-close" onclick="Payments.closeModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -691,9 +691,9 @@
           <input type="text" class="form-input" id="fQuotNo" placeholder="Q-001">
         </div>
         <div class="form-group">
-          <label class="form-label">參考編號</label>
+          <label class="form-label">判項編號</label>
           <select class="form-input" id="fScNo" onchange="Payments.onScChange(this.value)">
-            <option value="">— 選擇參考編號 —</option>
+            <option value="">— 選擇判項編號 —</option>
           </select>
         </div>
       </div>
@@ -715,7 +715,7 @@
       <div class="section-title">金額</div>
       <div class="form-row-3">
         <div class="form-group">
-          <label class="form-label">合約金額 (HK$)</label>
+          <label class="form-label">判項金額 (HK$)</label>
           <div class="amount-input-wrap">
             <input type="number" class="form-input" id="fContractAmt" placeholder="0" step="0.01" oninput="Payments.calcRemainder()">
           </div>
@@ -799,9 +799,15 @@
           </select>
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">項目名稱</label>
-        <input type="text" class="form-input" id="pName" placeholder="MTR C9644-24C...">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">項目名稱（英文）</label>
+          <input type="text" class="form-input" id="pNameEn" placeholder="MTR C9644-24C Extension of Fitness Room...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">項目名稱（中文）</label>
+          <input type="text" class="form-input" id="pNameZh" placeholder="港鐵九龍灣站健身室擴展工程">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -846,18 +852,18 @@
   </div>
 </div>
 
-<!-- ─── 模態框：新增分判商 ────────────────────────────────────── -->
+<!-- ─── 模態框：新增/編輯判項 ────────────────────────────────────── -->
 <div class="modal-backdrop" id="scModal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title" id="scModalTitle">新增合同項目</div>
+      <div class="modal-title" id="scModalTitle">新增判項</div>
       <button class="modal-close" onclick="SC.closeModal()">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="scModalId">
       <div class="form-row-3">
         <div class="form-group">
-          <label class="form-label">參考編號 <span class="required">*</span></label>
+          <label class="form-label">判項編號 <span class="required">*</span></label>
           <input type="text" class="form-input" id="scNo" placeholder="M-011 / SC-019 / O-012">
         </div>
         <div class="form-group">
@@ -928,7 +934,7 @@
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">修訂合約金額 (J)</label>
+          <label class="form-label">修訂判項金額 (J)</label>
           <div class="amount-input-wrap">
             <input type="number" class="form-input" id="scAmt" placeholder="0" step="0.01" readonly style="opacity:0.9">
           </div>
@@ -947,7 +953,7 @@
         <div class="form-group">
           <label class="form-label">累計已付金額</label>
           <input type="text" class="form-input" id="scPaidAmt" readonly style="opacity:0.85" placeholder="—">
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">由「付款記錄」自動加總，不可在此編輯</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">由「付款登記」自動加總，不可在此編輯</div>
         </div>
         <div class="form-group">
           <label class="form-label">未付餘額</label>
@@ -985,12 +991,12 @@
   </div>
 </div>
 
-<!-- ─── 模態框：合同項目付款記錄 ───────────────────────────────── -->
+<!-- ─── 模態框：判項付款登記 ───────────────────────────────── -->
 <div class="modal-backdrop" id="scPayModal">
   <div class="modal modal-lg">
     <div class="modal-header">
       <div>
-        <div class="modal-title" id="scPayModalTitle">付款記錄</div>
+        <div class="modal-title" id="scPayModalTitle">付款登記</div>
         <div id="scPayModalSub" style="font-size:12px;color:var(--text-secondary);margin-top:4px"></div>
       </div>
       <button class="modal-close" onclick="SC.closePayModal()">✕</button>
@@ -1004,8 +1010,8 @@
               <th>#</th>
               <th>發票日期</th>
               <th>發票號碼</th>
-              <th>描述</th>
-              <th style="text-align:right">合約金額</th>
+              <th>工程描述</th>
+              <th style="text-align:right">判項金額</th>
               <th style="text-align:right">已付金額</th>
               <th style="text-align:right">餘額</th>
               <th>OA狀態</th>
@@ -1020,7 +1026,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="SC.closePayModal()">關閉</button>
-      <button class="btn btn-primary" onclick="SC.goToPayments()">前往付款記錄</button>
+      <button class="btn btn-primary" onclick="SC.goToPayments()">前往付款登記</button>
     </div>
   </div>
 </div>

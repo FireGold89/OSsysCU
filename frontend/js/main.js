@@ -139,6 +139,57 @@ function fmtIpExpenditure(val) {
   return fmtAcct(n < 0 ? n : -Math.abs(n));
 }
 
+/** 項目名稱中英欄位（兼容舊 project_name） */
+function projectNameParts(p) {
+  let en = (p?.project_name_en || '').trim();
+  let zh = (p?.project_name_zh || '').trim();
+  const legacy = (p?.project_name || '').trim();
+  if (!en && !zh && legacy) {
+    if (/[\u4e00-\u9fff]/.test(legacy)) {
+      if (/[A-Za-z]/.test(legacy)) {
+        for (const sep of [' / ', ' · ', '｜', ' | ']) {
+          if (legacy.includes(sep)) {
+            const i = legacy.indexOf(sep);
+            en = legacy.slice(0, i).trim();
+            zh = legacy.slice(i + sep.length).trim();
+            break;
+          }
+        }
+        if (!en && !zh) en = legacy;
+      } else {
+        zh = legacy;
+      }
+    } else {
+      en = legacy;
+    }
+  }
+  return { en, zh };
+}
+
+function projectNameOneLine(p, maxLen) {
+  const { en, zh } = projectNameParts(p);
+  let s = en && zh ? `${en} · ${zh}` : (en || zh || p?.project_code || '—');
+  if (maxLen && s.length > maxLen) s = s.slice(0, maxLen) + '...';
+  return s;
+}
+
+function projectNameHtml(p) {
+  const { en, zh } = projectNameParts(p);
+  if (!en && !zh) return escHtml(p?.project_code || '—');
+  if (en && zh) {
+    return `<span class="proj-name-en">${escHtml(en)}</span><span class="proj-name-zh">${escHtml(zh)}</span>`;
+  }
+  return `<span class="proj-name-en">${escHtml(en || zh)}</span>`;
+}
+
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function projectStatusInfo(status) {
   const map = {
     Active: { label: '進行中', badge: 'success', en: 'Active' },
@@ -161,7 +212,8 @@ function updateDashProjectHero(project, ipPeriod) {
     if (el) el.textContent = val || '—';
   };
   set('dashProjCode', proj.project_code);
-  set('dashProjName', proj.project_name || proj.project_code);
+  const nameEl = document.getElementById('dashProjName');
+  if (nameEl) nameEl.innerHTML = projectNameHtml(proj);
   const period = ipPeriod?.site_period_text || proj.site_period_text;
   set('dashProjPeriod', period);
   set('dashProjMc', proj.main_contractor);
@@ -230,7 +282,7 @@ function fmtDate(str) {
   return d.toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
-/** 推導父級參考編號（M-011.26 → M-011，SC-003A → SC-003） */
+/** 推導父級判項編號（M-011.26 → M-011，SC-003A → SC-003） */
 function deriveParentScNo(scNo) {
   if (!scNo) return scNo;
   const s = String(scNo).trim();
@@ -311,12 +363,12 @@ function buildDescriptionText(items, title) {
   return lines.join('\n');
 }
 
-/** M-/SC-/O- 參考編號類型（對應 Excel 灰色提示） */
+/** M-/SC-/O- 判項編號類型（對應 Excel 灰色提示） */
 function refNoType(scNo) {
   const s = (scNo || '').toUpperCase().trim();
   if (/^M[-.]/.test(s) || s.startsWith('M')) return { label: '物料', badge: 'info' };
   if (/^SC[-.]/.test(s) || s.startsWith('SC')) return { label: '分判', badge: 'success' };
-  if (/^O[-.]/.test(s) || s.startsWith('O')) return { label: '其他', badge: 'warning' };
+  if (/^O[-.]/.test(s) || s.startsWith('O')) return { label: '其他支出', badge: 'warning' };
   return { label: '', badge: 'muted' };
 }
 
@@ -405,10 +457,10 @@ const App = {
     this.projects.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
-      opt.textContent = `${p.project_code} ${p.project_name ? '— ' + p.project_name.substring(0, 30) : ''}`;
+      opt.textContent = `${p.project_code}${projectNameOneLine(p) !== p.project_code ? ' — ' + projectNameOneLine(p, 40) : ''}`;
       sel.appendChild(opt);
     });
-    // 更新項目管理頁
+    // 更新工程項目頁
     Projects.render(this.projects);
   },
 
@@ -433,7 +485,7 @@ const App = {
     document.getElementById('currentProjectBadge').style.display = '';
     document.getElementById('btnQuickAdd').style.display = '';
 
-    // 載入分判商
+    // 載入分判及支出清單
     this.scList = await api('GET', `/projects/${id}/subcontractors`) || [];
 
     // 刷新各頁面
@@ -454,12 +506,12 @@ const App = {
     // 更新頁面標題
     const titles = {
       dashboard: ['儀表板', '項目財務總覽'],
-      payments: ['付款記錄', '管理所有付款'],
-      subcontractors: ['合同項目', 'M=物料 · SC=分判 · O=其他'],
-      'ip-period': ['糧期狀況', '地盤糧期手動編輯'],
-      ocr: ['發票·報價識別', '上傳發票單、報價單，自動提取並建立付款記錄'],
+      payments: ['付款登記', 'Sub-Contract 付款登記'],
+      subcontractors: ['分判及支出', 'M=物料 · SC=分判 · O=其他支出'],
+      'ip-period': ['糧期狀況', '地盤中期糧款手動編輯'],
+      ocr: ['發票 / 報價上傳', '上傳發票、報價，自動識別並登記付款'],
       reports: ['財務報表', '付款統計分析'],
-      projects: ['項目管理', '管理所有工程項目'],
+      projects: ['工程項目', '管理地盤工程項目'],
       settings: ['系統設定', 'OCR與系統配置'],
     };
     const [title, sub] = titles[page] || ['', ''];
@@ -542,7 +594,7 @@ const Dashboard = {
 
     updateDashIpTotals(summary.ip_period);
 
-    // 付款記錄統計
+    // 付款登記統計
     const payments = await api('GET', `/projects/${p.id}/payments`);
     document.getElementById('dashPayCount').textContent = payments?.length || 0;
     document.getElementById('payBadge').textContent = payments?.length || 0;
@@ -555,7 +607,7 @@ const Dashboard = {
     const recent = (payments || []).slice(0, 8);
     const tbody = document.getElementById('dashRecentPayments');
     if (recent.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:24px">暫無付款記錄</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:24px">暫無付款登記</div></td></tr>`;
     } else {
       tbody.innerHTML = recent.map(r => `
         <tr onclick="App.navigate('payments')">

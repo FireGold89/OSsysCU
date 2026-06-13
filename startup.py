@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '2026-06-12-ocr-vendor-parse'
+APP_VERSION = '2026-06-12-project-name-bilingual'
 
 
 def _sync_excel_background():

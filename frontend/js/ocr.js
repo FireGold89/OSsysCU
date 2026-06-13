@@ -14,7 +14,7 @@ const OCR = {
     const sel = document.getElementById('ocrScNo');
     const cur = sel?.value;
     if (!sel) return;
-    sel.innerHTML = '<option value="">— 選擇參考編號 —</option>';
+    sel.innerHTML = '<option value="">— 選擇判項編號 —</option>';
     (App.scList || []).forEach(sc => {
       const opt = document.createElement('option');
       opt.value = sc.sc_no;
@@ -382,7 +382,7 @@ const OCR = {
       let score = 0;
       const reasons = [];
       const scNo = (sc.sc_no || '').toUpperCase();
-      if (scHint && scNo === scHint) { score += 120; reasons.push('參考編號相符'); }
+      if (scHint && scNo === scHint) { score += 120; reasons.push('判項編號相符'); }
       if (qNo && sc.quotation_no) {
         const sq = String(sc.quotation_no).trim().toLowerCase();
         if (qNo === sq || qNo.includes(sq) || sq.includes(qNo)) {
@@ -405,7 +405,7 @@ const OCR = {
         const ca = parseFloat(sc.contract_amount) || 0;
         if (ca > 0 && Math.abs(ca - amount) / ca < 0.05) {
           score += 25;
-          reasons.push('金額接近合同');
+          reasons.push('金額接近判項');
         }
       }
       if (score > 0) {
@@ -506,8 +506,8 @@ const OCR = {
     el.style.display = '';
     const isQuot = this.getDocType() === 'quotation';
     if (isQuot) {
-      el.innerHTML = `💡 同公司已有合同 <strong>${top.sc_no}</strong>（${reasons}）。
-        報價單請用下方<strong>新建參考編號</strong>新增，勿選現有編號以免覆蓋舊資料。`;
+      el.innerHTML = `💡 同公司已有判項 <strong>${top.sc_no}</strong>（${reasons}）。
+        報價單請用下方<strong>新建判項編號</strong>新增，勿選現有編號以免覆蓋舊資料。`;
       return;
     }
     el.innerHTML = `💡 建議關聯：<strong>${top.sc_no}</strong> ${top.company_name_en || top.company_name_zh || ''}（${reasons}）
@@ -516,10 +516,10 @@ const OCR = {
 
   applyScSuggestion(scNo) {
     if (this.getDocType() === 'quotation') {
-      toast('報價單請使用新建參考編號，勿關聯現有合同', 'warning');
+      toast('報價單請使用新建判項編號，勿關聯現有判項', 'warning');
       return;
     }
-    if (!confirm(`確定關聯現有合同「${scNo}」？（發票付款用）`)) return;
+    if (!confirm(`確定關聯現有判項「${scNo}」？（發票付款用）`)) return;
     const sel = document.getElementById('ocrScNo');
     if (sel) {
       sel.value = scNo;
@@ -768,16 +768,16 @@ const OCR = {
     const p = App.currentProject;
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     if (this.getDocType() === 'invoice') {
-      if (!confirm('系統判斷為發票單，仍要儲存為報價（合同項目）？')) return;
+      if (!confirm('系統判斷為發票單，仍要儲存為報價（判項）？')) return;
     }
     if (!this.validateAmountMismatch()) {
       if (!confirm('明細合計與表頭金額不一致，仍要儲存？')) return;
     }
     const { scNo, newScNo, effectiveScNo, sc, amount, company, description } = this._readCommonFields();
-    if (!effectiveScNo) { toast('請選擇參考編號或輸入新建編號', 'warning'); return; }
+    if (!effectiveScNo) { toast('請選擇判項編號或輸入新建編號', 'warning'); return; }
     if (scNo && sc && !newScNo) {
       const paid = parseFloat(sc.total_paid) || 0;
-      const msg = `「${scNo}」為現有合同（金額 ${fmt(sc.contract_amount)}${paid ? `，已付 ${fmt(paid)}` : ''}）。\n\n儲存將覆蓋原有報價資料。\n若要新增，請清空「關聯參考編號」並使用「新建參考編號」。\n\n確定要覆蓋？`;
+      const msg = `「${scNo}」為現有判項（金額 ${fmt(sc.contract_amount)}${paid ? `，已付 ${fmt(paid)}` : ''}）。\n\n儲存將覆蓋原有報價資料。\n若要新增，請清空「關聯判項編號」並使用「新建判項編號」。\n\n確定要覆蓋？`;
       if (!confirm(msg)) return;
     }
     if (!amount) { toast('請輸入報價金額', 'warning'); return; }
@@ -807,7 +807,7 @@ const OCR = {
     };
     try {
       await api('POST', '/subcontractors', data);
-      toast(`報價已寫入合同項目 ${effectiveScNo}`, 'success');
+      toast(`報價已寫入判項 ${effectiveScNo}`, 'success');
       App.scList = await api('GET', `/projects/${p.id}/subcontractors`) || [];
       this.populateScOptions();
       this.reset();
@@ -819,13 +819,13 @@ const OCR = {
     const p = App.currentProject;
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     if (this.getDocType() === 'quotation') {
-      if (!confirm('系統判斷為報價單，仍要儲存為發票（付款記錄）？')) return;
+      if (!confirm('系統判斷為報價單，仍要儲存為發票（付款登記）？')) return;
     }
     if (!this.validateAmountMismatch()) {
       if (!confirm('明細合計與表頭金額不一致，仍要儲存？')) return;
     }
     const { scNo, sc, amount, company, description } = this._readCommonFields();
-    if (!scNo) { toast('發票單須選擇關聯參考編號', 'warning'); return; }
+    if (!scNo) { toast('發票單須選擇關聯判項編號', 'warning'); return; }
     const invNo = document.getElementById('ocrInvoiceNo').value.trim();
     if (!invNo) { toast('請輸入發票號碼', 'warning'); return; }
     if (await this.checkDuplicateInvoice()) { toast('此發票號已存在，請檢查', 'error'); return; }
@@ -833,7 +833,7 @@ const OCR = {
     const contractAmt = parseFloat(sc?.contract_amount) || 0;
     const totalPaid = parseFloat(sc?.total_paid) || 0;
     if (contractAmt > 0 && totalPaid + amount > contractAmt + 0.02) {
-      if (!confirm(`累計已付將超過合同金額 ${fmt(contractAmt)}，仍要儲存？`)) return;
+      if (!confirm(`累計已付將超過判項金額 ${fmt(contractAmt)}，仍要儲存？`)) return;
     }
     const data = {
       project_id: p.id,
@@ -857,7 +857,7 @@ const OCR = {
     };
     try {
       await api('POST', '/payments', data);
-      toast('發票已儲存為付款記錄', 'success');
+      toast('發票已儲存為付款登記', 'success');
       this.reset();
       setTimeout(() => { App.navigate('payments'); Payments.load(); Dashboard.load(); }, 400);
     } catch (e) {}

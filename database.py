@@ -5,6 +5,7 @@ SQLite 資料庫初始化與CRUD操作
 import sqlite3
 import os
 import json
+import re
 from datetime import datetime
 
 from config import DB_PATH
@@ -144,6 +145,24 @@ def _migrate_db(conn):
         conn.execute("ALTER TABLE projects ADD COLUMN ip_total_expenditure REAL DEFAULT 0")
     if 'ip_advance' not in cols:
         conn.execute("ALTER TABLE projects ADD COLUMN ip_advance REAL DEFAULT 0")
+    if 'project_name_en' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN project_name_en TEXT")
+    if 'project_name_zh' not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN project_name_zh TEXT")
+    for row in conn.execute(
+        "SELECT id, project_name, project_name_en, project_name_zh FROM projects"
+    ).fetchall():
+        if row['project_name_en'] or row['project_name_zh']:
+            continue
+        en, zh = _split_legacy_project_name(row['project_name'])
+        if not en and not zh:
+            continue
+        combined = f'{en} · {zh}' if en and zh else (en or zh)
+        conn.execute(
+            """UPDATE projects SET project_name_en=?, project_name_zh=?, project_name=?
+               WHERE id=?""",
+            (en or None, zh or None, combined or row['project_name'], row['id']),
+        )
     conn.execute("""
         CREATE TABLE IF NOT EXISTS interim_payments (
             id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,6 +237,39 @@ def _migrate_db(conn):
 
 # ─── Projects ──────────────────────────────────────────────────────────
 
+def _split_legacy_project_name(name):
+    """將舊 project_name 拆成中英（匯入/遷移用）"""
+    name = (name or '').strip()
+    if not name:
+        return '', ''
+    has_cjk = bool(re.search(r'[\u4e00-\u9fff]', name))
+    has_latin = bool(re.search(r'[A-Za-z]', name))
+    if has_cjk and has_latin:
+        for sep in (' / ', ' · ', '｜', ' | ', '\n'):
+            if sep in name:
+                a, b = name.split(sep, 1)
+                return a.strip(), b.strip()
+        return name, ''
+    if has_cjk:
+        return '', name
+    return name, ''
+
+
+def _normalize_project_fields(data):
+    en = (data.get('project_name_en') or '').strip()
+    zh = (data.get('project_name_zh') or '').strip()
+    legacy = (data.get('project_name') or '').strip()
+    if not en and not zh and legacy:
+        en, zh = _split_legacy_project_name(legacy)
+    data['project_name_en'] = en or None
+    data['project_name_zh'] = zh or None
+    if en and zh:
+        data['project_name'] = f'{en} · {zh}'
+    else:
+        data['project_name'] = en or zh or legacy or (data.get('project_code') or '')
+    return data
+
+
 def get_all_projects():
     conn = get_conn()
     rows = conn.execute("""
@@ -242,12 +294,15 @@ def get_project(project_id):
 
 
 def create_project(data):
+    data = _normalize_project_fields(dict(data))
     conn = get_conn()
     cur = conn.execute("""
-        INSERT INTO projects (project_code, project_name, client, main_contractor,
-                              contract_amount, labour_allocation, start_date, status, notes)
-        VALUES (:project_code, :project_name, :client, :main_contractor,
-                :contract_amount, :labour_allocation, :start_date, :status, :notes)
+        INSERT INTO projects (project_code, project_name, project_name_en, project_name_zh,
+                              client, main_contractor, contract_amount, labour_allocation,
+                              start_date, status, notes)
+        VALUES (:project_code, :project_name, :project_name_en, :project_name_zh,
+                :client, :main_contractor, :contract_amount, :labour_allocation,
+                :start_date, :status, :notes)
     """, data)
     conn.commit()
     new_id = cur.lastrowid
@@ -256,9 +311,11 @@ def create_project(data):
 
 
 def update_project(project_id, data):
+    data = _normalize_project_fields(dict(data))
     conn = get_conn()
     conn.execute("""
         UPDATE projects SET project_code=:project_code, project_name=:project_name,
+            project_name_en=:project_name_en, project_name_zh=:project_name_zh,
             client=:client, main_contractor=:main_contractor,
             contract_amount=:contract_amount, labour_allocation=:labour_allocation,
             start_date=:start_date, status=:status, notes=:notes

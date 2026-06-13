@@ -264,6 +264,8 @@ def import_excel(filepath, project_code=None):
             db.update_project(project_id, {
                 'project_code': project_code,
                 'project_name': project_name or existing.get('project_name') or project_code,
+                'project_name_en': project_name or existing.get('project_name_en') or existing.get('project_name') or '',
+                'project_name_zh': existing.get('project_name_zh') or '',
                 'client': existing.get('client') or client or 'MTR',
                 'main_contractor': main_contractor or existing.get('main_contractor') or '',
                 'contract_amount': contract_amount,
@@ -277,6 +279,8 @@ def import_excel(filepath, project_code=None):
         project_id = db.create_project({
             'project_code': project_code,
             'project_name': project_name or project_code,
+            'project_name_en': project_name or project_code,
+            'project_name_zh': '',
             'client': client or 'MTR',
             'main_contractor': main_contractor or 'Mepork Engineering Services Limited',
             'contract_amount': contract_amount,

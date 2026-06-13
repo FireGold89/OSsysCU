@@ -1,4 +1,4 @@
-/* ─── payments.js — 付款記錄管理 ──────────────────────── */
+/* ─── payments.js — 付款登記管理 ──────────────────────── */
 const Payments = {
   data: [],
   filtered: [],
@@ -117,7 +117,7 @@ const Payments = {
     totalPaidEl.textContent = fmt(totalPaid);
 
     if (this.filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-icon">💰</div><div class="empty-title">暫無付款記錄</div><div class="empty-sub">點擊「新增記錄」或上傳PDF自動識別</div></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-icon">💰</div><div class="empty-title">暫無付款登記</div><div class="empty-sub">點擊「新增記錄」或上傳PDF自動識別</div></div></td></tr>`;
       return;
     }
 
@@ -174,7 +174,7 @@ const Payments = {
   populateScFilter() {
     const sel = document.getElementById('payFilterSc');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">全部參考編號</option>';
+    sel.innerHTML = '<option value="">全部判項編號</option>';
     (App.scList || []).forEach(sc => {
       const opt = document.createElement('option');
       opt.value = sc.sc_no;
@@ -191,7 +191,7 @@ const Payments = {
     const sel = document.getElementById('fScNo');
     const cur = sel?.value;
     if (!sel) return;
-    sel.innerHTML = '<option value="">— 選擇參考編號 —</option>';
+    sel.innerHTML = '<option value="">— 選擇判項編號 —</option>';
     (App.scList || []).forEach(sc => {
       const opt = document.createElement('option');
       opt.value = sc.sc_no;
@@ -235,7 +235,7 @@ const Payments = {
   },
 
   openAdd() {
-    document.getElementById('payModalTitle').textContent = '新增付款記錄';
+    document.getElementById('payModalTitle').textContent = '新增付款登記';
     document.getElementById('payModalId').value = '';
     this._setPdfUi(null);
     const fields = ['fInvDate','fInvNo','fQuotNo','fCompanyEn','fCompanyZh','fDesc','fOaRef','fOaNo','fMcIpNo','fBcToSub','fSubIpNo','fRemark'];
@@ -255,7 +255,7 @@ const Payments = {
   async openEdit(id) {
     const r = await api('GET', `/payments/${id}`);
     if (!r) return;
-    document.getElementById('payModalTitle').textContent = '編輯付款記錄';
+    document.getElementById('payModalTitle').textContent = '編輯付款登記';
     document.getElementById('payModalId').value = r.id;
     this.populateScSelect();
     const seqEl = document.getElementById('fSeqNo');
@@ -335,7 +335,7 @@ const Payments = {
   },
 
   async delete(id) {
-    if (!confirm('確認刪除此付款記錄？')) return;
+    if (!confirm('確認刪除此付款登記？')) return;
     await api('DELETE', `/payments/${id}`);
     toast('已刪除', 'success');
     await this.load();
@@ -344,7 +344,7 @@ const Payments = {
 
   exportCsv() {
     if (!this.filtered.length) { toast('沒有資料可匯出', 'warning'); return; }
-    const headers = ['序號','發票日期','發票號碼','參考編號','公司名稱(英)','公司名稱(中)','描述','合約金額','已付金額','餘額','OA參考','OA編號','MC IP No.','Sub-IP No.','備注'];
+    const headers = ['序號','發票日期','發票號碼','判項編號','公司名稱(英)','公司名稱(中)','工程描述','判項金額','已付金額','餘額','OA參考','OA編號','MC IP No.','Sub-IP No.','備注'];
     const rows = this.filtered.map(r => [
       r.seq_no, r.invoice_date, r.invoice_no, r.sc_no, r.company_name_en, r.company_name_zh,
       r.description, fmtNumPlain(r.contract_amount), fmtNumPlain(r.paid_amount), fmtNumPlain(r.remainder_amount),

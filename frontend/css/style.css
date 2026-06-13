@@ -328,6 +328,33 @@ body {
   margin: 0;
   word-break: break-word;
 }
+.dash-hero-name .proj-name-en {
+  display: block;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.dash-hero-name .proj-name-zh {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.proj-name-block .proj-name-en {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+.proj-name-block .proj-name-zh {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
 .dash-hero-amount {
   text-align: right;
   flex-shrink: 0;
@@ -1140,7 +1167,7 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .table-wrap tbody tr.row-clickable { cursor: pointer; }
 .table-wrap tbody tr.row-clickable:hover td { background: var(--bg-hover); }
 
-/* ─── 合同項目父級分組 ─── */
+/* ─── 分判及支出父級分組 ─── */
 .table-wrap tbody tr.sc-group-header {
   cursor: pointer;
   user-select: none;
