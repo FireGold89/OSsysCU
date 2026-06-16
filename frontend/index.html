@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QS付款管理系統 — Mepork Engineering</title>
   <meta name="description" content="QS部門工程付款管理系統，支援發票單、報價單自動識別、付款登記追蹤及財務報表">
+  <script>
+    (function () {
+      var saved = localStorage.getItem('qs_theme');
+      var theme = saved === 'light' || saved === 'dark' ? saved
+        : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -86,6 +94,10 @@
         </div>
       </div>
       <div class="topbar-right">
+        <div class="theme-toggle" role="group" aria-label="主題模式">
+          <button type="button" class="theme-toggle-btn" data-theme-pick="light" title="淺色模式" aria-label="淺色模式">☀️</button>
+          <button type="button" class="theme-toggle-btn" data-theme-pick="dark" title="深色模式" aria-label="深色模式">🌙</button>
+        </div>
         <div id="currentProjectBadge" style="display:none">
           <span class="badge badge-info" id="currentProjectCode"></span>
         </div>

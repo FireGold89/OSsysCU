@@ -1,6 +1,75 @@
 /* ─── main.js — 核心應用邏輯 ───────────────────────────── */
 const API = `${window.location.origin}/api`;
 
+// ─── 主題（Light / Dark）──────────────────────────────────
+const Theme = {
+  STORAGE_KEY: 'qs_theme',
+
+  init() {
+    this._syncToggleUI();
+    document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
+      btn.addEventListener('click', () => this.set(btn.getAttribute('data-theme-pick')));
+    });
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem(this.STORAGE_KEY)) {
+          this.set(e.matches ? 'dark' : 'light', { animate: true, persist: false });
+        }
+      });
+    }
+  },
+
+  get() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  },
+
+  set(theme, opts = {}) {
+    const next = theme === 'light' ? 'light' : 'dark';
+    const { animate = true, persist = true } = opts;
+    if (animate) {
+      document.documentElement.classList.add('theme-animate');
+      setTimeout(() => document.documentElement.classList.remove('theme-animate'), 320);
+    }
+    document.documentElement.setAttribute('data-theme', next);
+    if (persist) localStorage.setItem(this.STORAGE_KEY, next);
+    this._syncToggleUI();
+    if (typeof Dashboard !== 'undefined' && Dashboard.charts && App.currentProject) {
+      const page = document.getElementById('page-dashboard');
+      if (page?.classList.contains('active') && Dashboard._lastScStats) {
+        Dashboard.renderCharts(Dashboard._lastScStats);
+      }
+    }
+  },
+
+  toggle() {
+    this.set(this.get() === 'dark' ? 'light' : 'dark');
+  },
+
+  _syncToggleUI() {
+    const current = this.get();
+    document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
+      const on = btn.getAttribute('data-theme-pick') === current;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  },
+
+  cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  },
+
+  chartPalette() {
+    return {
+      paid: this.cssVar('--success') || '#10b981',
+      unpaid: this.cssVar('--chart-unpaid') || '#374151',
+      grid: this.cssVar('--chart-grid') || '#21262d',
+      text: this.cssVar('--chart-text') || '#8b949e',
+      label: this.cssVar('--chart-label') || '#e6edf3',
+      segments: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+    };
+  },
+};
+
 function uploadUrl(filename) {
   if (!filename) return null;
   return `${window.location.origin}/api/uploads/${encodeURIComponent(filename)}`;
@@ -431,6 +500,7 @@ const App = {
   scList: [],
 
   async init() {
+    Theme.init();
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-view-pdf');
       if (!btn) return;
@@ -622,7 +692,8 @@ const Dashboard = {
     }
 
     // 圖表
-    this.renderCharts(summary.sc_stats || []);
+    this._lastScStats = summary.sc_stats || [];
+    this.renderCharts(this._lastScStats);
   },
 
   renderCharts(scStats) {
@@ -630,6 +701,7 @@ const Dashboard = {
     const labels = stats.map(s => s.sc_no || s.company_name_en?.substring(0, 15));
     const paid = stats.map(s => s.total_paid || 0);
     const remaining = stats.map(s => Math.max(0, (s.contract_amount || 0) - (s.total_paid || 0)));
+    const pal = Theme.chartPalette();
 
     // 銷毀舊圖表
     Object.values(this.charts).forEach(c => c?.destroy());
@@ -642,15 +714,15 @@ const Dashboard = {
       data: {
         labels,
         datasets: [
-          { label: '已付', data: paid, backgroundColor: '#10b981', borderRadius: 4 },
-          { label: '未付', data: remaining, backgroundColor: '#374151', borderRadius: 4 },
+          { label: '已付', data: paid, backgroundColor: pal.paid, borderRadius: 4 },
+          { label: '未付', data: remaining, backgroundColor: pal.unpaid, borderRadius: 4 },
         ]
       },
       options: {
         indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+          legend: { labels: { color: pal.text, font: { size: 11 } } },
           tooltip: {
             callbacks: {
               label: ctx => `${ctx.dataset.label}: HK$${fmtNumPlain(ctx.raw)}`
@@ -658,8 +730,8 @@ const Dashboard = {
           }
         },
         scales: {
-          x: { stacked: true, ticks: { color: '#8b949e', font: { size: 10 }, callback: v => 'HK$' + (v / 1000).toFixed(FMT_DECIMALS) + 'K' }, grid: { color: '#21262d' } },
-          y: { stacked: true, ticks: { color: '#e6edf3', font: { size: 11 } }, grid: { display: false } },
+          x: { stacked: true, ticks: { color: pal.text, font: { size: 10 }, callback: v => 'HK$' + (v / 1000).toFixed(FMT_DECIMALS) + 'K' }, grid: { color: pal.grid } },
+          y: { stacked: true, ticks: { color: pal.label, font: { size: 11 } }, grid: { display: false } },
         }
       }
     });
@@ -678,14 +750,14 @@ const Dashboard = {
         labels: Object.keys(categories),
         datasets: [{
           data: Object.values(categories),
-          backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+          backgroundColor: pal.segments,
           borderWidth: 0, hoverOffset: 8
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 11 }, padding: 12 } },
+          legend: { position: 'bottom', labels: { color: pal.text, font: { size: 11 }, padding: 12 } },
           tooltip: {
             callbacks: { label: ctx => `${ctx.label}: HK$${fmtNumPlain(ctx.raw)}` }
           }
