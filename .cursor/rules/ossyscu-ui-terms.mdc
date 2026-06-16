@@ -1,0 +1,23 @@
+---
+description: 香港 SME QS 介面術語與前端慣例
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# OSsysCU — UI 術語
+
+## 導航與頁面（勿改回舊稱）
+| 顯示 | 說明 |
+|------|------|
+| 分判及支出 | 原 subcontractor；M/SC/O 判項 |
+| 判項編號 | SC 編號欄位 |
+| 付款登記 | 發票付款記錄 |
+| 糧期狀況 | IP 糧款（非「IP 糧期」） |
+| 發票 / 報價上傳 | OCR 頁（非「OCR」作主標題） |
+| QS 匯報表 | PDF 按鈕（非「老細 QS 匯報」） |
+| 項目名稱（英文）/（中文） | 雙語項目名 |
+
+## 前端慣例
+- 主題：`Theme` 模組於 `main.js`；Chart.js 用 `Theme.chartPalette()`
+- 金額：`fmt()` / `fmtNumPlain()`；表格右對齊
+- 判項前綴：M 物料、SC 分判、O 其他支出

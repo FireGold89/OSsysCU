@@ -1,0 +1,39 @@
+---
+description: OSsysCU 專案脈絡、部署、架構與開發禁忌
+alwaysApply: true
+---
+
+# OSsysCU — 專案規則
+
+## 定位
+- QS 付款管理（Flask + SQLite + 靜態前端），生產：https://ossys.zeabur.app
+- GitHub：`FireGold89/OSsysCU`，分支 `main` → Zeabur 自動部署
+- 版本號：`startup.py` 的 `APP_VERSION`（部署後用 `/api/system/status` 核對）
+
+## 架構速查
+| 區塊 | 檔案 |
+|------|------|
+| API | `app.py` |
+| DB / 匯總 | `database.py` |
+| OCR | `ocr_processor.py` |
+| QS 匯報 PDF | `qs_report_pdf.py` |
+| Excel 匯入 | `excel_importer.py` |
+| 前端 | `frontend/index.html`, `frontend/js/*.js`, `frontend/css/style.css` |
+| 資料路徑 | `config.py`（本機 `BASE_DIR`，Docker `/data` Volume） |
+
+## 部署與資料
+- 推送 `main` 即觸發 Zeabur rebuild；改完記得更新 `APP_VERSION` 與 `CHANGELOG.md`
+- 上傳檔在 `DATA_DIR/uploads`；空庫還原用 `RESTORE_TOKEN`
+- **勿 commit**：`_backup/`、`.env`、憑證
+
+## 功能要點（避免重做）
+- 項目名稱：`project_name_en` / `project_name_zh`（雙語）
+- QS 匯報表 PDF：關注事項為**系統規則**（`qs_report_pdf._attention_items`），非 AI
+- PDF 中文：Linux Docker 用 `fonts-wqy-zenhei`；ReportLab TTFont 嵌入（勿用 MSung CID）
+- UI 主題：`data-theme` light/dark，`localStorage` key `qs_theme`；改 CSS 須兩主題都顧及
+- OCR：夸克 / RapidOCR / Gemini；報價→判項、發票→付款登記
+
+## 改碼原則
+- 最小 diff；沿用現有命名與 HK QS 術語（見 `ossyscu-ui-terms` rule）
+- 新 UI 字串用繁體中文；金額顯示 HK$
+- 不主動 commit / push，除非使用者明確要求
