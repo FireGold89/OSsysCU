@@ -19,7 +19,10 @@ const Projects = {
                           p.status === 'Completed' ? '已完成' : '暫停';
       const paid = p.total_paid || 0;
       const contractAmt = p.contract_amount || 0;
-      const progress = contractAmt > 0 ? Math.min(100, (paid / contractAmt * 100)).toFixed(FMT_DECIMALS) : '0.00';
+      const pctRaw = contractAmt > 0 ? (paid / contractAmt * 100) : 0;
+      const progress = pctRaw.toFixed(FMT_DECIMALS);
+      const barWidth = Math.min(100, Math.max(0, pctRaw));
+      const overPct = pctRaw > 100;
 
       return `
         <div class="card" style="cursor:pointer" onclick="App.selectProject(${p.id});App.navigate('dashboard')">
@@ -38,11 +41,11 @@ const Projects = {
             </div>
             <div style="margin-bottom:8px">
               <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px">
-                <span>付款進度 ${progress}%</span>
+                <span>付款進度 ${progress}%${overPct ? ' <span style="color:var(--warning)">（已超承建金額）</span>' : ''}</span>
                 <span>${fmt(paid)} / ${fmt(contractAmt)}</span>
               </div>
               <div class="progress-bar-wrap">
-                <div class="progress-bar" style="width:${progress}%"></div>
+                <div class="progress-bar" style="width:${barWidth}%${overPct ? ';background:var(--warning)' : ''}"></div>
               </div>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">

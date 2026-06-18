@@ -274,12 +274,10 @@ def get_all_projects():
     conn = get_conn()
     rows = conn.execute("""
         SELECT p.*,
-               COUNT(DISTINCT sc.id) AS sc_count,
-               SUM(pr.paid_amount)   AS total_paid
+               (SELECT COUNT(*) FROM subcontractors sc WHERE sc.project_id = p.id) AS sc_count,
+               (SELECT COALESCE(SUM(pr.paid_amount), 0)
+                FROM payment_records pr WHERE pr.project_id = p.id) AS total_paid
         FROM projects p
-        LEFT JOIN subcontractors sc ON sc.project_id = p.id
-        LEFT JOIN payment_records pr ON pr.project_id = p.id
-        GROUP BY p.id
         ORDER BY p.created_at DESC
     """).fetchall()
     conn.close()
