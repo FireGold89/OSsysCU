@@ -8,7 +8,8 @@ alwaysApply: true
 ## 定位
 - QS 付款管理（Flask + SQLite + 靜態前端），生產：https://ossys.zeabur.app
 - GitHub：`FireGold89/OSsysCU`，分支 `main` → Zeabur 自動部署
-- 版本號：`startup.py` 的 `APP_VERSION`（部署後用 `/api/system/status` 核對）
+- 版本號：`startup.py` 的 `APP_VERSION`（同步 `VERSION` 檔；部署後用 `/api/system/status` 核對）
+- 發行基線：`RELEASE.md`；Git tag `release/YYYY-MM-DD`；備份腳本 `scripts/backup_release.ps1`
 
 ## 架構速查
 | 區塊 | 檔案 |

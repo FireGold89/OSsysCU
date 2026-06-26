@@ -6,7 +6,17 @@
 
 ---
 
-## [2026-06-08] — 工程項目付款進度修復
+## [2026-06-08] — 版本基線與備份機制
+
+`APP_VERSION`: `2026-06-08-fix-project-payment-progress`  
+`Git tag`: `release/2026-06-08`
+
+### 新增
+- `VERSION`、`RELEASE.md` 發行基線說明
+- `scripts/backup_release.ps1` / `backup_release.sh` 一鍵完整備份（原始碼 zip + MANIFEST + 本機 DB）
+- `.gitignore` 排除 `_backup/`、`_releases/`
+
+---
 
 `APP_VERSION`: `2026-06-08-fix-project-payment-progress`
 

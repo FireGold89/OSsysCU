@@ -5,3 +5,5 @@ uploads/
 .env
 .env.*
 _tmp_yescan/
+_backup/
+_releases/
