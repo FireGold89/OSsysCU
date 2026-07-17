@@ -289,6 +289,12 @@ def _migrate_db(conn):
             imported_at     TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_source_year ON quotation_registry(source_year)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_quote_date ON quotation_registry(quote_date)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_person ON quotation_registry(person_in_charge)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_doc_type ON quotation_registry(doc_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_project_id ON quotation_registry(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_awarded ON quotation_registry(awarded)")
     qr_cols = {r[1] for r in conn.execute("PRAGMA table_info(quotation_registry)")}
     if 'person_code' not in qr_cols:
         conn.execute("ALTER TABLE quotation_registry ADD COLUMN person_code TEXT")
@@ -2244,6 +2250,20 @@ def list_quotation_registry(q=None, awarded_only=False, unlinked_only=False,
     total = conn.execute(count_sql, params[:-2]).fetchone()[0]
     conn.close()
     return {'items': [dict(r) for r in rows], 'total': total}
+
+
+def list_master_registry_years():
+    """Master List 年份清單（輕量；供下拉選單）"""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT source_year, COUNT(*) AS cnt
+        FROM quotation_registry
+        WHERE source_year IS NOT NULL
+        GROUP BY source_year
+        ORDER BY source_year DESC
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_quotation_registry_stats(q=None, awarded_only=False, unlinked_only=False,

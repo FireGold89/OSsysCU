@@ -606,6 +606,11 @@ def deactivate_staff(staff_id):
 
 
 # ─── Master List API ─────────────────────────────────────────────────────
+@app.route('/api/master/years', methods=['GET'])
+def master_list_years():
+    return resp(db.list_master_registry_years())
+
+
 @app.route('/api/master/stats', methods=['GET'])
 def master_list_stats():
     q = request.args.get('q', '').strip()

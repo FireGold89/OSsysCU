@@ -639,7 +639,7 @@
         <div class="toolbar master-toolbar">
           <div class="toolbar-left">
             <input type="text" class="form-input master-search" id="masterSearch" placeholder="搜尋報價編號、屋苑、內容、業主…" onkeydown="if(event.key==='Enter')MasterList.search()">
-            <select class="form-input master-filter" id="masterYearFilter" onchange="MasterList.resetAndLoad()">
+            <select class="form-input master-filter" id="masterYearFilter" onchange="MasterList.onYearFilterChange()">
               <option value="">全部年份</option>
             </select>
             <select class="form-input master-filter" id="masterPersonFilter" onchange="MasterList.resetAndLoad()">
@@ -690,6 +690,7 @@
           <div class="card-header"><div class="card-title">ℹ️ 匯入模組說明</div></div>
           <div class="card-body" style="font-size:13px;color:var(--text-secondary);line-height:1.6">
             <p>報價編號結尾字母（Excel E 欄）為<strong>編號慣例</strong>，例 <code>MS/Q1241/24/kp</code>；<strong>項目負責人</strong>以主檔姓名欄為準，可由不同同事跟進同一報價。</p>
+            <p>預設只載入<strong>當前年份</strong>主檔（約千筆），可改選「全部年份」；選擇會記住於本機。</p>
             <p><strong>Master List</strong>（本頁）：公司級 <code>Quotation &amp; Contract number.xlsx</code>，Phase 1 只同步 QS 主檔；財務 Admin 欄位（發票、支票等）稍後 Phase 2 處理。</p>
             <p><strong>Payment Status Table</strong>（側欄「從 Excel 匯入」）：地盤判項／付款／糧期，仍用 <code>excel_importer_payment.py</code>。</p>
           </div>
@@ -1669,7 +1670,7 @@
 <script src="js/ocr.js?v=20260714a"></script>
 <script src="js/reports.js?v=20260714c"></script>
 <script src="js/ip_reconcile.js?v=20260714a"></script>
-<script src="js/master_list.js?v=20260708d"></script>
+<script src="js/master_list.js?v=20260717a"></script>
 <script src="js/staff.js?v=20260708e"></script>
 </body>
 </html>

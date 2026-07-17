@@ -35,15 +35,44 @@ const MasterList = {
   },
 
   async load() {
-    await this.loadStats();
-    await this.loadTable();
+    this._initDefaultYear();
+    await Promise.all([this.loadStats(), this.loadTable()]);
+  },
+
+  _initDefaultYear() {
+    const sel = document.getElementById('masterYearFilter');
+    if (!sel || sel.dataset.userPicked === '1') return;
+    const saved = localStorage.getItem('qs_master_year');
+    if (saved !== null && saved !== '') {
+      sel.dataset.pendingYear = saved;
+    } else if (saved === null) {
+      sel.dataset.pendingYear = String(new Date().getFullYear());
+    }
+  },
+
+  _getEffectiveYear() {
+    const sel = document.getElementById('masterYearFilter');
+    if (!sel) return '';
+    if (sel.value) return sel.value;
+    return sel.dataset.pendingYear || '';
+  },
+
+  onYearFilterChange() {
+    const sel = document.getElementById('masterYearFilter');
+    if (sel) {
+      sel.dataset.userPicked = '1';
+      delete sel.dataset.pendingYear;
+      if (sel.value) localStorage.setItem('qs_master_year', sel.value);
+      else localStorage.setItem('qs_master_year', '');
+    }
+    this.resetAndLoad();
   },
 
   DOC_TYPE_OPTIONS: ['報價', '標書'],
 
   _filterParams(includePagination = false) {
     const q = document.getElementById('masterSearch')?.value.trim() || '';
-    const year = document.getElementById('masterYearFilter')?.value || '';
+    const year = this._getEffectiveYear();
     const person = document.getElementById('masterPersonFilter')?.value || '';
     const docType = document.getElementById('masterTypeFilter')?.value || '';
     const awarded = document.getElementById('masterAwardedOnly')?.checked ? '1' : '';
@@ -91,7 +120,7 @@ const MasterList = {
 
   _filterScopeLabel() {
     const parts = [];
-    const year = document.getElementById('masterYearFilter')?.value;
+    const year = this._getEffectiveYear();
     const person = document.getElementById('masterPersonFilter')?.value;
     const docType = document.getElementById('masterTypeFilter')?.value;
     const q = document.getElementById('masterSearch')?.value.trim();
@@ -124,13 +153,23 @@ const MasterList = {
     }
 
     const sel = document.getElementById('masterYearFilter');
-    const cur = sel.value;
+    const cur = sel.value || this._getEffectiveYear();
     const years = (stats.by_year || []).map(y => y.source_year);
     sel.innerHTML = '<option value="">全部年份</option>' +
       (stats.by_year || []).map(y =>
         `<option value="${y.source_year}">${y.source_year} · ${y.cnt}</option>`
       ).join('');
-    if (cur && years.some(y => String(y) === String(cur))) sel.value = cur;
+    if (cur && years.some(y => String(y) === String(cur))) {
+      sel.value = String(cur);
+    } else if (sel.dataset.pendingYear && years.some(y => String(y) === String(sel.dataset.pendingYear))) {
+      sel.value = String(sel.dataset.pendingYear);
+    } else if (years.length && sel.dataset.userPicked !== '1' && !sel.value) {
+      sel.value = String(years[0]);
+    }
+    if (sel.value && sel.dataset.userPicked !== '1') {
+      localStorage.setItem('qs_master_year', sel.value);
+    }
+    delete sel.dataset.pendingYear;
 
     const psel = document.getElementById('masterPersonFilter');
     if (psel) {

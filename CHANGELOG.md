@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `2026-07-17-master-year-filter`
+
+### 改善
+- Master List 預設只載入當前年份（localStorage 記住選擇）；`quotation_registry` 加索引加速篩選
+
 `APP_VERSION`: `2026-07-15-ip-phase234`
 
 ### 新增
