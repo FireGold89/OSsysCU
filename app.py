@@ -959,6 +959,60 @@ def restore_database():
     })
 
 
+@app.route('/api/system/restore-uploads', methods=['POST'])
+def restore_uploads():
+    """上傳 uploads.zip 還原附件（保留檔名；需 RESTORE_TOKEN）"""
+    import shutil
+    import zipfile
+
+    expected = os.environ.get('RESTORE_TOKEN', '').strip()
+    token = (request.headers.get('X-Restore-Token') or request.form.get('token') or '').strip()
+    if not expected or token != expected:
+        return resp(error='未授權', status=403)
+
+    if 'file' not in request.files:
+        return resp(error='請上傳 uploads.zip', status=400)
+    file = request.files['file']
+    if not file.filename:
+        return resp(error='沒有文件', status=400)
+
+    from config import UPLOAD_DIR
+    tmp_zip = os.path.join(UPLOAD_DIR, '_restore_uploads.zip')
+    file.save(tmp_zip)
+    synced = skipped = 0
+    try:
+        with zipfile.ZipFile(tmp_zip, 'r') as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                base = os.path.basename(info.filename)
+                if not base or base.startswith('.') or '..' in base:
+                    continue
+                dest = os.path.join(UPLOAD_DIR, base)
+                if os.path.exists(dest):
+                    skipped += 1
+                    continue
+                with zf.open(info) as src, open(dest, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                synced += 1
+    except zipfile.BadZipFile as e:
+        return resp(error=f'無效的 zip: {e}', status=400)
+    finally:
+        if os.path.exists(tmp_zip):
+            os.remove(tmp_zip)
+
+    upload_count = len([
+        f for f in os.listdir(UPLOAD_DIR)
+        if os.path.isfile(os.path.join(UPLOAD_DIR, f))
+    ])
+    return resp({
+        'message': 'uploads 已同步',
+        'synced': synced,
+        'skipped': skipped,
+        'upload_count': upload_count,
+    })
+
+
 @app.route('/api/system/sync-excel', methods=['POST'])
 def sync_excel_api():
     """從內建 Excel 同步合同、付款、糧期（需 SYNC_TOKEN 或空庫）"""

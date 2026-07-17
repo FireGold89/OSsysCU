@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '2026-07-15-ip-phase234'
+APP_VERSION = '2026-07-17-uploads-sync'
 
 
 def _preload_pdf_font():
