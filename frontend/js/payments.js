@@ -5,9 +5,10 @@ const Payments = {
   sortKey: 'seq_no',
   sortDir: 'asc',
 
-  async load() {
+  async load(switchSeq) {
     const p = App.currentProject;
     if (!p) { this.renderEmpty(); return; }
+    const projectId = p.id;
 
     const filters = {
       sc_no: document.getElementById('payFilterSc').value || undefined,
@@ -17,7 +18,9 @@ const Payments = {
     if (filters.sc_no) params.append('sc_no', filters.sc_no);
     if (filters.search) params.append('search', filters.search);
 
-    this.data = await api('GET', `/projects/${p.id}/payments?${params}`) || [];
+    this.data = await api('GET', `/projects/${projectId}/payments?${params}`) || [];
+    if (!App.currentProject || App.currentProject.id != projectId) return;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
     this.filtered = [...this.data];
     this.applySort();
     this.render();
@@ -133,7 +136,7 @@ const Payments = {
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
           <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
           <td>${fmtRefNo(r.sc_no)}</td>
-          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.company_name_en || ''}">${r.company_name_en || r.company_name_zh || '—'}</td>
+          <td class="td-company-name">${paymentCompanyNameHtml(r)}</td>
           <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description || ''}">${r.description || '—'}</td>
           <td class="td-amount">${fmt(r.contract_amount)}</td>
           <td class="td-amount ${paidClass}">${fmt(r.paid_amount)}</td>
@@ -181,7 +184,8 @@ const Payments = {
       opt.textContent = `${sc.sc_no} — ${sc.company_name_en || sc.company_name_zh || ''}`.substring(0, 40);
       sel.appendChild(opt);
     });
-    sel.value = cur;
+    const valid = cur && (App.scList || []).some(sc => sc.sc_no === cur);
+    sel.value = valid ? cur : '';
 
     // 同步付款表單的SC選擇
     this.populateScSelect();
@@ -198,7 +202,8 @@ const Payments = {
       opt.textContent = `${sc.sc_no} — ${sc.company_name_en || sc.company_name_zh || ''}`.substring(0, 45);
       sel.appendChild(opt);
     });
-    if (cur) sel.value = cur;
+    const valid = cur && (App.scList || []).some(sc => sc.sc_no === cur);
+    if (valid) sel.value = cur;
   },
 
   onScChange(scNo) {

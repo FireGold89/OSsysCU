@@ -105,7 +105,13 @@ def create_project():
     data.setdefault('status', 'Active')
     data.setdefault('notes', '')
     data.setdefault('labour_allocation', 0)
-    new_id = db.create_project(data)
+    data.setdefault('quotation_no', None)
+    data.setdefault('person_code', None)
+    data.setdefault('person_in_charge', None)
+    try:
+        new_id = db.create_project(data)
+    except ValueError as e:
+        return resp(error=str(e), status=400)
     return resp({'id': new_id}, status=201)
 
 
@@ -123,7 +129,13 @@ def update_project(project_id):
     data.setdefault('status', 'Active')
     data.setdefault('notes', '')
     data.setdefault('labour_allocation', 0)
-    db.update_project(project_id, data)
+    data.setdefault('quotation_no', None)
+    data.setdefault('person_code', None)
+    data.setdefault('person_in_charge', None)
+    try:
+        db.update_project(project_id, data)
+    except ValueError as e:
+        return resp(error=str(e), status=400)
     return resp({'message': '已更新'})
 
 
@@ -419,6 +431,24 @@ def get_interim_payments_api(project_id):
     return resp(summary)
 
 
+@app.route('/api/projects/<int:project_id>/ip-reconciliation', methods=['GET'])
+def project_ip_reconciliation(project_id):
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    return resp(db.get_ip_reconciliation(project_id=project_id))
+
+
+@app.route('/api/projects/<int:project_id>/ip-sc-drilldown', methods=['GET'])
+def ip_sc_drilldown(project_id):
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    ip_no = request.args.get('ip_no', '').strip()
+    sc_no = request.args.get('sc_no', '').strip()
+    if not ip_no or not sc_no:
+        return resp(error='缺少 ip_no 或 sc_no', status=400)
+    return resp(db.get_ip_sc_drilldown(project_id, ip_no, sc_no))
+
+
 @app.route('/api/projects/<int:project_id>/interim-payments/meta', methods=['PUT'])
 def update_ip_meta(project_id):
     data = request.json or {}
@@ -514,6 +544,341 @@ def boss_report_pdf(project_id):
         as_attachment=True,
         download_name=filename,
     )
+
+
+# ─── Staff roster API（負責人名單 → 未來權限）────────────────────────────
+@app.route('/api/staff', methods=['GET'])
+def list_staff():
+    active_only = request.args.get('active') == '1'
+    return resp(db.list_staff_members(active_only=active_only))
+
+
+@app.route('/api/staff/roles', methods=['GET'])
+def staff_roles():
+    return resp({
+        'roles': [
+            {'id': 'qs', 'label': 'QS', 'hint': '報價／判項／付款（預設）'},
+            {'id': 'finance', 'label': '財務', 'hint': '發票／支票欄位（預留）'},
+            {'id': 'admin', 'label': '管理員', 'hint': '全系統設定（預留）'},
+            {'id': 'viewer', 'label': '唯讀', 'hint': '僅查閱（預留）'},
+        ],
+    })
+
+
+@app.route('/api/staff/<int:staff_id>', methods=['GET'])
+def get_staff(staff_id):
+    row = db.get_staff_member(staff_id)
+    if not row:
+        return resp(error='找不到人員', status=404)
+    return resp(row)
+
+
+@app.route('/api/staff', methods=['POST'])
+def create_staff():
+    data = request.json or {}
+    if not data.get('code'):
+        return resp(error='請填寫縮寫', status=400)
+    try:
+        new_id = db.create_staff_member(data)
+        return resp({'id': new_id}, status=201)
+    except ValueError as e:
+        return resp(error=str(e), status=400)
+
+
+@app.route('/api/staff/<int:staff_id>', methods=['PUT'])
+def update_staff(staff_id):
+    data = request.json or {}
+    if not db.get_staff_member(staff_id):
+        return resp(error='找不到人員', status=404)
+    try:
+        db.update_staff_member(staff_id, data)
+        return resp(db.get_staff_member(staff_id))
+    except ValueError as e:
+        return resp(error=str(e), status=400)
+
+
+@app.route('/api/staff/<int:staff_id>', methods=['DELETE'])
+def deactivate_staff(staff_id):
+    if not db.get_staff_member(staff_id):
+        return resp(error='找不到人員', status=404)
+    db.deactivate_staff_member(staff_id)
+    return resp({'message': '已停用'})
+
+
+# ─── Master List API ─────────────────────────────────────────────────────
+@app.route('/api/master/stats', methods=['GET'])
+def master_list_stats():
+    q = request.args.get('q', '').strip()
+    awarded_only = request.args.get('awarded') == '1'
+    unlinked_only = request.args.get('unlinked') == '1'
+    source_year = request.args.get('year', type=int)
+    person_in_charge = request.args.get('person', '').strip() or None
+    doc_type = request.args.get('doc_type', '').strip() or None
+    if doc_type not in (None, '報價', '標書'):
+        doc_type = None
+    return resp(db.get_quotation_registry_stats(
+        q=q or None, awarded_only=awarded_only, unlinked_only=unlinked_only,
+        source_year=source_year, person_in_charge=person_in_charge, doc_type=doc_type,
+    ))
+
+
+@app.route('/api/master/imports', methods=['GET'])
+def master_list_import_history():
+    return resp(db.list_master_import_history())
+
+
+@app.route('/api/master/quotations', methods=['GET'])
+def master_list_quotations():
+    q = request.args.get('q', '').strip()
+    awarded_only = request.args.get('awarded') == '1'
+    unlinked_only = request.args.get('unlinked') == '1'
+    source_year = request.args.get('year', type=int)
+    person_id = request.args.get('person_id', type=int)
+    person_in_charge = request.args.get('person', '').strip() or None
+    if person_id:
+        staff = db.get_staff_member(person_id)
+        if staff:
+            person_in_charge = (staff.get('name_en') or staff.get('name_zh') or '').strip() or person_in_charge
+    limit = min(request.args.get('limit', 100, type=int), 500)
+    offset = max(request.args.get('offset', 0, type=int), 0)
+    sort_by = request.args.get('sort', '').strip() or None
+    sort_dir = request.args.get('dir', 'desc').strip().lower()
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+    doc_type = request.args.get('doc_type', '').strip() or None
+    if doc_type not in (None, '報價', '標書'):
+        doc_type = None
+    return resp(db.list_quotation_registry(
+        q=q or None, awarded_only=awarded_only, unlinked_only=unlinked_only,
+        source_year=source_year, person_in_charge=person_in_charge, doc_type=doc_type,
+        limit=limit, offset=offset,
+        sort_by=sort_by, sort_dir=sort_dir,
+    ))
+
+
+def _master_item_by_id(row_id):
+    if not row_id:
+        return None, resp(error='缺少 id', status=400)
+    row = db.get_quotation_by_id(row_id)
+    if not row:
+        return None, resp(error='找不到報價記錄', status=404)
+    return row, None
+
+
+@app.route('/api/master/item', methods=['GET'])
+def master_item_get():
+    row_id = request.args.get('id', type=int)
+    row, err = _master_item_by_id(row_id)
+    if err:
+        return err
+    return resp(_master_quotation_row(row))
+
+
+@app.route('/api/master/item/finance', methods=['GET'])
+def master_item_finance():
+    row_id = request.args.get('id', type=int)
+    row, err = _master_item_by_id(row_id)
+    if err:
+        return err
+    return resp(db.get_quotation_finance(row['quotation_no']))
+
+
+@app.route('/api/master/item/ip-reconcile', methods=['GET'])
+def master_item_ip_reconcile():
+    row_id = request.args.get('id', type=int)
+    row, err = _master_item_by_id(row_id)
+    if err:
+        return err
+    return resp(db.get_ip_reconciliation(
+        project_id=row.get('project_id'),
+        quotation_no=row['quotation_no'],
+    ))
+
+
+@app.route('/api/master/item/link', methods=['POST'])
+def master_item_link():
+    row_id = request.args.get('id', type=int)
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return resp(error='缺少 project_id', status=400)
+    row, err = _master_item_by_id(row_id)
+    if err:
+        return err
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    qno = row['quotation_no']
+    db.link_quotation_to_project(qno, project_id, sync_project_code=True)
+    return resp({'message': '已配對項目', 'quotation_no': qno, 'project_id': project_id})
+
+
+@app.route('/api/master/item/unlink', methods=['POST'])
+def master_item_unlink():
+    row_id = request.args.get('id', type=int)
+    row, err = _master_item_by_id(row_id)
+    if err:
+        return err
+    db.unlink_quotation_from_project(row['quotation_no'])
+    return resp({'message': '已解除項目配對'})
+
+
+@app.route('/api/master/item', methods=['PUT'])
+def master_item_update():
+    row_id = request.args.get('id', type=int)
+    data = request.json or {}
+    row, err = _master_item_by_id(row_id)
+    if err:
+        return err
+    qno = row['quotation_no']
+    try:
+        db.update_quotation_registry(qno, data)
+        return resp(db.get_quotation_by_no(qno))
+    except Exception as e:
+        return resp(error=str(e), status=400)
+
+
+def _master_quotation_row(row):
+    if row.get('project_id'):
+        row['project'] = db.get_project(row['project_id'])
+    return row
+
+
+@app.route('/api/master/quotations/id/<int:row_id>', methods=['GET'])
+def master_list_quotation_by_id(row_id):
+    row = db.get_quotation_by_id(row_id)
+    if not row:
+        return resp(error='找不到報價記錄', status=404)
+    return resp(_master_quotation_row(row))
+
+
+@app.route('/api/master/quotations/id/<int:row_id>/finance', methods=['GET'])
+def master_list_quotation_finance_by_id(row_id):
+    row = db.get_quotation_by_id(row_id)
+    if not row:
+        return resp(error='找不到報價記錄', status=404)
+    return resp(db.get_quotation_finance(row['quotation_no']))
+
+
+@app.route('/api/master/quotations/id/<int:row_id>/link', methods=['POST'])
+def master_list_link_project_by_id(row_id):
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return resp(error='缺少 project_id', status=400)
+    row = db.get_quotation_by_id(row_id)
+    if not row:
+        return resp(error='找不到報價記錄', status=404)
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    qno = row['quotation_no']
+    db.link_quotation_to_project(qno, project_id, sync_project_code=True)
+    return resp({'message': '已配對項目', 'quotation_no': qno, 'project_id': project_id})
+
+
+@app.route('/api/master/quotations/id/<int:row_id>/unlink', methods=['POST'])
+def master_list_unlink_project_by_id(row_id):
+    row = db.get_quotation_by_id(row_id)
+    if not row:
+        return resp(error='找不到報價記錄', status=404)
+    db.unlink_quotation_from_project(row['quotation_no'])
+    return resp({'message': '已解除項目配對'})
+
+
+@app.route('/api/master/quotations/id/<int:row_id>', methods=['PUT'])
+def master_list_update_quotation_by_id(row_id):
+    data = request.json or {}
+    row = db.get_quotation_by_id(row_id)
+    if not row:
+        return resp(error='找不到報價記錄', status=404)
+    qno = row['quotation_no']
+    try:
+        db.update_quotation_registry(qno, data)
+        return resp(db.get_quotation_by_no(qno))
+    except Exception as e:
+        return resp(error=str(e), status=400)
+
+
+@app.route('/api/master/quotations/<path:quotation_no>', methods=['GET'])
+def master_list_quotation_detail(quotation_no):
+    row = db.get_quotation_by_no(quotation_no)
+    if not row:
+        return resp(error='找不到報價記錄', status=404)
+    return resp(_master_quotation_row(row))
+
+
+@app.route('/api/master/quotations/<path:quotation_no>/finance', methods=['GET'])
+def master_list_quotation_finance(quotation_no):
+    if not db.get_quotation_by_no(quotation_no):
+        return resp(error='找不到報價記錄', status=404)
+    return resp(db.get_quotation_finance(quotation_no))
+
+
+@app.route('/api/master/quotations/<path:quotation_no>/link', methods=['POST'])
+def master_list_link_project(quotation_no):
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return resp(error='缺少 project_id', status=400)
+    if not db.get_quotation_by_no(quotation_no):
+        return resp(error='找不到報價記錄', status=404)
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    db.link_quotation_to_project(quotation_no, project_id, sync_project_code=True)
+    return resp({'message': '已配對項目', 'quotation_no': quotation_no, 'project_id': project_id})
+
+
+@app.route('/api/master/quotations/<path:quotation_no>/unlink', methods=['POST'])
+def master_list_unlink_project(quotation_no):
+    if not db.get_quotation_by_no(quotation_no):
+        return resp(error='找不到報價記錄', status=404)
+    db.unlink_quotation_from_project(quotation_no)
+    return resp({'message': '已解除項目配對'})
+
+
+@app.route('/api/master/quotations/<path:quotation_no>', methods=['PUT'])
+def master_list_update_quotation(quotation_no):
+    data = request.json or {}
+    if not db.get_quotation_by_no(quotation_no):
+        return resp(error='找不到報價記錄', status=404)
+    try:
+        db.update_quotation_registry(quotation_no, data)
+        return resp(db.get_quotation_by_no(quotation_no))
+    except Exception as e:
+        return resp(error=str(e), status=400)
+
+
+@app.route('/api/master/preview', methods=['POST'])
+def master_list_preview():
+    if 'file' not in request.files:
+        return resp(error='沒有文件', status=400)
+    file = request.files['file']
+    if not file.filename.lower().endswith(('.xlsx', '.xls')):
+        return resp(error='請上傳 Master List Excel', status=400)
+    save_path = os.path.join(UPLOAD_DIR, secure_filename(file.filename))
+    file.save(save_path)
+    try:
+        from master_list_importer import preview_master_import
+        return resp(preview_master_import(save_path))
+    except Exception as e:
+        return resp(error=f'預覽失敗: {str(e)}', status=500)
+
+
+@app.route('/api/master/sync', methods=['POST'])
+def master_list_sync():
+    if 'file' not in request.files:
+        return resp(error='沒有文件', status=400)
+    file = request.files['file']
+    if not file.filename.lower().endswith(('.xlsx', '.xls')):
+        return resp(error='請上傳 Master List Excel', status=400)
+    save_path = os.path.join(UPLOAD_DIR, secure_filename(file.filename))
+    file.save(save_path)
+    try:
+        from master_list_importer import sync_master_import
+        stats = sync_master_import(save_path)
+        stats['stats'] = db.get_quotation_registry_stats()
+        return resp(stats)
+    except Exception as e:
+        return resp(error=f'同步失敗: {str(e)}', status=500)
 
 
 # ─── System API ───────────────────────────────────────────────────────────

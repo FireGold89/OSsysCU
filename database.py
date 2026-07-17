@@ -183,6 +183,17 @@ def _migrate_db(conn):
             UNIQUE(project_id, ip_no)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS interim_payment_sc_lines (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id  INTEGER NOT NULL,
+            ip_no       TEXT NOT NULL,
+            sc_no       TEXT NOT NULL,
+            amount      REAL DEFAULT 0,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE(project_id, ip_no, sc_no)
+        )
+    """)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(subcontractors)")}
     if 'oa_date' not in cols:
         conn.execute("ALTER TABLE subcontractors ADD COLUMN oa_date TEXT")
@@ -196,6 +207,8 @@ def _migrate_db(conn):
         conn.execute("ALTER TABLE subcontractors ADD COLUMN vo_amount REAL DEFAULT 0")
     if 'parent_sc_no' not in cols:
         conn.execute("ALTER TABLE subcontractors ADD COLUMN parent_sc_no TEXT")
+    if 'trade_label' not in cols:
+        conn.execute("ALTER TABLE subcontractors ADD COLUMN trade_label TEXT")
     # 舊資料：contract_sum 預設為 contract_amount，補 parent_sc_no
     rows = conn.execute(
         "SELECT id, sc_no, contract_amount, contract_sum FROM subcontractors"
@@ -619,6 +632,14 @@ def get_project(project_id):
     return _enrich_project(row) if row else None
 
 
+def _maybe_link_quotation(quotation_no, project_id, sync_project_code=True):
+    """僅當 Master List 存在該報價編號時才配對"""
+    if not quotation_no:
+        return
+    if get_quotation_by_no(quotation_no):
+        link_quotation_to_project(quotation_no, project_id, sync_project_code=sync_project_code)
+
+
 def create_project(data):
     data = _normalize_project_fields(dict(data))
     data.setdefault('quotation_no', None)
@@ -642,7 +663,7 @@ def create_project(data):
     new_id = cur.lastrowid
     conn.close()
     if data.get('quotation_no'):
-        link_quotation_to_project(data['quotation_no'], new_id, sync_project_code=True)
+        _maybe_link_quotation(data['quotation_no'], new_id, sync_project_code=True)
     return new_id
 
 
@@ -671,12 +692,23 @@ def update_project(project_id, data):
     conn.close()
     qno = data.get('quotation_no')
     if qno:
-        link_quotation_to_project(qno, project_id, sync_project_code=True)
+        _maybe_link_quotation(qno, project_id, sync_project_code=True)
 
 
 def delete_project(project_id):
     conn = get_conn()
     conn.execute("DELETE FROM projects WHERE id=?", (project_id,))
+    conn.commit()
+    conn.close()
+
+
+def set_project_labour_allocation(project_id, labour):
+    """更新項目人工分攤 (C1)"""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE projects SET labour_allocation=? WHERE id=?",
+        (float(labour or 0), project_id),
+    )
     conn.commit()
     conn.close()
 
@@ -1104,6 +1136,14 @@ def replace_payments_for_project(project_id):
     conn.close()
 
 
+def replace_subcontractors_for_project(project_id):
+    """清除項目分判商（Excel 重新同步用；須先清除付款記錄）"""
+    conn = get_conn()
+    conn.execute("DELETE FROM subcontractors WHERE project_id=?", (project_id,))
+    conn.commit()
+    conn.close()
+
+
 # ─── 地盤糧期狀況 (Interim Payments) ───────────────────────────────────
 
 def calc_ip_cumulative_pcts(items, contract_amount):
@@ -1125,7 +1165,169 @@ def calc_ip_cumulative_pcts(items, contract_amount):
     return out
 
 
-def replace_interim_payments(project_id, items, meta=None):
+def set_subcontractor_trade_labels(project_id, labels):
+    """Summary row 41 工種簡稱 → subcontractors.trade_label"""
+    if not labels:
+        return
+    conn = get_conn()
+    for sc_no, label in labels.items():
+        sc = (sc_no or '').strip().upper()
+        lbl = (label or '').strip()
+        if not sc or not lbl:
+            continue
+        conn.execute(
+            "UPDATE subcontractors SET trade_label=? WHERE project_id=? AND UPPER(sc_no)=?",
+            (lbl, project_id, sc),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_ip_sc_drilldown(project_id, ip_no, sc_no):
+    """分包糧期 cell drill-down：矩陣金額 vs 付款登記明細"""
+    ip_key = (ip_no or '').strip().upper()
+    sc_key = (sc_no or '').strip().upper()
+    conn = get_conn()
+    row = conn.execute("""
+        SELECT amount FROM interim_payment_sc_lines
+        WHERE project_id=? AND UPPER(ip_no)=? AND UPPER(sc_no)=?
+    """, (project_id, ip_key, sc_key)).fetchone()
+    matrix_amt = float(row['amount']) if row else 0.0
+    payments = conn.execute("""
+        SELECT id, seq_no, invoice_date, invoice_no, description,
+               paid_amount, sub_ip_no, mc_ip_no, sc_no
+        FROM payment_records
+        WHERE project_id=? AND UPPER(sc_no)=? AND UPPER(sub_ip_no)=?
+        ORDER BY CAST(seq_no AS INTEGER), seq_no
+    """, (project_id, sc_key, ip_key)).fetchall()
+    conn.close()
+    items = [dict(r) for r in payments]
+    records_total = sum(float(p.get('paid_amount') or 0) for p in items)
+    diff = matrix_amt - records_total
+    return {
+        'ip_no': ip_key,
+        'sc_no': sc_key,
+        'matrix_amount': matrix_amt,
+        'records_total': records_total,
+        'diff': diff,
+        'match': abs(diff) < 0.02,
+        'payments': items,
+    }
+
+
+def replace_interim_payment_sc_lines(project_id, lines):
+    """取代項目全部分包糧期明細（Excel Summary 矩陣）"""
+    conn = get_conn()
+    conn.execute("DELETE FROM interim_payment_sc_lines WHERE project_id=?", (project_id,))
+    for ln in lines or []:
+        sc_no = (ln.get('sc_no') or '').strip()
+        ip_no = (ln.get('ip_no') or '').strip().upper()
+        amt = float(ln.get('amount') or 0)
+        if not sc_no or not ip_no or not amt:
+            continue
+        conn.execute("""
+            INSERT INTO interim_payment_sc_lines (project_id, ip_no, sc_no, amount)
+            VALUES (?, ?, ?, ?)
+        """, (project_id, ip_no, sc_no.upper(), amt))
+    conn.commit()
+    conn.close()
+
+
+def get_interim_payment_sc_lines(project_id):
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT ip_no, sc_no, amount FROM interim_payment_sc_lines
+        WHERE project_id=? ORDER BY ip_no, sc_no
+    """, (project_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def build_ip_sc_matrix(project_id, ip_items=None):
+    """分包糧期矩陣：columns + 每期各 SC 金額 + 分判商主檔對照"""
+    if ip_items is None:
+        ip_items = get_interim_payments(project_id)
+    lines = get_interim_payment_sc_lines(project_id)
+    if not lines and not ip_items:
+        return {'columns': [], 'columns_detail': [], 'rows': [], 'column_totals': {}}
+
+    sc_set = set()
+    by_ip = {}
+    for ln in lines:
+        ip_no = (ln['ip_no'] or '').upper()
+        sc_no = (ln['sc_no'] or '').upper()
+        sc_set.add(sc_no)
+        by_ip.setdefault(ip_no, {})[sc_no] = ln['amount'] or 0
+
+    columns = sorted(sc_set, key=lambda s: (s.replace('SC-', ''), s))
+    rows = []
+    column_totals = {sc: 0.0 for sc in columns}
+    for it in ip_items:
+        ip_no = (it.get('ip_no') or '').upper()
+        cells = {sc: by_ip.get(ip_no, {}).get(sc, 0) for sc in columns}
+        row_total = it.get('subcon_paid') or sum(cells.values())
+        for sc, amt in cells.items():
+            column_totals[sc] += amt or 0
+        rows.append({
+            'ip_no': ip_no,
+            'cells': cells,
+            'total': row_total,
+            'subcon_paid_pct': it.get('subcon_paid_pct'),
+        })
+
+    conn = get_conn()
+    sc_rows = conn.execute("""
+        SELECT sc.sc_no, sc.company_name_en, sc.company_name_zh, sc.description,
+               sc.trade_label, sc.contract_amount,
+               COALESCE(SUM(pr.paid_amount), 0) AS total_paid_records
+        FROM subcontractors sc
+        LEFT JOIN payment_records pr ON pr.project_id = sc.project_id
+            AND (pr.sc_id = sc.id OR pr.sc_no = sc.sc_no)
+        WHERE sc.project_id = ? AND NOT sc.is_excluded
+        GROUP BY sc.id
+    """, (project_id,)).fetchall()
+    conn.close()
+    sc_map = {(r['sc_no'] or '').upper(): dict(r) for r in sc_rows}
+
+    columns_detail = []
+    for sc in columns:
+        info = sc_map.get(sc, {})
+        contract = float(info.get('contract_amount') or 0)
+        paid_records = float(info.get('total_paid_records') or 0)
+        paid_matrix = float(column_totals.get(sc) or 0)
+        remainder = contract - paid_records
+        columns_detail.append({
+            'sc_no': sc,
+            'trade_label': info.get('trade_label'),
+            'company_name_en': info.get('company_name_en'),
+            'company_name_zh': info.get('company_name_zh'),
+            'description': info.get('description'),
+            'contract_amount': contract,
+            'total_paid_matrix': paid_matrix,
+            'total_paid_records': paid_records,
+            'remainder': remainder,
+            'matrix_match': abs(paid_matrix - paid_records) < 0.02,
+            'overpaid': remainder < -0.02,
+        })
+
+    overpaid = [d for d in columns_detail if d.get('overpaid')]
+    return {
+        'columns': columns,
+        'columns_detail': columns_detail,
+        'rows': rows,
+        'column_totals': column_totals,
+        'summary': {
+            'total_contract': sum(d['contract_amount'] for d in columns_detail),
+            'total_paid_matrix': sum(column_totals.values()),
+            'total_paid_records': sum(d['total_paid_records'] for d in columns_detail),
+            'all_matrix_match': all(d['matrix_match'] for d in columns_detail),
+            'overpaid_count': len(overpaid),
+            'overpaid_sc': [d['sc_no'] for d in overpaid],
+        },
+    }
+
+
+def replace_interim_payments(project_id, items, meta=None, sc_lines=None):
     """取代項目全部糧期記錄（Excel Summary 匯入）"""
     project = get_project(project_id)
     contract_amount = (project or {}).get('contract_amount') or 0
@@ -1156,6 +1358,8 @@ def replace_interim_payments(project_id, items, meta=None):
         """, {**meta, 'project_id': project_id})
     conn.commit()
     conn.close()
+    if sc_lines is not None:
+        replace_interim_payment_sc_lines(project_id, sc_lines)
 
 
 def get_interim_payments(project_id):
@@ -1177,9 +1381,11 @@ def get_ip_period_summary(project_id):
         get_interim_payments(project_id),
         project.get('contract_amount'),
     )
+    sc_matrix = build_ip_sc_matrix(project_id, items)
     return {
         'site_period_text': project.get('site_period_text'),
         'items': items,
+        'sc_matrix': sc_matrix,
         'totals': {
             'total_income': project.get('ip_total_income') or 0,
             'total_expenditure': project.get('ip_total_expenditure') or 0,
@@ -1306,7 +1512,16 @@ def delete_interim_payment(ip_id):
         conn.close()
         return None
     project_id = row['project_id']
+    ip_row = conn.execute(
+        "SELECT ip_no FROM interim_payments WHERE id=?", (ip_id,)
+    ).fetchone()
+    ip_no = ip_row['ip_no'] if ip_row else None
     conn.execute("DELETE FROM interim_payments WHERE id=?", (ip_id,))
+    if ip_no:
+        conn.execute(
+            "DELETE FROM interim_payment_sc_lines WHERE project_id=? AND ip_no=?",
+            (project_id, ip_no),
+        )
     conn.commit()
     conn.close()
     _recalc_and_save_ip_pcts(project_id)
@@ -1343,17 +1558,23 @@ def get_project_summary(project_id):
         conn.close()
         return None
 
-    # 按分判商統計
+    # 按分判商統計（名稱取自 subcontractors，付款取自 payment_records）
     sc_stats = conn.execute("""
-        SELECT sc_no, company_name_en, description,
-               contract_amount, SUM(paid_amount) AS total_paid,
-               (contract_amount - SUM(paid_amount)) AS remainder,
-               COUNT(*) AS payment_count
-        FROM payment_records
-        WHERE project_id = ?
-        GROUP BY sc_no
-        ORDER BY sc_no
-    """, (project_id,)).fetchall()
+        SELECT sc.sc_no, sc.company_name_en, sc.company_name_zh, sc.description,
+               sc.contract_amount,
+               COALESCE(pay.total_paid, 0) AS total_paid,
+               sc.contract_amount - COALESCE(pay.total_paid, 0) AS remainder,
+               COALESCE(pay.payment_count, 0) AS payment_count
+        FROM subcontractors sc
+        LEFT JOIN (
+            SELECT sc_no, SUM(paid_amount) AS total_paid, COUNT(*) AS payment_count
+            FROM payment_records
+            WHERE project_id = ?
+            GROUP BY sc_no
+        ) pay ON pay.sc_no = sc.sc_no
+        WHERE sc.project_id = ? AND NOT sc.is_excluded
+        ORDER BY sc.sc_no
+    """, (project_id, project_id)).fetchall()
 
     # 總計
     totals = conn.execute("""

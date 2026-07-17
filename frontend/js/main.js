@@ -251,6 +251,32 @@ function projectNameHtml(p) {
   return `<span class="proj-name-en">${escHtml(en || zh)}</span>`;
 }
 
+/** 表格公司名稱：英上、中下（對應 Excel Company Name / Company Name in Chinese） */
+function formatCompanyNameHtml(en, zh) {
+  const e = (en || '').trim();
+  const z = (zh || '').trim();
+  if (!e && !z) return '—';
+  const enHtml = escHtml(e || z);
+  if (!z || z === e) {
+    return `<div class="proj-name-block"><div class="proj-name-en">${enHtml}</div></div>`;
+  }
+  return `<div class="proj-name-block"><div class="proj-name-en">${enHtml}</div><div class="proj-name-zh">${escHtml(z)}</div></div>`;
+}
+
+/** 付款記錄公司名稱（缺中文時從分判商主檔補） */
+function paymentCompanyNameHtml(row) {
+  let en = row?.company_name_en;
+  let zh = row?.company_name_zh;
+  if ((!zh || !en) && row?.sc_no && App.scList?.length) {
+    const sc = App.scList.find(s => s.sc_no === row.sc_no);
+    if (sc) {
+      if (!en) en = sc.company_name_en;
+      if (!zh) zh = sc.company_name_zh;
+    }
+  }
+  return formatCompanyNameHtml(en, zh);
+}
+
 function escHtml(s) {
   return String(s || '')
     .replace(/&/g, '&amp;')
@@ -280,7 +306,13 @@ function updateDashProjectHero(project, ipPeriod) {
     const el = document.getElementById(id);
     if (el) el.textContent = val || '—';
   };
-  set('dashProjCode', proj.project_code);
+  const displayCode = proj.quotation_no || proj.project_code;
+  set('dashProjCode', displayCode);
+  const personEl = document.getElementById('dashProjPerson');
+  if (personEl) {
+    const personHtml = fmtProjectPerson(proj);
+    personEl.innerHTML = personHtml && personHtml !== '—' ? personHtml : '—';
+  }
   const nameEl = document.getElementById('dashProjName');
   if (nameEl) nameEl.innerHTML = projectNameHtml(proj);
   const period = ipPeriod?.site_period_text || proj.site_period_text;
@@ -297,6 +329,13 @@ function updateDashProjectHero(project, ipPeriod) {
   const amt = parseFloat(proj.contract_amount);
   const amtEl = document.getElementById('dashHeroContractAmt');
   if (amtEl) amtEl.textContent = !isNaN(amt) && amt !== 0 ? fmt(amt) : '—';
+}
+
+/** 工程項目負責人（顯示全名） */
+function fmtProjectPerson(p) {
+  if (!p) return '—';
+  const name = (p.person_in_charge || '').trim();
+  return name ? escHtml(name) : '—';
 }
 
 function updateDashIpTotals(ip) {
@@ -470,14 +509,15 @@ function toast(msg, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
-async function api(method, path, body) {
+async function api(method, path, body, opts = {}) {
+  const silent = opts.silent === true;
   try {
-    const opts = {
+    const fetchOpts = {
       method,
       headers: { 'Content-Type': 'application/json' },
     };
-    if (body) opts.body = JSON.stringify(body);
-    const r = await fetch(API + path, opts);
+    if (body) fetchOpts.body = JSON.stringify(body);
+    const r = await fetch(API + path, fetchOpts);
     const text = await r.text();
     let json;
     try {
@@ -488,7 +528,7 @@ async function api(method, path, body) {
     if (!json.success) throw new Error(json.error || '操作失敗');
     return json.data;
   } catch (e) {
-    toast(e.message, 'error');
+    if (!silent) toast(e.message, 'error');
     throw e;
   }
 }
@@ -496,8 +536,10 @@ async function api(method, path, body) {
 // ─── App 主控制器 ───────────────────────────────────────────
 const App = {
   currentProject: null,
+  currentPage: 'dashboard',
   projects: [],
   scList: [],
+  _projectSwitchSeq: 0,
 
   async init() {
     Theme.init();
@@ -511,6 +553,9 @@ const App = {
     });
 
     await this.loadProjects();
+    document.getElementById('projectSelect').addEventListener('change', (e) => {
+      this.selectProject(e.target.value);
+    });
     const saved = localStorage.getItem('qs_project_id');
     if (saved && this.projects.find(p => p.id == saved)) {
       await this.selectProject(saved);
@@ -535,36 +580,81 @@ const App = {
   },
 
   async selectProject(id) {
-    if (!id) {
-      this.currentProject = null;
-      this.scList = [];
-      document.getElementById('projectSelect').value = '';
-      document.getElementById('currentProjectBadge').style.display = 'none';
-      document.getElementById('btnQuickAdd').style.display = 'none';
-      return;
+    const switchSeq = ++this._projectSwitchSeq;
+    showLoading('載入項目資料…');
+    try {
+      if (!id) {
+        this.currentProject = null;
+        this.scList = [];
+        localStorage.removeItem('qs_project_id');
+        document.getElementById('projectSelect').value = '';
+        document.getElementById('currentProjectBadge').style.display = 'none';
+        document.getElementById('btnQuickAdd').style.display = 'none';
+        this._closeProjectModals();
+        this._resetProjectFilters();
+        await this._refreshProjectViews(switchSeq);
+        return;
+      }
+      const fresh = await api('GET', `/projects/${id}`);
+      if (!fresh || switchSeq !== this._projectSwitchSeq) return;
+      this.currentProject = fresh;
+      const idx = this.projects.findIndex(p => p.id == id);
+      if (idx >= 0) this.projects[idx] = fresh;
+
+      localStorage.setItem('qs_project_id', id);
+      document.getElementById('projectSelect').value = String(id);
+      document.getElementById('currentProjectCode').textContent = this.currentProject.project_code;
+      document.getElementById('currentProjectBadge').style.display = '';
+      document.getElementById('btnQuickAdd').style.display = '';
+
+      this._closeProjectModals();
+      this._resetProjectFilters();
+
+      this.scList = await api('GET', `/projects/${id}/subcontractors`) || [];
+      if (switchSeq !== this._projectSwitchSeq) return;
+
+      await this._refreshProjectViews(switchSeq);
+    } finally {
+      if (switchSeq === this._projectSwitchSeq) hideLoading();
     }
-    const fresh = await api('GET', `/projects/${id}`);
-    if (!fresh) return;
-    this.currentProject = fresh;
-    const idx = this.projects.findIndex(p => p.id == id);
-    if (idx >= 0) this.projects[idx] = fresh;
+  },
 
-    localStorage.setItem('qs_project_id', id);
-    document.getElementById('projectSelect').value = id;
-    document.getElementById('currentProjectCode').textContent = this.currentProject.project_code;
-    document.getElementById('currentProjectBadge').style.display = '';
-    document.getElementById('btnQuickAdd').style.display = '';
+  _getActivePage() {
+    return this.currentPage || document.querySelector('.nav-item.active')?.dataset.page || 'dashboard';
+  },
 
-    // 載入分判及支出清單
-    this.scList = await api('GET', `/projects/${id}/subcontractors`) || [];
+  _closeProjectModals() {
+    Payments.closeModal?.();
+    SC.closeModal?.();
+    SC.closePayModal?.();
+    IpPeriod.closeModal?.();
+    IpPeriod.closeMetaModal?.();
+  },
 
-    // 刷新各頁面
-    await Dashboard.load();
+  _resetProjectFilters() {
+    const payFilter = document.getElementById('payFilterSc');
+    const paySearch = document.getElementById('paySearch');
+    if (payFilter) payFilter.value = '';
+    if (paySearch) paySearch.value = '';
+  },
+
+  async _refreshProjectViews(switchSeq) {
     Payments.populateScFilter();
     OCR.populateScOptions();
+
+    await Promise.all([
+      Dashboard.load(switchSeq),
+      Payments.load(switchSeq),
+      SC.load(switchSeq),
+      IpPeriod.load(switchSeq),
+      Reports.load(switchSeq),
+    ]);
+    if (switchSeq !== this._projectSwitchSeq) return;
+    OCR.reset();
   },
 
   navigate(page) {
+    this.currentPage = page;
     // 隱藏所有頁面
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -582,6 +672,8 @@ const App = {
       ocr: ['發票 / 報價上傳', '上傳發票、報價，自動識別並登記付款'],
       reports: ['財務報表', '付款統計分析'],
       projects: ['工程項目', '管理地盤工程項目'],
+      'master-list': ['Master List', '公司報價／標書主檔（Phase 1）'],
+      staff: ['項目負責人管理', 'Master List 項目負責人主檔 · 工程項目選人'],
       settings: ['系統設定', 'OCR與系統配置'],
     };
     const [title, sub] = titles[page] || ['', ''];
@@ -589,10 +681,13 @@ const App = {
     document.getElementById('pageSubtitle').textContent = sub;
 
     // 載入頁面數據
-    if (page === 'payments') Payments.load();
+    if (page === 'dashboard') Dashboard.load();
+    else if (page === 'payments') Payments.load();
     else if (page === 'subcontractors') SC.load();
     else if (page === 'ip-period') IpPeriod.load();
     else if (page === 'reports') Reports.load();
+    else if (page === 'master-list') MasterList.load();
+    else if (page === 'staff') StaffRoster.refresh();
     else if (page === 'settings') Settings.load();
   },
 
@@ -637,18 +732,20 @@ const App = {
 const Dashboard = {
   charts: {},
 
-  async load() {
+  async load(switchSeq) {
     const p = App.currentProject;
     if (!p) {
       document.getElementById('dashboardNoProject').style.display = '';
       document.getElementById('dashboardContent').style.display = 'none';
       return;
     }
+    const projectId = p.id;
     document.getElementById('dashboardNoProject').style.display = 'none';
     document.getElementById('dashboardContent').style.display = '';
 
-    const summary = await api('GET', `/reports/summary/${p.id}`);
-    if (!summary) return;
+    const summary = await api('GET', `/reports/summary/${projectId}`);
+    if (!summary || !App.currentProject || App.currentProject.id != projectId) return;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
 
     // 統計卡片
     const totalPaid = summary.total_paid || 0;
@@ -665,7 +762,9 @@ const Dashboard = {
     updateDashIpTotals(summary.ip_period);
 
     // 付款登記統計
-    const payments = await api('GET', `/projects/${p.id}/payments`);
+    const payments = await api('GET', `/projects/${projectId}/payments`);
+    if (!App.currentProject || App.currentProject.id != projectId) return;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
     document.getElementById('dashPayCount').textContent = payments?.length || 0;
     document.getElementById('payBadge').textContent = payments?.length || 0;
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
@@ -683,7 +782,7 @@ const Dashboard = {
         <tr onclick="App.navigate('payments')">
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
           <td>${fmtRefNo(r.sc_no)}</td>
-          <td>${r.company_name_en || r.company_name_zh || '—'}</td>
+          <td class="td-company-name">${paymentCompanyNameHtml(r)}</td>
           <td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description || '—'}</td>
           <td class="td-amount positive">${fmt(r.paid_amount)}</td>
           <td class="td-mono td-muted">${r.invoice_no || '—'}</td>

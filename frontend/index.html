@@ -13,7 +13,7 @@
       document.documentElement.setAttribute('data-theme', theme);
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260715e">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -40,7 +40,7 @@
 
     <div class="project-selector">
       <label>當前項目</label>
-      <select id="projectSelect" onchange="App.selectProject(this.value)">
+      <select id="projectSelect">
         <option value="">— 請選擇項目 —</option>
       </select>
     </div>
@@ -70,6 +70,12 @@
       <div class="nav-section-title" style="margin-top:12px">管理</div>
       <div class="nav-item" data-page="projects" onclick="App.navigate('projects')">
         <span class="nav-icon">📁</span> 工程項目
+      </div>
+      <div class="nav-item" data-page="master-list" onclick="App.navigate('master-list')">
+        <span class="nav-icon">📋</span> Master List
+      </div>
+      <div class="nav-item" data-page="staff" onclick="App.navigate('staff')">
+        <span class="nav-icon">👷</span> 項目負責人管理
       </div>
       <div class="nav-item" data-page="settings" onclick="App.navigate('settings')">
         <span class="nav-icon">⚙️</span> 系統設定
@@ -140,6 +146,10 @@
               <div class="dash-hero-meta-item">
                 <div class="dash-hero-meta-label">工期</div>
                 <div class="dash-hero-meta-value" id="dashProjPeriod">—</div>
+              </div>
+              <div class="dash-hero-meta-item">
+                <div class="dash-hero-meta-label">項目負責人</div>
+                <div class="dash-hero-meta-value" id="dashProjPerson">—</div>
               </div>
               <div class="dash-hero-meta-item">
                 <div class="dash-hero-meta-label">主承建商 (MC)</div>
@@ -287,9 +297,25 @@
         <div id="ipPeriodContent">
           <div class="card" style="margin-bottom:20px">
             <div class="card-header">
-              <div class="card-title">🏗️ 糧期狀況 <span style="font-size:11px;color:var(--text-muted);font-weight:400">手動編輯 · IP 糧款</span></div>
+              <div class="card-title">🏗️ 糧期狀況 <span style="font-size:11px;color:var(--text-muted);font-weight:400">地盤 QS · 申請／則師批款</span></div>
             </div>
             <div class="card-body" id="ipPeriodMain">
+              <div class="empty-state" style="padding:24px">載入中...</div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <div class="card-title">📊 分包糧期明細 <span style="font-size:11px;color:var(--text-muted);font-weight:400">美博 → 各分判 · Excel Summary 矩陣</span></div>
+            </div>
+            <div class="card-body" id="ipPeriodScMatrix">
+              <div class="empty-state" style="padding:24px">載入中...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">🔀 糧期核對 <span style="font-size:11px;color:var(--text-muted);font-weight:400">地盤 ↔ 行政 · 只對照不覆寫</span></div>
+            </div>
+            <div class="card-body" id="ipReconcilePanel">
               <div class="empty-state" style="padding:24px">載入中...</div>
             </div>
           </div>
@@ -608,6 +634,117 @@
         </div>
       </div>
 
+      <!-- ─── Master List ──────────────────────── -->
+      <div class="page" id="page-master-list">
+        <div class="toolbar master-toolbar">
+          <div class="toolbar-left">
+            <input type="text" class="form-input master-search" id="masterSearch" placeholder="搜尋報價編號、屋苑、內容、業主…" onkeydown="if(event.key==='Enter')MasterList.search()">
+            <select class="form-input master-filter" id="masterYearFilter" onchange="MasterList.resetAndLoad()">
+              <option value="">全部年份</option>
+            </select>
+            <select class="form-input master-filter" id="masterPersonFilter" onchange="MasterList.resetAndLoad()">
+              <option value="">全部項目負責人</option>
+            </select>
+            <select class="form-input master-filter master-type-filter" id="masterTypeFilter" onchange="MasterList.resetAndLoad()">
+              <option value="">全部類型</option>
+              <option value="報價">報價</option>
+              <option value="標書">標書</option>
+            </select>
+            <label class="master-check"><input type="checkbox" id="masterAwardedOnly" onchange="MasterList.resetAndLoad()"> 只顯示中標</label>
+            <label class="master-check"><input type="checkbox" id="masterUnlinkedOnly" onchange="MasterList.resetAndLoad()"> 未配對項目</label>
+            <button class="btn btn-secondary btn-sm" onclick="MasterList.search()">搜尋</button>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn btn-secondary btn-sm" onclick="MasterList.openPreview()">📤 上傳預覽</button>
+            <button class="btn btn-primary btn-sm" onclick="MasterList.openSync()">🔄 同步 Master List</button>
+          </div>
+        </div>
+        <div class="master-scope-banner" id="masterStatScope" hidden>
+          <span class="master-scope-icon">🔍</span>
+          <span class="master-scope-text"></span>
+        </div>
+        <div class="stats-grid" id="masterStats">
+          <div class="stat-card"><div class="stat-label">主檔總數</div><div class="stat-value" id="masterStatTotal">—</div></div>
+          <div class="stat-card success"><div class="stat-label">中標</div><div class="stat-value" id="masterStatAwarded">—</div></div>
+          <div class="stat-card warning"><div class="stat-label">未配對項目</div><div class="stat-value" id="masterStatUnlinked">—</div></div>
+          <div class="stat-card"><div class="stat-label">上次匯入</div><div class="stat-value small" id="masterStatLastImport" style="font-size:13px">—</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📋 報價／標書主檔</div>
+            <div class="card-sub" id="masterListCount">—</div>
+          </div>
+          <div class="table-wrap" style="border:none;border-radius:0">
+            <table>
+              <thead id="masterTableHead">
+                <tr></tr>
+              </thead>
+              <tbody id="masterTableBody">
+                <tr><td colspan="11"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="master-pagination" id="masterPagination"></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><div class="card-title">ℹ️ 匯入模組說明</div></div>
+          <div class="card-body" style="font-size:13px;color:var(--text-secondary);line-height:1.6">
+            <p>報價編號結尾字母（Excel E 欄）為<strong>編號慣例</strong>，例 <code>MS/Q1241/24/kp</code>；<strong>項目負責人</strong>以主檔姓名欄為準，可由不同同事跟進同一報價。</p>
+            <p><strong>Master List</strong>（本頁）：公司級 <code>Quotation &amp; Contract number.xlsx</code>，Phase 1 只同步 QS 主檔；財務 Admin 欄位（發票、支票等）稍後 Phase 2 處理。</p>
+            <p><strong>Payment Status Table</strong>（側欄「從 Excel 匯入」）：地盤判項／付款／糧期，仍用 <code>excel_importer_payment.py</code>。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 項目負責人管理 ──────────────────────── -->
+      <div class="page" id="page-staff">
+        <div class="toolbar">
+          <button class="btn btn-primary btn-sm" onclick="StaffRoster.openAdd()">➕ 新增項目負責人</button>
+        </div>
+        <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stat-card success">
+            <div class="stat-label">已建立檔案</div>
+            <div class="stat-value" id="staffStatActive">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Master List 人數</div>
+            <div class="stat-value" id="staffStatTotal">—</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">👷 項目負責人管理</div>
+            <div class="card-sub">以 Master List 主檔「項目負責人」為準 · 可補充聯絡資料</div>
+          </div>
+          <div class="table-wrap" style="border:none;border-radius:0">
+            <table>
+              <thead>
+                <tr>
+                  <th>項目負責人</th>
+                  <th>部門</th>
+                  <th>電郵</th>
+                  <th>權限角色</th>
+                  <th>使用情況</th>
+                  <th>狀態</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="staffTableBody">
+                <tr><td colspan="7"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-body" style="font-size:13px;color:var(--text-secondary);line-height:1.6">
+            <p><strong>項目負責人</strong>名單以 Master List 主檔「項目負責人」欄為準自動列出；「建立對應」可補充電郵、部門等聯絡資料供工程項目選用。</p>
+            <p>已略過縮寫（如 jy、km）及多人並列（如 Joe Yu, Neelson）等非正式寫法；同一負責人多種拼寫會合併統計。</p>
+            <p>報價編號尾碼（如 <code>/kp</code>）僅為編號規則，<strong>不等同</strong>現時跟進人；同一報價可由不同負責人接手。</p>
+            <p><strong>權限角色</strong>現僅作記錄；日後登入時將依角色控制 QS／財務／管理等功能範圍。</p>
+          </div>
+        </div>
+      </div>
+
       <!-- ─── 系統設定 ──────────────────────── -->
       <div class="page" id="page-settings">
         <div class="card" style="max-width:600px">
@@ -806,10 +943,24 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="projModalId">
+      <input type="hidden" id="pQuotationNo">
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" style="flex:1">
           <label class="form-label">項目代碼 <span class="required">*</span></label>
-          <input type="text" class="form-input" id="pCode" placeholder="MS_Q1241_24">
+          <input type="text" class="form-input" id="pCode" placeholder="MS/Q001/26/jy">
+          <div class="form-hint">對應 Master List 報價編號</div>
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickFromMaster()">📋 從 Master List 選擇</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">項目負責人</label>
+          <select class="form-input" id="pPersonSelect">
+            <option value="">— 選擇項目負責人 —</option>
+          </select>
+          <div class="form-hint">與 Master List「項目負責人」同名；可獨立於報價編號尾碼</div>
         </div>
         <div class="form-group">
           <label class="form-label">狀態</label>
@@ -1056,7 +1207,7 @@
 <div class="modal-backdrop" id="importModal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">📥 從Excel匯入</div>
+      <div class="modal-title">📥 從 Excel 匯入（Payment Status Table）</div>
       <button class="modal-close" onclick="document.getElementById('importModal').classList.remove('open')">✕</button>
     </div>
     <div class="modal-body">
@@ -1064,7 +1215,7 @@
         <input type="file" id="importFileInput" accept=".xlsx,.xls" onchange="App.onImportFileSelect(event)">
         <div class="drop-icon">📊</div>
         <div class="drop-title">點擊選擇Excel文件</div>
-        <div class="drop-sub">支援 .xlsx / .xls 格式<br>系統會自動讀取所有工作表</div>
+        <div class="drop-sub">地盤 Payment Status Table（.xlsx）<br>判項、付款登記、糧期 — 非 Master List</div>
       </div>
       <div id="importStatus" style="margin-top:16px;display:none">
         <div style="display:flex;align-items:center;gap:10px">
@@ -1169,6 +1320,22 @@
   </div>
 </div>
 
+<!-- ─── 模態框：分包糧期 cell 明細 ───────────────────────────── -->
+<div class="modal-backdrop" id="ipScDrillModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title" id="ipScDrillTitle">分包糧期明細</div>
+      <button type="button" class="modal-close" onclick="IpPeriod.closeScDrillModal()">✕</button>
+    </div>
+    <div class="modal-body" id="ipScDrillBody">
+      <div class="empty-state" style="padding:20px">載入中...</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="IpPeriod.closeScDrillModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── 文件預覽（PDF / 圖片）──────────────────────────────── -->
 <div class="doc-viewer-backdrop" id="docViewerModal" onclick="DocViewer.onBackdrop(event)">
   <div class="doc-viewer-panel" onclick="event.stopPropagation()">
@@ -1194,12 +1361,315 @@
   </div>
 </div>
 
+<!-- ─── 模態框：Master List 同步 ───────────────────────────────── -->
+<div class="modal-backdrop" id="masterSyncModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title" id="masterSyncModalTitle">Master List 同步</div>
+      <button class="modal-close" onclick="MasterList.closeSyncModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="drop-zone" id="masterDropZone">
+        <input type="file" id="masterFileInput" accept=".xlsx,.xls" onchange="MasterList.onFileSelected(event)">
+        <div class="drop-icon">📋</div>
+        <div class="drop-title">選擇 Quotation &amp; Contract number.xlsx</div>
+        <div class="drop-sub">支援多年份檔案；預覽後再確認同步</div>
+      </div>
+      <div id="masterSyncStatus" style="margin-top:16px;display:none">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="spinner" style="width:20px;height:20px;border-width:2px"></div>
+          <span style="font-size:13px;color:var(--text-secondary)">處理中...</span>
+        </div>
+      </div>
+      <div id="masterPreviewResult" style="margin-top:16px;display:none"></div>
+    </div>
+    <div class="modal-footer" id="masterSyncFooter" style="display:none">
+      <button class="btn btn-secondary" onclick="MasterList.closeSyncModal()">關閉</button>
+      <button class="btn btn-primary" id="masterConfirmSyncBtn" onclick="MasterList.confirmSync()">確認同步至資料庫</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：Master 配對項目 ───────────────────────────────── -->
+<div class="modal-backdrop" id="masterLinkModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">配對工程項目</div>
+      <button class="modal-close" onclick="MasterList.closeLinkModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="masterLinkRowId">
+      <input type="hidden" id="masterLinkQuotationNo">
+      <div class="form-group">
+        <label class="form-label">報價編號</label>
+        <input type="text" class="form-input" id="masterLinkQuotationDisplay" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">工程項目</label>
+        <select class="form-input" id="masterLinkProjectSelect">
+          <option value="">— 選擇項目 —</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="MasterList.closeLinkModal()">取消</button>
+      <button class="btn btn-primary" onclick="MasterList.saveLink()">儲存配對</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：Master List 編輯 ───────────────────────────────── -->
+<div class="modal-backdrop" id="masterEditModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">編輯 Master List</div>
+      <button class="modal-close" onclick="MasterList.closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="masterEditRowId">
+      <input type="hidden" id="masterEditQuotationNo">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">報價編號</label>
+          <input type="text" class="form-input" id="masterEditQuotDisplay" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">日期</label>
+          <input type="date" class="form-input" id="masterEditDate">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">類型</label>
+          <select class="form-input" id="masterEditDocType" onchange="MasterList.onEditDocTypeChange()">
+            <option value="報價">報價</option>
+            <option value="標書">標書</option>
+            <option value="合約">合約</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">中標</label>
+          <select class="form-input" id="masterEditAwarded">
+            <option value="">—</option>
+            <option value="中">中</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">項目負責人</label>
+          <input type="text" class="form-input" id="masterEditPersonName" list="masterPersonSuggestions" placeholder="Master List 負責人全名">
+          <datalist id="masterPersonSuggestions"></datalist>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">屋苑/地點</label>
+          <input type="text" class="form-input" id="masterEditSite">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">工作範疇</label>
+          <input type="text" class="form-input" id="masterEditTrade">
+        </div>
+        <div class="form-group">
+          <label class="form-label">業主名稱</label>
+          <input type="text" class="form-input" id="masterEditClient">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">內容</label>
+        <textarea class="form-input" id="masterEditDesc" rows="3"></textarea>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">報價/投標金額 (業主 / 大判)</label>
+          <input type="number" step="0.01" class="form-input" id="masterEditQuoted" oninput="MasterList.recalcProfit()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">中標金額</label>
+          <input type="number" step="0.01" class="form-input" id="masterEditAwardedAmt" oninput="MasterList.recalcProfit()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">(M) 投標利潤率 (%)</label>
+          <input type="number" step="0.01" class="form-input" id="masterEditMargin">
+          <p class="form-hint">Master List 目標利潤率（投標時手填，非 QS 地盤結算）</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">外判與否</label>
+          <input type="text" class="form-input" id="masterEditSubconType" placeholder="是 / 否">
+        </div>
+        <div class="form-group">
+          <label class="form-label">主分判商（QS 合約）</label>
+          <textarea class="form-input" id="masterEditSubconCo" rows="3" placeholder="主要分判商"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">主分判金額（QS）</label>
+          <input type="number" step="0.01" class="form-input" id="masterEditSubconAmt" oninput="MasterList.recalcProfit()">
+          <p class="form-hint" id="masterEditSubconHint" style="display:none">多家主分判：上方為合計金額，逐家明細見下方「主分判 QS」分頁。</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">利潤$ (中標−分判)</label>
+          <input type="number" step="0.01" class="form-input" id="masterEditProfitAmt" readonly style="opacity:0.9">
+          <p class="form-hint">自動計算：中標金額 − 主分判金額</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">利潤% (÷報價金額)</label>
+          <input type="number" step="0.01" class="form-input" id="masterEditProfitPct" readonly style="opacity:0.9">
+          <p class="form-hint">自動計算：利潤$ ÷ 報價/投標金額</p>
+        </div>
+        <div class="form-group"></div>
+      </div>
+      <div class="section-title" style="margin-top:4px">工期與日期</div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">合約期/工期 (天)</label>
+          <input type="number" step="1" min="0" class="form-input" id="masterEditContractDays">
+        </div>
+        <div class="form-group">
+          <label class="form-label">開工日期</label>
+          <input type="date" class="form-input" id="masterEditStartDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">實際完工日期</label>
+          <input type="date" class="form-input" id="masterEditCompletionDate">
+        </div>
+      </div>
+      <div class="section-title" style="margin-top:12px">會簽表（已填妥）</div>
+      <div class="master-checklist" id="masterEditChecklist">
+        <label class="master-check-item" id="masterEditBidSignoffRow">
+          <input type="checkbox" id="masterEditBidSignoff">
+          <span><strong>已填妥</strong>　投標會簽表 <span class="form-hint">（只限標書）</span></span>
+        </label>
+        <label class="master-check-item">
+          <input type="checkbox" id="masterEditPartnerForm">
+          <span><strong>已填妥</strong>　合作夥伴表</span>
+        </label>
+        <label class="master-check-item">
+          <input type="checkbox" id="masterEditContractSignoff">
+          <span><strong>已填妥</strong>　合約會簽表（10萬或以上）<span class="form-hint">（由 QS 填寫）</span></span>
+        </label>
+      </div>
+      <div id="masterFinancePanel" class="master-finance-panel" style="display:none">
+        <div class="master-finance-tabs">
+          <button type="button" class="btn btn-secondary btn-sm master-fin-tab active" data-tab="ip" onclick="MasterList.switchFinanceTab('ip')">業主糧期（行政）</button>
+          <button type="button" class="btn btn-secondary btn-sm master-fin-tab" data-tab="recon" onclick="MasterList.switchFinanceTab('recon')">糧期核對</button>
+          <button type="button" class="btn btn-secondary btn-sm master-fin-tab" data-tab="qs" onclick="MasterList.switchFinanceTab('qs')">主分判 QS</button>
+          <button type="button" class="btn btn-secondary btn-sm master-fin-tab" data-tab="sub" onclick="MasterList.switchFinanceTab('sub')">分判付款</button>
+          <button type="button" class="btn btn-secondary btn-sm master-fin-tab" data-tab="chq" onclick="MasterList.switchFinanceTab('chq')">支票</button>
+        </div>
+        <p class="form-hint" id="masterFinanceSummary"></p>
+        <div id="masterFinanceTabIp" class="master-finance-tab-pane"></div>
+        <div id="masterFinanceTabRecon" class="master-finance-tab-pane" style="display:none"></div>
+        <div id="masterFinanceTabQs" class="master-finance-tab-pane" style="display:none"></div>
+        <div id="masterFinanceTabSub" class="master-finance-tab-pane" style="display:none"></div>
+        <div id="masterFinanceTabChq" class="master-finance-tab-pane" style="display:none"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="MasterList.closeEditModal()">取消</button>
+      <button class="btn btn-primary" onclick="MasterList.saveEdit()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：工程項目選 Master List ─────────────────────────── -->
+<div class="modal-backdrop" id="projMasterPickModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">選擇 Master List 報價</div>
+      <button class="modal-close" onclick="Projects.closeMasterPick()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row" style="margin-bottom:12px">
+        <input type="text" class="form-input" id="projMasterSearch" placeholder="搜尋報價編號、屋苑、內容…" onkeydown="if(event.key==='Enter')Projects.searchMasterPick()">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.searchMasterPick()">搜尋</button>
+      </div>
+      <div class="table-wrap" style="max-height:360px;overflow:auto">
+        <table>
+          <thead>
+            <tr><th>報價編號</th><th>項目負責人</th><th>屋苑</th><th>內容</th><th></th></tr>
+          </thead>
+          <tbody id="projMasterPickBody">
+            <tr><td colspan="5" class="td-muted" style="padding:24px;text-align:center">輸入關鍵字搜尋</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- ─── 模態框：項目負責人 ─────────────────────────────────────── -->
+<div class="modal-backdrop" id="staffModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="staffModalTitle">新增項目負責人</div>
+      <button class="modal-close" onclick="StaffRoster.closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="staffModalId">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">英文姓名 <span class="required">*</span></label>
+          <input type="text" class="form-input" id="staffNameEn" placeholder="例：Dennis Chan / Katie Puk">
+        </div>
+        <div class="form-group">
+          <label class="form-label">中文姓名</label>
+          <input type="text" class="form-input" id="staffNameZh" placeholder="（選填）">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">權限角色</label>
+          <select class="form-input" id="staffRole">
+            <option value="qs">QS</option>
+            <option value="finance">財務</option>
+            <option value="admin">管理員</option>
+            <option value="viewer">唯讀</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">部門</label>
+          <input type="text" class="form-input" id="staffDept" placeholder="QS / E&amp;M">
+        </div>
+        <div class="form-group">
+          <label class="form-label">電郵</label>
+          <input type="email" class="form-input" id="staffEmail" placeholder="name@company.com">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">電話</label>
+        <input type="text" class="form-input" id="staffPhone">
+      </div>
+      <div class="form-group">
+        <label class="form-label">備註</label>
+        <textarea class="form-input" id="staffNotes" rows="2"></textarea>
+      </div>
+      <label class="master-check"><input type="checkbox" id="staffActive" checked> 啟用</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="StaffRoster.closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="StaffRoster.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
-<script src="js/main.js"></script>
-<script src="js/payments.js"></script>
-<script src="js/projects.js"></script>
-<script src="js/ip_period.js"></script>
-<script src="js/ocr.js"></script>
-<script src="js/reports.js"></script>
+<script src="js/main.js?v=20260714d"></script>
+<script src="js/payments.js?v=20260714d"></script>
+<script src="js/projects.js?v=20260715a"></script>
+<script src="js/ip_period.js?v=20260715e"></script>
+<script src="js/ocr.js?v=20260714a"></script>
+<script src="js/reports.js?v=20260714c"></script>
+<script src="js/ip_reconcile.js?v=20260714a"></script>
+<script src="js/master_list.js?v=20260708d"></script>
+<script src="js/staff.js?v=20260708e"></script>
 </body>
 </html>

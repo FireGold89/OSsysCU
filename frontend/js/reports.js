@@ -2,15 +2,17 @@
 const Reports = {
   data: null,
 
-  async load() {
+  async load(switchSeq) {
     const p = App.currentProject;
     if (!p) {
       document.getElementById('rptTableBody').innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:40px">請先選擇項目</div></td></tr>`;
       return;
     }
+    const projectId = p.id;
 
-    this.data = await api('GET', `/reports/summary/${p.id}`);
-    if (!this.data) return;
+    this.data = await api('GET', `/reports/summary/${projectId}`);
+    if (!this.data || !App.currentProject || App.currentProject.id != projectId) return;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
 
     // 統計卡片
     document.getElementById('rptScCount').textContent = this.data.sc_stats?.length || 0;
@@ -38,11 +40,8 @@ const Reports = {
       return `
         <tr>
           <td>${fmtRefNo(s.sc_no)}</td>
-          <td>
-            <div style="font-weight:600">${s.company_name_en || '—'}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${s.description || ''}</div>
-          </td>
-          <td class="td-muted" style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.description || '—'}</td>
+          <td>${formatCompanyNameHtml(s.company_name_en, s.company_name_zh)}</td>
+          <td class="td-muted" style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.description || '—')}</td>
           <td class="td-amount">${fmt(s.contract_amount)}</td>
           <td class="td-amount positive">${fmt(s.total_paid)}</td>
           <td class="td-amount ${remClass}">${fmt(rem)}</td>
@@ -82,17 +81,17 @@ const Reports = {
 
   exportCsv() {
     if (!this.data?.sc_stats) { toast('暫無數據', 'warning'); return; }
-    const headers = ['判項編號','公司名稱','工程描述','判項金額(J)','累計已付','未付餘額','付款次數','進度%'];
+    const headers = ['判項編號','公司名稱(英)','公司名稱(中)','工程描述','判項金額(J)','累計已付','未付餘額','付款次數','進度%'];
     const rows = this.data.sc_stats.map(s => {
       const ca = parseFloat(s.contract_amount) || 0;
       const paid = parseFloat(s.total_paid) || 0;
       const rem = ca - paid;
       const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(FMT_DECIMALS) : '0.00';
-      return [s.sc_no, s.company_name_en, s.description,
+      return [s.sc_no, s.company_name_en, s.company_name_zh, s.description,
         fmtNumPlain(ca), fmtNumPlain(paid), fmtNumPlain(rem), s.payment_count, progress];
     });
     // 加合計行
-    rows.push(['合計', '', '',
+    rows.push(['合計', '', '', '',
       fmtNumPlain(this.data.sc_stats.reduce((s, r) => s + (parseFloat(r.contract_amount) || 0), 0)),
       fmtNumPlain(this.data.total_paid), fmtNumPlain(this.data.total_remainder),
       this.data.sc_stats.reduce((s, r) => s + (r.payment_count || 0), 0), ''

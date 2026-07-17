@@ -21,7 +21,8 @@ const OCR = {
       opt.textContent = `${sc.sc_no} — ${sc.company_name_en || sc.company_name_zh || ''}`.substring(0, 45);
       sel.appendChild(opt);
     });
-    if (cur) sel.value = cur;
+    const valid = cur && (App.scList || []).some(sc => sc.sc_no === cur);
+    if (valid) sel.value = cur;
   },
 
   onDragOver(e) {

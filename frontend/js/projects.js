@@ -1,5 +1,7 @@
 /* ─── projects.js — 工程項目 ──────────────────────────── */
 const Projects = {
+  _editOriginalCode: '',
+
   render(projects) {
     const container = document.getElementById('projectCards');
     if (!projects || projects.length === 0) {
@@ -23,18 +25,23 @@ const Projects = {
       const progress = pctRaw.toFixed(FMT_DECIMALS);
       const barWidth = Math.min(100, Math.max(0, pctRaw));
       const overPct = pctRaw > 100;
+      const personLine = fmtProjectPerson(p);
+      const codeLine = p.quotation_no || p.project_code;
 
       return `
         <div class="card" style="cursor:pointer" onclick="App.selectProject(${p.id});App.navigate('dashboard')">
           <div class="card-body">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
               <div>
-                <div style="font-size:12px;color:var(--text-muted);font-family:monospace">${p.project_code}</div>
+                <div style="font-size:12px;color:var(--text-muted);font-family:monospace">${escHtml(codeLine)}</div>
                 <div class="proj-name-block">
                   ${projectNameHtml(p)}
                 </div>
               </div>
               <span class="badge badge-${statusClass}">${statusLabel}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">
+              👷 項目負責人：${personLine}
             </div>
             <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
               👤 ${p.client || '—'} &nbsp;|&nbsp; 🏗️ ${p.main_contractor?.substring(0,20) || '—'}
@@ -64,9 +71,11 @@ const Projects = {
   },
 
   openAdd() {
+    this._editOriginalCode = '';
     document.getElementById('projModalTitle').textContent = '新增項目';
     document.getElementById('projModalId').value = '';
-    ['pCode','pNameEn','pNameZh','pClient','pMc','pNotes'].forEach(id => document.getElementById(id).value = '');
+    ['pCode','pNameEn','pNameZh','pClient','pMc','pNotes','pQuotationNo'].forEach(id => document.getElementById(id).value = '');
+    this._loadPersonFields(null, '');
     document.getElementById('pAmt').value = '';
     document.getElementById('pLabour').value = '';
     document.getElementById('pStartDate').value = '';
@@ -79,7 +88,11 @@ const Projects = {
     if (!p) return;
     document.getElementById('projModalTitle').textContent = '編輯項目';
     document.getElementById('projModalId').value = p.id;
-    document.getElementById('pCode').value = p.project_code || '';
+    const code = p.project_code || '';
+    this._editOriginalCode = code;
+    document.getElementById('pCode').value = code;
+    document.getElementById('pQuotationNo').value = p.quotation_no || '';
+    await this._loadPersonFields(null, p.person_in_charge || '');
     document.getElementById('pNameEn').value = p.project_name_en || '';
     document.getElementById('pNameZh').value = p.project_name_zh || '';
     if (!p.project_name_en && !p.project_name_zh && p.project_name) {
@@ -103,8 +116,22 @@ const Projects = {
 
   async saveModal() {
     const id = document.getElementById('projModalId').value;
+    const code = document.getElementById('pCode').value.trim();
+    if (!code) { toast('請輸入項目代碼', 'warning'); return; }
+    if (id && this._editOriginalCode && code !== this._editOriginalCode) {
+      const ok = confirm(
+        `項目代碼將由「${this._editOriginalCode}」改為「${code}」\n` +
+        '這會同時更新 Master List 配對。確定？'
+      );
+      if (!ok) return;
+    }
+    const qno = document.getElementById('pQuotationNo').value.trim() || null;
+    const staff = StaffRoster.staffFromSelect(document.getElementById('pPersonSelect'));
     const data = {
-      project_code: document.getElementById('pCode').value.trim(),
+      project_code: code,
+      quotation_no: qno,
+      person_code: null,
+      person_in_charge: staff ? StaffRoster.displayName(staff) : null,
       project_name_en: document.getElementById('pNameEn').value.trim(),
       project_name_zh: document.getElementById('pNameZh').value.trim(),
       client: document.getElementById('pClient').value.trim(),
@@ -140,7 +167,76 @@ const Projects = {
       App.scList = [];
     }
     await App.loadProjects();
-  }
+  },
+
+  pickFromMaster() {
+    document.getElementById('projMasterSearch').value = '';
+    document.getElementById('projMasterPickBody').innerHTML =
+      '<tr><td colspan="5" class="td-muted" style="padding:24px;text-align:center">輸入關鍵字搜尋</td></tr>';
+    document.getElementById('projMasterPickModal').classList.add('open');
+  },
+
+  closeMasterPick() {
+    document.getElementById('projMasterPickModal').classList.remove('open');
+  },
+
+  async searchMasterPick() {
+    const q = document.getElementById('projMasterSearch')?.value.trim() || '';
+    const params = new URLSearchParams({ limit: 30, offset: 0 });
+    if (q) params.set('q', q);
+    const data = await api('GET', `/master/quotations?${params}`);
+    const tbody = document.getElementById('projMasterPickBody');
+    if (!data?.items?.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="td-muted" style="padding:24px;text-align:center">沒有結果</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.items.map(r => {
+      const desc = escHtml((r.description || '').slice(0, 40));
+      return `<tr>
+        <td class="td-mono">${escHtml(r.quotation_no)}</td>
+        <td>${fmtMasterPerson(r)}</td>
+        <td>${escHtml(r.site_name || '—')}</td>
+        <td class="td-muted">${desc}</td>
+        <td><button type="button" class="btn btn-primary btn-sm" onclick="Projects.applyMasterPick(${r.id})">選擇</button></td>
+      </tr>`;
+    }).join('');
+  },
+
+  async applyMasterPick(rowId) {
+    const row = await api('GET', `/master/item?id=${rowId}`);
+    if (!row) return;
+    const cur = document.getElementById('pCode').value.trim();
+    if (cur && cur !== row.quotation_no) {
+      const ok = confirm(
+        `目前項目代碼：${cur}\n` +
+        `將改為 Master List：${row.quotation_no}\n` +
+        `（${row.site_name || row.description || ''}）\n\n確定帶入？`
+      );
+      if (!ok) return;
+    }
+    document.getElementById('pCode').value = row.quotation_no;
+    document.getElementById('pQuotationNo').value = row.quotation_no;
+    await this._loadPersonFields(null, row.person_in_charge || '');
+    if (row.site_name && !document.getElementById('pNameZh').value) {
+      document.getElementById('pNameZh').value = row.site_name;
+    }
+    if (row.client_name && !document.getElementById('pClient').value) {
+      document.getElementById('pClient').value = row.client_name;
+    }
+    if (row.awarded_amount && !document.getElementById('pAmt').value) {
+      document.getElementById('pAmt').value = row.awarded_amount;
+    }
+    this.closeMasterPick();
+    toast('已帶入報價資料', 'success');
+  },
+
+  async _loadPersonFields(selectedStaffId, selectedName) {
+    await StaffRoster.load(true);
+    const sel = document.getElementById('pPersonSelect');
+    const staffId = selectedStaffId
+      || (StaffRoster.findByName(selectedName)?.id ?? null);
+    StaffRoster.fillPersonSelect(sel, { selectedStaffId: staffId, selectedName });
+  },
 };
 
 /* ─── sc.js (在同一文件) — 分判及支出管理 ─────────────────────── */
@@ -557,13 +653,16 @@ const SC = {
     toast(`已收合 ${groups.length} 個分組`, 'info');
   },
 
-  async load() {
+  async load(switchSeq) {
     const p = App.currentProject;
     if (!p) {
       document.getElementById('scTableBody').innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:40px">請先選擇項目</div></td></tr>`;
       return;
     }
-    this.data = await api('GET', `/projects/${p.id}/subcontractors`) || [];
+    const projectId = p.id;
+    this.data = await api('GET', `/projects/${projectId}/subcontractors`) || [];
+    if (!App.currentProject || App.currentProject.id != projectId) return;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
     this.filtered = [...this.data];
     this.render();
   },

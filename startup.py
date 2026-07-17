@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '2026-06-08-fix-project-payment-progress'
+APP_VERSION = '2026-07-15-ip-phase234'
 
 
 def _preload_pdf_font():
@@ -18,8 +18,8 @@ def _preload_pdf_font():
 
 
 def _sync_excel_background():
-    """Excel 同步放背景，避免 Zeabur 健康檢查逾時"""
-    excel_name = 'MS_Q1241_24 - Main contract Works Payment Status Table - R4.xlsx'
+    """僅在空庫時自動匯入預設 Payment Excel；勿對所有項目覆寫同一檔案。"""
+    excel_name = 'MS_Q1241_24 - Main contract Works Payment Status Table - R5.xlsx'
     excel_path = os.path.join(BASE_DIR, excel_name)
     if not os.path.exists(excel_path):
         return
@@ -32,13 +32,6 @@ def _sync_excel_background():
             print('[初始化] Excel匯入完成!')
         except Exception as e:
             print(f'[初始化] Excel匯入警告: {e}')
-        return
-    from excel_importer import sync_excel_data
-    for p in projects:
-        try:
-            sync_excel_data(excel_path, p['id'])
-        except Exception as e:
-            print(f'[初始化] Excel 同步警告: {e}')
 
 
 def run():

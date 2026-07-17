@@ -462,6 +462,19 @@ body {
   color: var(--text-secondary);
   margin-top: 3px;
 }
+.td-company-name {
+  max-width: 180px;
+  vertical-align: top;
+}
+.td-company-name .proj-name-block .proj-name-en {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.td-company-name .proj-name-block .proj-name-zh {
+  font-size: 11px;
+  margin-top: 2px;
+}
 .dash-hero-amount {
   text-align: right;
   flex-shrink: 0;
@@ -1451,6 +1464,101 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   color: var(--text-muted);
   margin-bottom: 4px;
 }
+.ip-sc-matrix tfoot td {
+  background: var(--bg-card);
+  border-top: 2px solid var(--border);
+  font-weight: 500;
+}
+.ip-sc-matrix-foot td:first-child {
+  color: var(--text-secondary);
+}
+.ip-sc-matrix .ip-sc-col-head {
+  vertical-align: bottom;
+  padding-bottom: 4px;
+  border-bottom: none;
+}
+.ip-sc-matrix .ip-sc-col-co {
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--text-muted);
+  vertical-align: top;
+  padding-top: 0;
+  min-width: 88px;
+  max-width: 140px;
+}
+.ip-sc-matrix .ip-sc-col-co .proj-name-en,
+.ip-sc-matrix .ip-sc-col-co .proj-name-zh {
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: normal;
+  word-break: break-word;
+}
+.ip-sc-matrix-meta td {
+  font-size: 11px;
+}
+.ip-sc-matrix .td-amount.warn {
+  color: var(--warning, #d97706);
+  font-weight: 600;
+}
+.ip-sc-matrix-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ip-sc-view-toggle {
+  display: flex;
+  gap: 6px;
+}
+.ip-sc-matrix .ip-sc-col-trade {
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--text-secondary);
+  vertical-align: top;
+  padding-top: 0;
+  border-bottom: none;
+}
+.ip-sc-cell-click {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.ip-sc-cell-click:hover {
+  background: var(--bg-hover);
+  outline: 1px solid var(--accent);
+}
+.ip-sc-row-label {
+  min-width: 120px;
+  max-width: 160px;
+  vertical-align: top;
+}
+.ip-sc-row-trade {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.ip-sc-row-co .proj-name-en,
+.ip-sc-row-co .proj-name-zh {
+  font-size: 10px;
+  line-height: 1.3;
+}
+.ip-sc-drill-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+.ip-sc-drill-summary .label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
 
 /* ─── 可排序表頭 ─── */
 .th-sortable {
@@ -1567,4 +1675,157 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .ocr-items-total strong {
   color: var(--success);
   margin-left: 4px;
+}
+
+/* Master List */
+.master-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.master-toolbar .toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+}
+.master-toolbar .toolbar-right {
+  display: flex;
+  gap: 8px;
+}
+.master-search { min-width: 220px; max-width: 320px; }
+.master-filter { width: 120px; }
+.master-type-filter { width: 108px; }
+.master-scope-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-light);
+  background: var(--accent-glow);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+}
+.master-scope-banner[hidden] { display: none !important; }
+.master-scope-icon { font-size: 14px; line-height: 1; opacity: 0.9; }
+.master-scope-text { line-height: 1.4; }
+.master-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 4px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.master-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  line-height: 1.45;
+}
+.master-check-item input[type="checkbox"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+.master-check {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.master-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+}
+.master-page-info { font-size: 12px; color: var(--text-muted); }
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition), background var(--transition);
+}
+.th-sortable:hover { color: var(--text-primary); background: var(--bg-card); }
+.th-sort-active { color: var(--accent); }
+.th-sort-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  opacity: 0.45;
+  vertical-align: middle;
+}
+.th-sort-active .th-sort-icon { opacity: 1; }
+.master-preview-summary { display: flex; flex-wrap: wrap; gap: 8px; }
+.master-preview-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.row-muted td { opacity: 0.55; }
+.master-preview-table th,
+.master-preview-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.master-finance-panel {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.master-finance-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.master-fin-tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.ip-reconcile-hint {
+  margin-bottom: 10px;
+}
+.ip-reconcile-note {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.ip-reconcile-wrap {
+  max-height: 280px;
+  overflow: auto;
+}
+.ip-reconcile-table th {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ip-reconcile-th-site {
+  background: rgba(59, 130, 246, 0.08);
+  text-align: center;
+}
+.ip-reconcile-th-admin {
+  background: rgba(234, 179, 8, 0.1);
+  text-align: center;
+}
+.ip-reconcile-status-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  max-width: 88px;
+  line-height: 1.3;
 }
