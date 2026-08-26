@@ -18,7 +18,7 @@ const OCR = {
     (App.scList || []).forEach(sc => {
       const opt = document.createElement('option');
       opt.value = sc.sc_no;
-      opt.textContent = `${sc.sc_no} — ${sc.company_name_en || sc.company_name_zh || ''}`.substring(0, 45);
+      opt.textContent = `${sc.sc_no} — ${formatCompanyPrimary(sc.company_name_en, sc.company_name_zh)}`.substring(0, 45);
       sel.appendChild(opt);
     });
     const valid = cur && (App.scList || []).some(sc => sc.sc_no === cur);
@@ -511,7 +511,7 @@ const OCR = {
         報價單請用下方<strong>新建判項編號</strong>新增，勿選現有編號以免覆蓋舊資料。`;
       return;
     }
-    el.innerHTML = `💡 建議關聯：<strong>${top.sc_no}</strong> ${top.company_name_en || top.company_name_zh || ''}（${reasons}）
+    el.innerHTML = `💡 建議關聯：<strong>${top.sc_no}</strong> ${formatCompanyPrimary(top.company_name_en, top.company_name_zh)}（${reasons}）
       <button type="button" class="btn btn-secondary btn-sm" onclick="OCR.applyScSuggestion('${top.sc_no.replace(/'/g, "\\'")}')">關聯現有</button>`;
   },
 
@@ -655,7 +655,10 @@ const OCR = {
         document.getElementById('ocrQuotationDate').value =
           ex.quotation_date || ex.invoice_date || '';
         document.getElementById('ocrAmount').value = ex.total_amount || ex.amount || '';
-        document.getElementById('ocrCompany').value = ex.company_name_en || ex.company_name_zh || '';
+        document.getElementById('ocrCompany').value = formatCompanyPrimary(ex.company_name_en, ex.company_name_zh);
+        if (document.getElementById('ocrCompany').value === '—') {
+          document.getElementById('ocrCompany').value = '';
+        }
 
         const items = ex.line_items || [];
         if (items.length) {
@@ -812,7 +815,7 @@ const OCR = {
       App.scList = await api('GET', `/projects/${p.id}/subcontractors`) || [];
       this.populateScOptions();
       this.reset();
-      setTimeout(() => { App.navigate('subcontractors'); SC.load(); Dashboard.load(); }, 400);
+      setTimeout(() => { App.navigate('payments', { tab: 'sc' }); Dashboard.load(); }, 400);
     } catch (e) {}
   },
 
@@ -860,7 +863,7 @@ const OCR = {
       await api('POST', '/payments', data);
       toast('發票已儲存為付款登記', 'success');
       this.reset();
-      setTimeout(() => { App.navigate('payments'); Payments.load(); Dashboard.load(); }, 400);
+      setTimeout(() => { App.navigate('payments', { tab: 'records' }); Payments.load(); Dashboard.load(); }, 400);
     } catch (e) {}
   },
 

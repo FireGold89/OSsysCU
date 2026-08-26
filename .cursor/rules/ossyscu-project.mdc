@@ -18,7 +18,8 @@ alwaysApply: true
 | DB / 匯總 | `database.py` |
 | OCR | `ocr_processor.py` |
 | QS 匯報 PDF | `qs_report_pdf.py` |
-| Excel 匯入 | `excel_importer.py` |
+| Excel 匯入（地盤付款表） | `excel_importer_payment.py`（相容入口 `excel_importer.py`） |
+| Master List 匯入 | `master_list_importer.py`、`master_ref.py` |
 | 前端 | `frontend/index.html`, `frontend/js/*.js`, `frontend/css/style.css` |
 | 資料路徑 | `config.py`（本機 `BASE_DIR`，Docker `/data` Volume） |
 
@@ -33,6 +34,7 @@ alwaysApply: true
 - PDF 中文：Linux Docker 用 `fonts-wqy-zenhei`；ReportLab TTFont 嵌入（勿用 MSung CID）
 - UI 主題：`data-theme` light/dark，`localStorage` key `qs_theme`；改 CSS 須兩主題都顧及
 - OCR：夸克 / RapidOCR / Gemini；報價→判項、發票→付款登記
+- **Master List 報價編號**：`MS/Q001/26/jy` = B+C+D+E；`/jy` **項目負責人縮寫**（見 `staff_members` / 負責人名單頁）
 
 ## 改碼原則
 - 最小 diff；沿用現有命名與 HK QS 術語（見 `ossyscu-ui-terms` rule）

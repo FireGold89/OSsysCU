@@ -16,11 +16,11 @@ const Reports = {
 
     // 統計卡片
     document.getElementById('rptScCount').textContent = this.data.sc_stats?.length || 0;
-    document.getElementById('rptTotalPaid').textContent = fmt(this.data.total_paid);
+    setAmtEl(document.getElementById('rptTotalPaid'), this.data.total_paid, 'expense');
     document.getElementById('rptRemainder').textContent = fmt(this.data.total_remainder);
 
     renderContractCalc(this.data.contract_calc, 'rptContractCalc');
-    renderSiteIpPeriod(this.data.ip_period, 'rptSiteIp', { editable: false });
+    renderSiteIpPeriod(this.data.ip_period, 'rptSiteIp', { editable: false, hideProjectMeta: true });
 
     // 表格
     const tbody = document.getElementById('rptTableBody');
@@ -35,7 +35,7 @@ const Reports = {
       const paid = parseFloat(s.total_paid) || 0;
       const rem = ca - paid;
       const progress = ca > 0 ? Math.min(100, (paid / ca * 100)).toFixed(FMT_DECIMALS) : '0.00';
-      const remClass = rem > 0 ? 'negative' : rem < 0 ? '' : '';
+      const remClass = amtClass(rem, 'expense');
 
       return `
         <tr>
@@ -43,8 +43,8 @@ const Reports = {
           <td>${formatCompanyNameHtml(s.company_name_en, s.company_name_zh)}</td>
           <td class="td-muted" style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(s.description || '—')}</td>
           <td class="td-amount">${fmt(s.contract_amount)}</td>
-          <td class="td-amount positive">${fmt(s.total_paid)}</td>
-          <td class="td-amount ${remClass}">${fmt(rem)}</td>
+          <td class="td-amount ${amtClass(s.total_paid, 'expense')}">${fmtExpense(s.total_paid)}</td>
+          <td class="td-amount ${remClass}">${fmtExpense(rem)}</td>
           <td class="td-muted" style="text-align:center">${s.payment_count || 0}</td>
           <td style="min-width:100px">
             <div style="display:flex;align-items:center;gap:8px">
@@ -65,11 +65,11 @@ const Reports = {
         <td class="td-amount">
           ${fmt(stats.reduce((s, r) => s + (parseFloat(r.contract_amount) || 0), 0))}
         </td>
-        <td class="td-amount positive">
-          ${fmt(this.data.total_paid)}
+        <td class="td-amount ${amtClass(this.data.total_paid, 'expense')}">
+          ${fmtExpense(this.data.total_paid)}
         </td>
-        <td class="td-amount negative">
-          ${fmt(this.data.total_remainder)}
+        <td class="td-amount ${amtClass(this.data.total_remainder, 'expense')}">
+          ${fmtExpense(this.data.total_remainder)}
         </td>
         <td class="td-muted" style="text-align:center">
           ${stats.reduce((s, r) => s + (r.payment_count || 0), 0)}
@@ -100,12 +100,12 @@ const Reports = {
       `report_${App.currentProject?.project_code}_${new Date().toISOString().slice(0,10)}.csv`);
   },
 
-  async exportBossPdf() {
+  async previewBossPdf() {
     const p = App.currentProject;
     if (!p) { toast('請先選擇項目', 'warning'); return; }
-    const btn = document.getElementById('btnBossPdf');
-    if (btn) btn.disabled = true;
-    showLoading('正在生成 QS 匯報表 PDF…');
+    const btns = ['btnBossPdf', 'btnDashBossPdf'].map((id) => document.getElementById(id)).filter(Boolean);
+    btns.forEach((btn) => { btn.disabled = true; });
+    showLoading('正在載入預覽…');
     try {
       const r = await fetch(`${API}/reports/boss-pdf/${p.id}`);
       const ct = r.headers.get('Content-Type') || '';
@@ -129,6 +129,46 @@ const Reports = {
       let filename = `QS匯報_${p.project_code}_${new Date().toISOString().slice(0, 10)}.pdf`;
       const m = cd.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
       if (m) filename = decodeURIComponent(m[1].replace(/"/g, ''));
+      const title = `QS 匯報表 · ${p.project_code}`;
+      const verTag = r.headers.get('X-App-Version') || '';
+      const subtitle = `${verTag ? verTag + ' · ' : ''}A4 · 利潤結算 · 糧期 · 分判明細 · 關注事項`;
+      await DocViewer.openBlob(blob, title, {
+        kind: 'pdf',
+        downloadName: filename,
+        subtitle,
+      });
+    } catch (e) {
+      toast(e.message || 'PDF 生成失敗', 'error');
+    } finally {
+      hideLoading();
+      btns.forEach((btn) => { btn.disabled = false; });
+    }
+  },
+
+  async downloadBossDocx() {
+    const p = App.currentProject;
+    if (!p) { toast('請先選擇項目', 'warning'); return; }
+    const btns = ['btnBossDocx', 'btnDashBossDocx'].map((id) => document.getElementById(id)).filter(Boolean);
+    btns.forEach((btn) => { btn.disabled = true; });
+    showLoading('正在生成 Word…');
+    try {
+      const r = await fetch(`${API}/reports/boss-docx/${p.id}`);
+      const ct = r.headers.get('Content-Type') || '';
+      if (!r.ok) {
+        let msg = `匯出失敗（HTTP ${r.status}）`;
+        if (ct.includes('application/json')) {
+          try {
+            const j = await r.json();
+            if (j.error) msg = j.error;
+          } catch (e) { /* ignore */ }
+        }
+        throw new Error(msg);
+      }
+      const blob = await r.blob();
+      const cd = r.headers.get('Content-Disposition') || '';
+      let filename = `QS匯報_${p.project_code}_${new Date().toISOString().slice(0, 10)}.docx`;
+      const m = cd.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+      if (m) filename = decodeURIComponent(m[1].replace(/"/g, ''));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -137,12 +177,12 @@ const Reports = {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast('QS 匯報表 PDF 已下載', 'success');
+      toast('QS 匯報表 Word 已下載', 'success');
     } catch (e) {
-      toast(e.message || 'PDF 生成失敗', 'error');
+      toast(e.message || 'Word 匯出失敗', 'error');
     } finally {
       hideLoading();
-      if (btn) btn.disabled = false;
+      btns.forEach((btn) => { btn.disabled = false; });
     }
-  }
+  },
 };

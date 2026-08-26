@@ -1,4 +1,4 @@
-/* master_list.js — Master List 主檔同步與查詢 */
+/* master_list.js — Master List 報價／標書同步與查詢 */
 const MasterList = {
   offset: 0,
   limit: 50,
@@ -6,18 +6,24 @@ const MasterList = {
   sortDir: 'desc',
   pendingFile: null,
   syncMode: 'preview',
+  _pendingPersonFilter: null,
   _rowMap: {},
+  _quotNoManual: false,
+  _personSuggestTimer: null,
+  _fieldSuggestions: null,
+  _lastDescSite: '',
 
   SORT_COLUMNS: [
-    { key: 'quotation_no', label: '報價編號' },
-    { key: 'quote_date', label: '日期' },
-    { key: 'person_in_charge', label: '項目負責人' },
-    { key: 'doc_type', label: '類型' },
-    { key: 'awarded', label: '中標' },
-    { key: 'site_name', label: '屋苑/地點' },
-    { key: 'description', label: '內容' },
-    { key: 'awarded_amount', label: '中標金額', align: 'right' },
-    { key: 'project_code', label: '配對項目' },
+    { id: 'quotation_no', key: 'quotation_no', label: '報價編號' },
+    { id: 'quote_date', key: 'quote_date', label: '日期' },
+    { id: 'person_in_charge', key: 'person_in_charge', label: '項目負責人' },
+    { id: 'doc_type', key: 'doc_type', label: '類型' },
+    { id: 'awarded', key: 'awarded', label: '中標' },
+    { id: 'site_name', key: 'site_name', label: '屋苑/地點' },
+    { id: 'description', key: 'description', label: '內容' },
+    { id: 'awarded_amount', key: 'awarded_amount', label: '中標金額', align: 'right' },
+    { id: 'project_code', key: 'project_code', label: '配對項目' },
+    { id: 'act', label: '操作', locked: true },
   ],
 
   _itemPath(rowId, suffix = '') {
@@ -36,7 +42,18 @@ const MasterList = {
 
   async load() {
     this._initDefaultYear();
-    await Promise.all([this.loadStats(), this.loadTable()]);
+    await this.loadStats();
+    if (this._pendingPersonFilter) {
+      const person = this._pendingPersonFilter;
+      this._pendingPersonFilter = null;
+      const psel = document.getElementById('masterPersonFilter');
+      if (psel) {
+        psel.value = person;
+        psel.dataset.userPicked = '1';
+      }
+      this.offset = 0;
+    }
+    await this.loadTable();
   },
 
   _initDefaultYear() {
@@ -96,15 +113,17 @@ const MasterList = {
   },
 
   renderTableHead() {
+    if (!this._visibleCols) this._initColPrefs();
     const tr = document.querySelector('#masterTableHead tr');
     if (!tr) return;
-    const cols = this.SORT_COLUMNS.map(col => {
+    const cols = this.SORT_COLUMNS.filter(c => c.key).map(col => {
       const active = this.sortBy === col.key;
       const icon = active ? (this.sortDir === 'asc' ? '▲' : '▼') : '⇅';
       const align = col.align === 'right' ? ' style="text-align:right"' : '';
-      return `<th class="th-sortable${active ? ' th-sort-active' : ''}"${align} onclick="MasterList.setSort('${col.key}')">${col.label}<span class="th-sort-icon">${icon}</span></th>`;
+      return `<th class="th-sortable${active ? ' th-sort-active' : ''}" data-col="${col.id}"${align} onclick="MasterList.setSort('${col.key}')">${col.label}<span class="th-sort-icon">${icon}</span></th>`;
     }).join('');
-    tr.innerHTML = `${cols}<th></th>`;
+    tr.innerHTML = `${cols}<th data-col="act"></th>`;
+    this.applyColVisibility();
   },
 
   setSort(col) {
@@ -210,7 +229,20 @@ const MasterList = {
     this.load();
   },
 
+  _linkedProjectBadge(r) {
+    if (!r.project_id) {
+      return '<span class="badge badge-warning">未配對</span>';
+    }
+    const acc = (r.account_code || '').trim();
+    const mp = (r.mp_contract_code || r.project_code || '').trim();
+    const label = acc && mp && acc.toUpperCase() !== mp.toUpperCase()
+      ? `${acc} · ${mp}`
+      : (acc || mp || '—');
+    return `<span class="sc-no-chip" title="${escHtml(label)}">${escHtml(label)}</span>`;
+  },
+
   async loadTable() {
+    if (!this._visibleCols) this._initColPrefs();
     this.renderTableHead();
     const data = await api('GET', `/master/quotations?${this._filterParams(true)}`);
     if (!data) return;
@@ -230,15 +262,17 @@ const MasterList = {
     }
 
     const tbody = document.getElementById('masterTableBody');
+    const colSpan = this._visibleColCount();
     document.getElementById('masterListCount').textContent =
       `共 ${data.total} 筆（顯示 ${data.items.length} 筆）`;
 
     if (!data.items.length) {
       const emptyMsg = data.total > 0
         ? '此頁沒有資料'
-        : '尚無主檔資料，請上傳 Master List Excel';
-      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">${emptyMsg}</div></td></tr>`;
+        : '尚無報價／標書資料，請上傳 Master List Excel';
+      tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:40px">${emptyMsg}</div></td></tr>`;
       this.renderPagination(data.total);
+      this.applyColVisibility();
       return;
     }
 
@@ -246,30 +280,31 @@ const MasterList = {
       const awardedBadge = r.awarded === '中'
         ? '<span class="badge badge-success">中</span>'
         : '<span class="badge badge-muted">—</span>';
-      const linked = r.project_code
-        ? `<span class="sc-no-chip">${r.project_code}</span>`
-        : '<span class="badge badge-warning">未配對</span>';
+      const linked = this._linkedProjectBadge(r);
       const desc = (r.description || '—').replace(/</g, '&lt;');
       const shortDesc = desc.length > 48 ? desc.slice(0, 48) + '…' : desc;
       const personCell = fmtMasterPerson(r);
       return `<tr>
-        <td class="td-mono">${r.quotation_no}</td>
-        <td class="td-muted">${fmtDate(r.quote_date)}</td>
-        <td>${personCell}</td>
-        <td>${r.doc_type || '—'}</td>
-        <td>${awardedBadge}</td>
-        <td>${r.site_name || '—'}</td>
-        <td class="td-muted" title="${desc}">${shortDesc}</td>
-        <td class="td-amount">${r.awarded_amount ? fmt(r.awarded_amount) : '—'}</td>
-        <td>${linked}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="MasterList.openEdit(${r.id})">編輯</button>
-          <button class="btn btn-secondary btn-sm" onclick="MasterList.openLink(${r.id})">配對</button>
-          ${r.project_id ? `<button class="btn btn-secondary btn-sm" onclick="MasterList.unlink(${r.id})">解除</button>` : ''}
+        <td class="td-mono" data-col="quotation_no">${r.quotation_no}</td>
+        <td class="td-muted" data-col="quote_date">${fmtDate(r.quote_date)}</td>
+        <td data-col="person_in_charge">${personCell}</td>
+        <td data-col="doc_type">${r.doc_type || '—'}</td>
+        <td data-col="awarded">${awardedBadge}</td>
+        <td data-col="site_name">${r.site_name || '—'}</td>
+        <td class="td-muted" data-col="description" title="${desc}">${shortDesc}</td>
+        <td class="td-amount" data-col="awarded_amount">${r.awarded_amount ? fmt(r.awarded_amount) : '—'}</td>
+        <td data-col="project_code">${linked}</td>
+        <td data-col="act">
+          <div class="table-row-actions">
+            <button type="button" class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="MasterList.openEdit(${r.id})">✏️</button>
+            <button type="button" class="btn btn-icon btn-secondary btn-sm" title="配對項目" onclick="MasterList.openLink(${r.id})">🔗</button>
+            ${r.project_id ? `<button type="button" class="btn btn-icon btn-secondary btn-sm" title="解除配對" onclick="MasterList.unlink(${r.id})">🔓</button>` : ''}
+          </div>
         </td>
       </tr>`;
     }).join('');
     this.renderPagination(data.total);
+    this.applyColVisibility();
   },
 
   renderPagination(total) {
@@ -392,6 +427,105 @@ const MasterList = {
     await this.onFileSelected({ target: input });
   },
 
+  _autoLinkYearParam() {
+    const year = this._getEffectiveYear();
+    return year ? Number(year) : null;
+  },
+
+  async openAutoLink() {
+    document.getElementById('masterAutoLinkModal').classList.add('open');
+    document.getElementById('masterAutoLinkLoading').style.display = '';
+    document.getElementById('masterAutoLinkResult').style.display = 'none';
+    document.getElementById('masterAutoLinkFooter').style.display = 'none';
+    this._autoLinkPreview = null;
+    try {
+      const year = this._autoLinkYearParam();
+      const params = year ? `?year=${year}` : '';
+      const data = await api('GET', `/master/auto-link/preview${params}`);
+      this._autoLinkPreview = data;
+      this._renderAutoLinkPreview(data);
+    } catch (e) {
+      document.getElementById('masterAutoLinkLoading').textContent =
+        `無法載入預覽：${e?.message || '未知錯誤'}`;
+    }
+  },
+
+  _renderAutoLinkPreview(data) {
+    document.getElementById('masterAutoLinkLoading').style.display = 'none';
+    document.getElementById('masterAutoLinkResult').style.display = '';
+    document.getElementById('masterAutoLinkFooter').style.display = '';
+    document.getElementById('masterAutoLinkScanned').textContent = data.scanned ?? '—';
+    document.getElementById('masterAutoLinkMatched').textContent = data.matched_count ?? '—';
+    document.getElementById('masterAutoLinkSkipped').textContent = data.skipped_count ?? '—';
+    const scopeEl = document.getElementById('masterAutoLinkScope');
+    scopeEl.textContent = data.source_year
+      ? `範圍：${data.source_year} 年未配對報價／標書`
+      : '範圍：全部年份未配對報價／標書';
+    const rows = data.matched_sample || [];
+    const tableEl = document.getElementById('masterAutoLinkTable');
+    if (!rows.length) {
+      tableEl.innerHTML = '<p class="form-hint" style="padding:12px">找不到可自動配對的項目。</p>';
+    } else {
+      const more = (data.matched_count || 0) > rows.length
+        ? `<p class="form-hint" style="margin-top:8px">僅顯示前 ${rows.length} 筆，共 ${data.matched_count} 筆可配對。</p>`
+        : '';
+      tableEl.innerHTML = `${more}<div class="table-wrap" style="max-height:320px;overflow:auto"><table class="master-preview-table"><thead><tr>
+        <th>報價編號</th><th>屋苑</th><th>配對項目</th><th>比對方式</th>
+      </tr></thead><tbody>${rows.map(r => `<tr>
+        <td>${escHtml(r.quotation_no)}</td>
+        <td>${escHtml(r.site_name || '—')}</td>
+        <td>${escHtml(r.project_code || '—')} — ${escHtml(r.project_name || '—')}</td>
+        <td>${escHtml(r.reason_label || r.reason || '—')}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+    }
+    const skipHint = document.getElementById('masterAutoLinkSkippedHint');
+    if (data.skipped_count > 0) {
+      skipHint.style.display = '';
+      const samples = (data.skipped_sample || []).slice(0, 5).map(s =>
+        `${s.quotation_no}（${s.reason_label || s.reason}）`,
+      ).join('、');
+      skipHint.textContent = samples
+        ? `略過 ${data.skipped_count} 筆，例如：${samples}${data.skipped_count > 5 ? '…' : ''}`
+        : `略過 ${data.skipped_count} 筆（找不到唯一相符項目）`;
+    } else {
+      skipHint.style.display = 'none';
+    }
+    const btn = document.getElementById('masterAutoLinkConfirmBtn');
+    btn.disabled = !(data.matched_count > 0);
+    btn.textContent = data.matched_count > 0
+      ? `確認配對 ${data.matched_count} 筆`
+      : '無可配對項目';
+  },
+
+  closeAutoLinkModal() {
+    document.getElementById('masterAutoLinkModal').classList.remove('open');
+    this._autoLinkPreview = null;
+  },
+
+  async confirmAutoLink() {
+    const preview = this._autoLinkPreview;
+    if (!preview?.matched_count) {
+      toast('沒有可配對的項目', 'warning');
+      return;
+    }
+    if (!confirm(`確定自動配對 ${preview.matched_count} 筆 Master List 至工程項目？`)) return;
+    const btn = document.getElementById('masterAutoLinkConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = '配對中…';
+    try {
+      const year = this._autoLinkYearParam();
+      const result = await api('POST', '/master/auto-link', { year });
+      toast(`已配對 ${result.linked || 0} 筆`, 'success');
+      this.closeAutoLinkModal();
+      await this.load();
+      if (typeof App !== 'undefined' && App.loadProjects) await App.loadProjects();
+    } catch (e) {
+      toast(e?.message || '配對失敗', 'error');
+      btn.disabled = false;
+      btn.textContent = `確認配對 ${preview.matched_count} 筆`;
+    }
+  },
+
   async openLink(rowId) {
     const row = await this._fetchRow(rowId);
     if (!row) return;
@@ -406,6 +540,12 @@ const MasterList = {
       opt.textContent = `${p.project_code} — ${projectNameOneLine(p, 36)}`;
       sel.appendChild(opt);
     });
+    try {
+      const suggest = await api('GET', `/master/item/suggest?quotation_no=${encodeURIComponent(row.quotation_no)}`, null, { silent: true });
+      if (suggest?.id) {
+        sel.value = String(suggest.id);
+      }
+    } catch { /* ignore */ }
     document.getElementById('masterLinkModal').classList.add('open');
   },
 
@@ -423,7 +563,7 @@ const MasterList = {
     await api('POST', this._itemPath(rowId, '/link'), {
       project_id: Number(projectId),
     });
-    toast('已配對項目（已同步報價編號與負責人）', 'success');
+    toast('已配對項目（同一 N23／MP 項目可配多筆報價）', 'success');
     this.closeLinkModal();
     await this.load();
     if (typeof App !== 'undefined' && App.loadProjects) await App.loadProjects();
@@ -438,36 +578,303 @@ const MasterList = {
     await this.load();
   },
 
-  async openEdit(rowId) {
-    const row = await this._fetchRow(rowId);
-    if (!row) return;
-    const qno = row.quotation_no;
+  _isAddMode() {
+    return !document.getElementById('masterEditRowId')?.value;
+  },
+
+  _personCodeFromName(name) {
+    const staff = StaffRoster.findByName(name);
+    if (staff?.code) return String(staff.code).trim().toLowerCase();
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toLowerCase();
+    }
+    if (parts.length === 1 && parts[0].length >= 2) {
+      return parts[0].slice(0, 2).toLowerCase();
+    }
+    return '';
+  },
+
+  _quotNoHintText(docType, year, personCode, seq) {
+    const yy = String((year || new Date().getFullYear()) % 100).padStart(2, '0');
+    if (docType === '合約') return '合約請手動輸入完整編號';
+    const letter = docType === '標書' ? 'T' : 'Q';
+    const suffix = personCode || '負責人縮寫';
+    const seqN = seq != null && Number.isFinite(Number(seq)) ? Number(seq) : null;
+    const seqLabel = seqN != null && seqN >= 1000 ? '4 位序號' : '3 位序號';
+    const seqSample = seqN != null ? _fmtSeqSample(seqN) : 'XXX';
+    const example = seqN != null && personCode
+      ? `MS/${letter}${seqSample}/${yy}/${personCode}`
+      : `MS/${letter}${seqSample}/${yy}/${suffix}`;
+    return `${example} · ${seqLabel}（同類型＋年份自動遞增；手改後可按 ↻ 自動編號）`;
+
+    function _fmtSeqSample(n) {
+      return n >= 1000 ? String(n) : String(n).padStart(3, '0');
+    }
+  },
+
+  _syncQuotNoUi(mode) {
+    const quotEl = document.getElementById('masterEditQuotDisplay');
+    const refreshBtn = document.getElementById('masterEditQuotRefreshBtn');
+    const hint = document.getElementById('masterEditQuotHint');
+    if (!quotEl) return;
+    const isAdd = mode === 'add';
+    quotEl.readOnly = !isAdd;
+    if (refreshBtn) refreshBtn.hidden = !isAdd;
+    if (!isAdd && hint) hint.textContent = '';
+  },
+
+  onQuotNoInput() {
+    if (this._isAddMode()) this._quotNoManual = true;
+  },
+
+  onEditDateChange() {
+    this.refreshQuotNoSuggest();
+  },
+
+  onEditPersonChange() {
+    this.refreshQuotNoSuggest();
+  },
+
+  onEditPersonInput() {
+    clearTimeout(this._personSuggestTimer);
+    this._personSuggestTimer = setTimeout(() => this.refreshQuotNoSuggest(), 280);
+  },
+
+  async refreshQuotNoSuggest(force = false) {
+    if (!this._isAddMode()) return;
+    if (this._quotNoManual && !force) return;
+
+    const docType = document.getElementById('masterEditDocType')?.value || '報價';
+    const date = document.getElementById('masterEditDate')?.value;
+    const year = date ? parseInt(date.slice(0, 4), 10) : new Date().getFullYear();
+    const person = document.getElementById('masterEditPersonName')?.value?.trim() || '';
+    const personCode = this._personCodeFromName(person);
+    const hint = document.getElementById('masterEditQuotHint');
+    const quotEl = document.getElementById('masterEditQuotDisplay');
+
+    if (docType === '合約') {
+      if (hint) hint.textContent = this._quotNoHintText(docType, year, personCode);
+      return;
+    }
+
+    const params = new URLSearchParams({ doc_type: docType, year: String(year) });
+    if (personCode) params.set('person_code', personCode);
+
+    try {
+      const data = await api('GET', `/master/quotations/next-no?${params}`);
+      if (data?.quotation_no && quotEl) {
+        quotEl.value = data.quotation_no;
+        if (hint) {
+          hint.textContent = this._quotNoHintText(
+            docType, year, data.person_code || personCode, data.seq
+          );
+        }
+      }
+    } catch (e) {
+      if (hint) hint.textContent = this._quotNoHintText(docType, year, personCode);
+    }
+    if (force) this._quotNoManual = false;
+  },
+
+  async ensureFieldSuggestions(force = false) {
+    if (!force && this._fieldSuggestions) return this._fieldSuggestions;
+    try {
+      this._fieldSuggestions = await api('GET', '/master/field-suggestions', null, { silent: true });
+    } catch {
+      this._fieldSuggestions = { site_names: [], client_names: [] };
+    }
+    return this._fieldSuggestions;
+  },
+
+  _fillFieldDatalist(listId, items) {
+    const dl = document.getElementById(listId);
+    if (!dl) return;
+    dl.innerHTML = (items || []).map((row) => {
+      const val = (row?.val || row?.value || '').trim();
+      if (!val) return '';
+      const display = row?.cnt != null ? `${val} (${row.cnt})` : val;
+      // 只用 value 一行顯示；Chrome 若 value≠label 會重複兩行
+      return `<option value="${escHtml(display)}"></option>`;
+    }).join('');
+  },
+
+  _normalizeFieldPick(raw) {
+    return (raw || '').trim().replace(/\s\(\d+\)$/, '').trim();
+  },
+
+  _normalizeSiteInput() {
+    const el = document.getElementById('masterEditSite');
+    if (!el) return;
+    const cleaned = this._normalizeFieldPick(el.value);
+    if (cleaned !== el.value) el.value = cleaned;
+  },
+
+  _normalizeClientInput() {
+    const el = document.getElementById('masterEditClient');
+    if (!el) return;
+    const cleaned = this._normalizeFieldPick(el.value);
+    if (cleaned !== el.value) el.value = cleaned;
+  },
+
+  _normalizeSubconType(val) {
+    const v = (val || '').trim();
+    if (v === '外判' || v === '是') return '外判';
+    return '-';
+  },
+
+  async bindFieldSuggestions(force = false) {
+    const data = await this.ensureFieldSuggestions(force);
+    this._fillFieldDatalist('masterSiteSuggestions', data.site_names);
+    this._fillFieldDatalist('masterClientSuggestions', data.client_names);
+  },
+
+  _escRe(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  },
+
+  _stripSiteDescPrefix(desc, site) {
+    const d = (desc || '').trim();
+    const s = (site || '').trim();
+    if (!s || !d) return d;
+    const re = new RegExp(`^${this._escRe(s)}\\s*-\\s*`, 'u');
+    return d.replace(re, '').trimStart();
+  },
+
+  /** 內容欄：依 Excel 慣例加上「屋苑/地點 - 」前綴 */
+  _syncDescSitePrefix(force = false) {
+    const site = (document.getElementById('masterEditSite')?.value || '').trim();
+    const descEl = document.getElementById('masterEditDesc');
+    if (!descEl) return;
+    const prevSite = this._lastDescSite || '';
+    if (!force && site === prevSite) return;
+
+    let body = descEl.value;
+    if (prevSite) {
+      body = this._stripSiteDescPrefix(body, prevSite);
+    } else if (site && body.includes(' - ')) {
+      body = body.slice(body.indexOf(' - ') + 3).trimStart();
+    } else if (site) {
+      body = this._stripSiteDescPrefix(body, site);
+    }
+
+    if (!site) {
+      descEl.value = body;
+    } else {
+      descEl.value = body ? `${site} - ${body}` : `${site} - `;
+    }
+    this._lastDescSite = site;
+  },
+
+  onEditSiteChange() {
+    this._normalizeSiteInput();
+    this._syncDescSitePrefix(true);
+  },
+
+  onEditClientChange() {
+    this._normalizeClientInput();
+  },
+
+  async openAdd() {
     await StaffRoster.load(true);
+    await this.bindFieldSuggestions();
     const dl = document.getElementById('masterPersonSuggestions');
     if (dl) {
       dl.innerHTML = StaffRoster.list
         .filter(s => s.is_active)
         .map(s => {
-          const name = s.name_en || s.name_zh;
-          return name ? `<option value="${name.replace(/"/g, '&quot;')}">` : '';
+          const name = (s.name_en || s.name_zh || '').trim();
+          if (!name) return '';
+          const code = (s.code || '').trim();
+          const label = code ? `${name} (${code})` : name;
+          return `<option value="${name.replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
         })
         .join('');
     }
+    document.getElementById('masterEditModalTitle').textContent = '新增報價／標書';
+    document.getElementById('masterEditRowId').value = '';
+    document.getElementById('masterEditQuotationNo').value = '';
+    this._quotNoManual = false;
+    this._syncQuotNoUi('add');
+    const quotEl = document.getElementById('masterEditQuotDisplay');
+    quotEl.value = '';
+    quotEl.placeholder = '先選類型與負責人，將自動建議編號';
+    document.getElementById('masterEditDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('masterEditDocType').value = '報價';
+    document.getElementById('masterEditAwarded').value = '';
+    document.getElementById('masterEditPersonName').value = '';
+    this._lastDescSite = '';
+    document.getElementById('masterEditSite').value = '';
+    MasterTradeCats.clearTradeFields();
+    await MasterTradeCats.ensureLoaded();
+    document.getElementById('masterEditClient').value = '';
+    document.getElementById('masterEditDesc').value = '';
+    document.getElementById('masterEditQuoted').value = '';
+    document.getElementById('masterEditAwardedAmt').value = '';
+    document.getElementById('masterEditMargin').value = '';
+    document.getElementById('masterEditSubconType').value = '-';
+    document.getElementById('masterEditSubconCo').value = '';
+    document.getElementById('masterEditSubconCo').readOnly = false;
+    document.getElementById('masterEditSubconAmt').value = '';
+    document.getElementById('masterEditSubconAmt').readOnly = false;
+    document.getElementById('masterEditContractDays').value = '';
+    document.getElementById('masterEditStartDate').value = '';
+    document.getElementById('masterEditCompletionDate').value = '';
+    document.getElementById('masterEditBidSignoff').checked = false;
+    document.getElementById('masterEditPartnerForm').checked = false;
+    document.getElementById('masterEditContractSignoff').checked = false;
+    const hint = document.getElementById('masterEditSubconHint');
+    if (hint) hint.style.display = 'none';
+    const panel = document.getElementById('masterFinancePanel');
+    if (panel) panel.style.display = 'none';
+    this._bindChecklistVisibility();
+    this.recalcProfit();
+    await this.refreshQuotNoSuggest(true);
+    document.getElementById('masterEditModal').classList.add('open');
+  },
+
+  async openEdit(rowId) {
+    const row = await this._fetchRow(rowId);
+    if (!row) return;
+    const qno = row.quotation_no;
+    await StaffRoster.load(true);
+    await this.bindFieldSuggestions();
+    const dl = document.getElementById('masterPersonSuggestions');
+    if (dl) {
+      dl.innerHTML = StaffRoster.list
+        .filter(s => s.is_active)
+        .map(s => {
+          const name = (s.name_en || s.name_zh || '').trim();
+          if (!name) return '';
+          const code = (s.code || '').trim();
+          const label = code ? `${name} (${code})` : name;
+          return `<option value="${name.replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
+        })
+        .join('');
+    }
+    document.getElementById('masterEditModalTitle').textContent = '編輯報價／標書';
+    this._syncQuotNoUi('edit');
     document.getElementById('masterEditPersonName').value = row.person_in_charge || '';
     document.getElementById('masterEditRowId').value = rowId;
     document.getElementById('masterEditQuotationNo').value = qno;
-    document.getElementById('masterEditQuotDisplay').value = qno;
+    const quotEl = document.getElementById('masterEditQuotDisplay');
+    quotEl.value = qno;
+    quotEl.placeholder = '';
     document.getElementById('masterEditDate').value = row.quote_date || '';
     document.getElementById('masterEditDocType').value = row.doc_type || '報價';
     document.getElementById('masterEditAwarded').value = row.awarded || '';
     document.getElementById('masterEditSite').value = row.site_name || '';
-    document.getElementById('masterEditTrade').value = row.trade_category || '';
+    this._lastDescSite = (row.site_name || '').trim();
+    await MasterTradeCats.setTradeFieldsFromRow(row);
     document.getElementById('masterEditClient').value = row.client_name || '';
     document.getElementById('masterEditDesc').value = row.description || '';
+    if (this._lastDescSite && !(row.description || '').trim()) {
+      this._syncDescSitePrefix(true);
+    }
     document.getElementById('masterEditQuoted').value = row.quoted_amount ?? '';
     document.getElementById('masterEditAwardedAmt').value = row.awarded_amount ?? '';
     document.getElementById('masterEditMargin').value = row.margin_pct ?? '';
-    document.getElementById('masterEditSubconType').value = row.subcon_type || '';
+    document.getElementById('masterEditSubconType').value = this._normalizeSubconType(row.subcon_type);
     document.getElementById('masterEditSubconCo').value = row.subcon_company || '';
     document.getElementById('masterEditSubconCo').readOnly = false;
     document.getElementById('masterEditSubconAmt').value = row.subcon_amount ?? '';
@@ -501,6 +908,10 @@ const MasterList = {
 
   onEditDocTypeChange() {
     this._bindChecklistVisibility();
+    if (this._isAddMode()) {
+      this._quotNoManual = false;
+      this.refreshQuotNoSuggest(true);
+    }
   },
 
   _bindChecklistVisibility() {
@@ -710,14 +1121,16 @@ const MasterList = {
       const n = parseInt(v, 10);
       return Number.isFinite(n) ? n : null;
     };
+    this._normalizeSiteInput();
+    this._normalizeClientInput();
     const body = {
       quote_date: document.getElementById('masterEditDate').value || null,
       doc_type: document.getElementById('masterEditDocType').value,
       awarded: document.getElementById('masterEditAwarded').value || null,
       person_in_charge: document.getElementById('masterEditPersonName').value.trim() || null,
-      site_name: document.getElementById('masterEditSite').value.trim() || null,
-      trade_category: document.getElementById('masterEditTrade').value.trim() || null,
-      client_name: document.getElementById('masterEditClient').value.trim() || null,
+      site_name: this._normalizeFieldPick(document.getElementById('masterEditSite').value) || null,
+      ...MasterTradeCats.readTradeFields(),
+      client_name: this._normalizeFieldPick(document.getElementById('masterEditClient').value) || null,
       description: document.getElementById('masterEditDesc').value.trim() || null,
       quoted_amount: num('masterEditQuoted'),
       awarded_amount: num('masterEditAwardedAmt'),
@@ -726,18 +1139,44 @@ const MasterList = {
       start_date: document.getElementById('masterEditStartDate').value || null,
       completion_date: document.getElementById('masterEditCompletionDate').value || null,
       checklist_json: this._buildChecklistPayload(),
-      subcon_type: document.getElementById('masterEditSubconType').value.trim() || null,
+      subcon_type: this._normalizeSubconType(document.getElementById('masterEditSubconType').value),
       subcon_company: document.getElementById('masterEditSubconCo').value.trim() || null,
       subcon_amount: num('masterEditSubconAmt'),
       profit_amount: num('masterEditProfitAmt'),
       profit_pct: num('masterEditProfitPct'),
     };
-    await api('PUT', this._itemPath(rowId), body);
-    toast('Master List 已更新', 'success');
+    if (!rowId) {
+      const qno = document.getElementById('masterEditQuotDisplay').value.trim();
+      if (!qno) {
+        toast('請填寫報價編號', 'warning');
+        return;
+      }
+      body.quotation_no = qno;
+      await api('POST', '/master/item', body);
+      toast('Master List 已新增', 'success');
+    } else {
+      await api('PUT', this._itemPath(rowId), body);
+      toast('Master List 已更新', 'success');
+    }
+    this._fieldSuggestions = null;
     this.closeEditModal();
     await this.load();
+    if (typeof StaffRoster !== 'undefined' && StaffRoster._quotPerson
+        && document.getElementById('staffQuotModal')?.classList.contains('open')) {
+      await StaffRoster.loadQuotations();
+      await StaffRoster.refresh();
+    }
   },
 };
+
+ColPicker.attach(MasterList, {
+  columnsKey: 'SORT_COLUMNS',
+  storageKey: 'qs_master_visible_cols',
+  tableSelector: '#page-master-list .table-wrap table',
+  wrapId: 'masterColPickerWrap',
+  panelId: 'masterColPickerPanel',
+  hostName: 'MasterList',
+});
 
 function fmtDateTime(s) {
   if (!s) return '—';

@@ -15,6 +15,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
+    KeepTogether,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -25,9 +27,15 @@ from reportlab.platypus import (
 from config import BASE_DIR, DATA_DIR
 
 FONT = 'NotoSansTC'
+FONT_BOLD = 'NotoSansTC-Bold'
 _FONT_READY = False
+_FONT_BOLD_READY = False
 PAGE_W, PAGE_H = A4
 MARGIN = 15 * mm
+CONTENT_W = PAGE_W - 2 * MARGIN  # 180mm · 與糧期表一致
+TOP_LOGO_ZONE = 14 * mm          # 與 sc_fac_pdf 頁首 LOGO 區一致
+
+_HDR = colors.HexColor('#334155')
 
 STATUS_LABELS = {
     'Active': '進行中',
@@ -75,29 +83,76 @@ def _resolve_font_path() -> str:
     )
 
 
+def _resolve_bold_font_path() -> str | None:
+    win = os.environ.get('WINDIR', r'C:\Windows')
+    candidates = [
+        os.path.join(win, 'Fonts', 'msjhbd.ttc'),
+        os.path.join(BASE_DIR, 'assets', 'fonts', 'NotoSansCJKtc-Bold.ttf'),
+        os.path.join(DATA_DIR, 'fonts', 'NotoSansCJKtc-Bold.ttf'),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def _register_tt_font(name: str, path: str) -> None:
+    if path.lower().endswith('.ttc'):
+        pdfmetrics.registerFont(TTFont(name, path, subfontIndex=0))
+    else:
+        pdfmetrics.registerFont(TTFont(name, path))
+
+
 def ensure_pdf_font() -> str:
     """註冊並嵌入繁體中文字型（避免 MSung CID 亂碼）"""
     global _FONT_READY, FONT
     if _FONT_READY:
         return FONT
     path = _resolve_font_path()
-    if path.lower().endswith('.ttc'):
-        pdfmetrics.registerFont(TTFont(FONT, path, subfontIndex=0))
-    else:
-        pdfmetrics.registerFont(TTFont(FONT, path))
+    _register_tt_font(FONT, path)
     _FONT_READY = True
     return FONT
 
 
+def ensure_pdf_font_bold() -> str:
+    """P1 粗體列等：優先微軟正黑體 Bold；無則回退 Regular"""
+    global _FONT_BOLD_READY, FONT_BOLD
+    ensure_pdf_font()
+    if _FONT_BOLD_READY:
+        return FONT_BOLD
+    bold_path = _resolve_bold_font_path()
+    if bold_path:
+        _register_tt_font(FONT_BOLD, bold_path)
+    else:
+        FONT_BOLD = FONT
+    _FONT_BOLD_READY = True
+    return FONT_BOLD
+
+
 def _money(val) -> str:
+    """含 HK$ 金額（內文／非表格式）"""
     try:
         n = float(val or 0)
     except (TypeError, ValueError):
         return '—'
     if n == 0:
         return 'HK$0.00'
-    sign = '-' if n < 0 else ''
-    return f'{sign}HK${abs(n):,.2f}'
+    if n < 0:
+        return f'(HK${abs(n):,.2f})'
+    return f'HK${n:,.2f}'
+
+
+def _money_num(val) -> str:
+    """金額數字（不含 HK$ · 表頭標示幣別 · 負數用括號）"""
+    try:
+        n = float(val or 0)
+    except (TypeError, ValueError):
+        return '—'
+    if n == 0:
+        return '0.00'
+    if n < 0:
+        return f'({abs(n):,.2f})'
+    return f'{n:,.2f}'
 
 
 def _pct(val) -> str:
@@ -179,7 +234,17 @@ def _styles(font_name: str):
         'cell_w': ParagraphStyle(
             'cell_w', fontName=font_name, fontSize=8, leading=10, textColor=colors.white,
         ),
+        'cell_wh': ParagraphStyle(
+            'cell_wh', fontName=font_name, fontSize=8, leading=10, alignment=TA_RIGHT,
+            textColor=colors.white,
+        ),
     }
+
+
+def _cols_mm(ratios: list[float]) -> list:
+    """依比例分配欄寬，總闊 = CONTENT_W"""
+    total = sum(ratios)
+    return [CONTENT_W * r / total for r in ratios]
 
 
 def _p(text, styles, style='cell'):
@@ -188,19 +253,35 @@ def _p(text, styles, style='cell'):
     return Paragraph(_esc(text), styles[style])
 
 
-def _table_row(cells, styles, styles_map=None):
-    """表格儲存格一律用 Paragraph，確保中文正確嵌入"""
+def _table_row(cells, styles, styles_map=None, plain_cols=None):
+    """表格儲存格用 Paragraph；plain_cols 內欄位用純文字避免金額換行"""
     styles_map = styles_map or {}
-    return [_p(c, styles, styles_map.get(i, 'cell')) for i, c in enumerate(cells)]
+    plain_cols = plain_cols or set()
+    row = []
+    for i, c in enumerate(cells):
+        if i in plain_cols:
+            row.append(c)
+        else:
+            row.append(_p(c, styles, styles_map.get(i, 'cell')))
+    return row
+
+
+def _company_primary(sc: dict) -> str:
+    """公司名稱：中文優先，無則英文"""
+    zh = (sc.get('company_name_zh') or '').strip()
+    en = (sc.get('company_name_en') or '').strip()
+    return zh or en
 
 
 def _header_footer(canvas, doc, company_name: str, project_code: str, font_name: str):
+    from sc_fac_pdf import _draw_logo, _logo_path
+    _draw_logo(canvas, doc)
     canvas.saveState()
     canvas.setFont(font_name, 8)
     canvas.setFillColor(colors.HexColor('#94a3b8'))
     canvas.drawString(MARGIN, 10 * mm, company_name or 'Mepork Engineering Services Limited')
     canvas.drawRightString(PAGE_W - MARGIN, 10 * mm, f'第 {doc.page} 頁')
-    if doc.page == 1:
+    if doc.page == 1 and not _logo_path():
         canvas.setStrokeColor(colors.HexColor('#1e3a5f'))
         canvas.setLineWidth(1.2)
         canvas.line(MARGIN, PAGE_H - 12 * mm, PAGE_W - MARGIN, PAGE_H - 12 * mm)
@@ -241,7 +322,7 @@ def _attention_items(summary: dict, sc_list: list) -> list[str]:
             continue
         pct = paid / ca * 100
         if rem > 50000 and pct < 40:
-            risky.append((rem, sc.get('sc_no'), _plain(sc.get('company_name_en') or sc.get('company_name_zh'), 24)))
+            risky.append((rem, sc.get('sc_no'), _plain(_company_primary(sc), 24)))
     risky.sort(reverse=True)
     for rem, sc_no, company in risky[:3]:
         items.append(f'判項 {sc_no}（{company}）未付 {_money(rem)}，付款進度偏慢。')
@@ -261,10 +342,58 @@ def _category_rows(sc_list: list) -> list[list[str]]:
         paid = float(sc.get('total_paid') or 0)
         cats[cat][0] += ca
         cats[cat][1] += paid
-    rows = [['類別', '判項金額 (J)', '累計已付', '未付餘額']]
+    rows = [['類別', '判項金額 (J) (HK$)', '累計已付 (HK$)', '未付餘額 (HK$)']]
     for cat, (ca, paid) in cats.items():
-        rows.append([cat, _money(ca), _money(paid), _money(ca - paid)])
+        rows.append([cat, _money_num(ca), _money_num(paid), _money_num(ca - paid)])
     return rows
+
+
+def _build_ip_period_table(ip_items: list, ip_totals: dict, styles, font_name: str):
+    """糧期：摘要（三組 x2 欄）+ 明細（同一表格 · 全寬 CONTENT_W）"""
+    col_w = _cols_mm([18, 37, 30, 28, 32, 35])
+    income = _money_num(ip_totals.get('total_income'))
+    expend = _money_num(-abs(float(ip_totals.get('total_expenditure') or 0)))
+    advance = _money_num(ip_totals.get('advance'))
+    rows = [
+        _table_row(['總收入 (HK$)', '', '總支出 (HK$)', '', '墊支 (HK$)', ''],
+                   styles, {0: 'cell_w', 2: 'cell_w', 4: 'cell_w'}),
+        _table_row([income, '', expend, '', advance, ''], styles, {0: 'cell', 2: 'cell', 4: 'cell'}),
+    ]
+    if ip_items:
+        ip_hdr = ['期數', '申請日期', '申請金額 (HK$)', '累計%', '批款收入 (HK$)', '分包支出 (HK$)']
+        rows.append(_table_row(ip_hdr, styles, {i: 'cell_w' for i in range(6)}))
+        for it in ip_items:
+            rows.append(_table_row([
+                _plain(it.get('ip_no'), 8),
+                _plain(it.get('applied_date'), 12),
+                _money_num(it.get('application_amount')),
+                _pct(it.get('application_pct')),
+                _money_num(it.get('certified_income')),
+                _money_num(it.get('subcon_paid')),
+            ], styles, {2: 'cell_r', 3: 'cell_r', 4: 'cell_r', 5: 'cell_r'},
+               plain_cols={3}))
+    tbl = Table(rows, colWidths=col_w, repeatRows=3 if ip_items else 2)
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), _HDR),
+        ('ALIGN', (0, 0), (-1, 1), 'CENTER'),
+        ('SPAN', (0, 0), (1, 0)), ('SPAN', (2, 0), (3, 0)), ('SPAN', (4, 0), (5, 0)),
+        ('SPAN', (0, 1), (1, 1)), ('SPAN', (2, 1), (3, 1)), ('SPAN', (4, 1), (5, 1)),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('FONTNAME', (0, 1), (-1, 1), font_name),
+        ('FONTSIZE', (0, 1), (-1, 1), 8),
+    ]
+    if ip_items:
+        style_cmds.extend([
+            ('BACKGROUND', (0, 2), (-1, 2), _HDR),
+            ('ALIGN', (2, 2), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 2), (-1, -1), font_name),
+            ('FONTSIZE', (0, 2), (-1, -1), 8),
+        ])
+    tbl.setStyle(TableStyle(style_cmds))
+    return tbl
 
 
 def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
@@ -294,15 +423,13 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
         pagesize=A4,
         leftMargin=MARGIN,
         rightMargin=MARGIN,
-        topMargin=18 * mm,
+        topMargin=MARGIN + TOP_LOGO_ZONE,
         bottomMargin=16 * mm,
         title=f'QS匯報_{code}',
         author=company,
     )
 
     story = []
-
-    # ── 封面標題 ──
     story.append(Paragraph('QS 地盤財務匯報', styles['title']))
     story.append(Paragraph('Quantity Surveying · Site Financial Summary', styles['subtitle']))
     story.append(Spacer(1, 4 * mm))
@@ -310,14 +437,14 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
     meta_rows = [
         _table_row(['項目代碼', code, '報告日期', report_date], styles,
                    {1: 'cell', 3: 'cell'}),
-        _table_row(['項目名稱（英）', _plain(en or '—', 80), '客戶', _plain(project.get('client'))], styles),
-        _table_row(['項目名稱（中）', _plain(zh or '—', 80), '主承建商', _plain(project.get('main_contractor'), 40)], styles),
+        _table_row(['項目名稱（中）', _plain(zh or '—', 80), '客戶', _plain(project.get('client'))], styles),
+        _table_row(['項目名稱（英）', _plain(en or '—', 80), '主承建商', _plain(project.get('main_contractor'), 40)], styles),
         _table_row([
             '工期', _plain(project.get('site_period_text') or ip.get('site_period_text'), 50),
             '狀態', STATUS_LABELS.get(project.get('status'), project.get('status') or '—'),
         ], styles),
     ]
-    meta = Table(meta_rows, colWidths=[28 * mm, 62 * mm, 28 * mm, 52 * mm])
+    meta = Table(meta_rows, colWidths=_cols_mm([28, 62, 28, 52]))
     meta.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f1f5f9')),
         ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#f1f5f9')),
@@ -326,8 +453,8 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
     ]))
     story.append(meta)
@@ -342,23 +469,22 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
             _money(calc.get('profit_e')),
             _pct(calc.get('profit_rate')),
         ], styles, {0: 'cell', 1: 'cell', 2: 'cell'}),
-        _table_row(['累計已付', '未付餘額', '付款進度 / 墊支'], styles, {0: 'cell_w', 1: 'cell_w', 2: 'cell_w'}),
+        _table_row(['累計已付', '未付餘額', '付款進度 / 墊支'], styles),
         _table_row([
             _money(total_paid), _money(total_rem),
             f'{_pct(pay_progress)} / {_money(ip_totals.get("advance"))}',
         ], styles),
-    ], colWidths=[56 * mm, 56 * mm, 56 * mm])
+    ], colWidths=_cols_mm([1, 1, 1]))
     profit_color = colors.HexColor('#dc2626') if float(calc.get('profit_e') or 0) < 0 else colors.HexColor('#059669')
     kpi.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a5f')),
-        ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#1e3a5f')),
+        ('BACKGROUND', (0, 0), (-1, 0), _HDR),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('TEXTCOLOR', (1, 1), (1, 1), profit_color),
         ('TEXTCOLOR', (2, 1), (2, 1), profit_color),
         ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
     story.append(kpi)
     story.append(Spacer(1, 3 * mm))
@@ -379,92 +505,57 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
     story.append(Paragraph('三、合約金額結算 (A–E)', styles['h2']))
     calc_rows = [
         _table_row(['項目', '金額 (HK$)'], styles, {0: 'cell_w', 1: 'cell_w'}),
-        _table_row(['(A) 承建金額', _money(calc.get('main_contract_amount'))], styles, {1: 'cell_r'}),
-        _table_row(['(B) 分判及代支小計', _money(calc.get('sub_total_b'))], styles, {1: 'cell_r'}),
-        _table_row(['(C) 除外合約收費項目', _money(calc.get('excluded_c'))], styles, {1: 'cell_r'}),
-        _table_row(['財務會作調撥（人工分攤）', _money(calc.get('labour_allocation'))], styles, {1: 'cell_r'}),
-        _table_row(['(D) = (B)+(C)+調撥', _money(calc.get('total_d'))], styles, {1: 'cell_r'}),
-        _table_row(['(E) = (A)−(D) 預計利潤', _money(calc.get('profit_e'))], styles, {1: 'cell_r'}),
+        _table_row(['(A) 承建金額', _money_num(calc.get('main_contract_amount'))], styles, {1: 'cell_r'}),
+        _table_row(['(B) 分判及代支小計', _money_num(calc.get('sub_total_b'))], styles, {1: 'cell_r'}),
+        _table_row(['(C) 除外合約收費項目', _money_num(calc.get('excluded_c'))], styles, {1: 'cell_r'}),
+        _table_row(['財務會作調撥（人工分攤）', _money_num(calc.get('labour_allocation'))], styles, {1: 'cell_r'}),
+        _table_row(['(D) = (B)+(C)+調撥', _money_num(calc.get('total_d'))], styles, {1: 'cell_r'}),
+        _table_row(['(E) = (A) - (D) 預計利潤', _money_num(calc.get('profit_e'))], styles, {1: 'cell_r'}),
         _table_row(['預計利潤率', _pct(calc.get('profit_rate'))], styles, {1: 'cell_r'}),
     ]
-    calc_tbl = Table(calc_rows, colWidths=[110 * mm, 58 * mm])
+    calc_tbl = Table(calc_rows, colWidths=_cols_mm([110, 58]))
     calc_tbl.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#334155')),
+        ('BACKGROUND', (0, 0), (-1, 0), _HDR),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('BACKGROUND', (0, 5), (-1, 5), colors.HexColor('#f8fafc')),
-        ('BACKGROUND', (0, 6), (-1, 7), colors.HexColor('#eff6ff')),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    story.append(calc_tbl)
-    story.append(Spacer(1, 5 * mm))
-
-    # ── 費用類別 ──
-    story.append(Paragraph('四、費用類別概覽', styles['h2']))
-    cat_tbl = Table(
-        [_table_row(r, styles, {0: 'cell_w', 1: 'cell_r', 2: 'cell_r', 3: 'cell_r'}) if i == 0
-         else _table_row(r, styles, {1: 'cell_r', 2: 'cell_r', 3: 'cell_r'})
-         for i, r in enumerate(_category_rows(sc_list))],
-        colWidths=[35 * mm, 45 * mm, 45 * mm, 43 * mm],
-    )
-    cat_tbl.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#475569')),
-        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (1, 1), (1, -1), font_name),
+        ('FONTSIZE', (1, 1), (1, -1), 8),
         ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
     ]))
-    story.append(cat_tbl)
+    story.append(calc_tbl)
     story.append(Spacer(1, 5 * mm))
 
-    # ── 糧期狀況 ──
-    story.append(Paragraph('五、地盤糧期狀況', styles['h2']))
-    ip_sum = Table([
-        _table_row(['總收入', '總支出', '墊支'], styles, {0: 'cell_w', 1: 'cell_w', 2: 'cell_w'}),
-        _table_row([
-            _money(ip_totals.get('total_income')),
-            _money(-abs(float(ip_totals.get('total_expenditure') or 0))),
-            _money(ip_totals.get('advance')),
-        ], styles),
-    ], colWidths=[56 * mm, 56 * mm, 56 * mm])
-    ip_sum.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a5f')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+    # ── 費用類別（第一頁 · 標題+表格不拆頁）──
+    cat_rows_data = _category_rows(sc_list)
+    cat_body = [
+        _table_row(r, styles, {0: 'cell_w', 1: 'cell_wh', 2: 'cell_wh', 3: 'cell_wh'}) if i == 0
+        else _table_row(r, styles, {1: 'cell_r', 2: 'cell_r', 3: 'cell_r'})
+        for i, r in enumerate(cat_rows_data)
+    ]
+    cat_tbl = Table(cat_body, colWidths=_cols_mm([35, 45, 45, 43]))
+    cat_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), _HDR),
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (1, 1), (-1, -1), font_name),
+        ('FONTSIZE', (1, 1), (-1, -1), 8),
         ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
-    story.append(ip_sum)
-    story.append(Spacer(1, 3 * mm))
+    story.append(KeepTogether([
+        Paragraph('四、費用類別概覽', styles['h2']),
+        cat_tbl,
+    ]))
+    story.append(PageBreak())
 
-    if ip_items:
-        ip_hdr = ['期數', '申請日期', '申請金額', '累計%', '批款收入', '分包支出']
-        ip_rows = [
-            _table_row(ip_hdr, styles, {i: 'cell_w' for i in range(len(ip_hdr))}),
-        ]
-        for it in ip_items:
-            ip_rows.append(_table_row([
-                _plain(it.get('ip_no'), 8),
-                _plain(it.get('applied_date'), 12),
-                _money(it.get('application_amount')),
-                _pct(it.get('application_pct')),
-                _money(it.get('certified_income')),
-                _money(it.get('subcon_paid')),
-            ], styles, {2: 'cell_r', 3: 'cell_r', 4: 'cell_r', 5: 'cell_r'}))
-        ip_tbl = Table(ip_rows, colWidths=[18 * mm, 24 * mm, 30 * mm, 18 * mm, 30 * mm, 30 * mm], repeatRows=1)
-        ip_tbl.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#64748b')),
-            ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ]))
-        story.append(ip_tbl)
+    # ── 糧期狀況（摘要 + 明細同一表 · 對照 Word）──
+    story.append(Paragraph('五、地盤糧期狀況', styles['h2']))
+    if ip_items or ip_totals:
+        story.append(_build_ip_period_table(ip_items, ip_totals, styles, font_name))
     else:
         story.append(Paragraph('暫無糧期記錄', styles['body']))
     story.append(Spacer(1, 5 * mm))
@@ -472,9 +563,11 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
     # ── 分判及支出明細 ──
     story.append(Paragraph('六、分判及支出明細', styles['h2']))
     if sc_list:
-        sc_hdr = ['判項', '類別', '公司', '判項金額', '已付', '未付', '進度']
+        sc_hdr = ['判項', '類別', '公司', '判項金額 (HK$)', '已付 (HK$)', '未付 (HK$)', '進度']
         sc_rows = [
-            _table_row(sc_hdr, styles, {i: 'cell_w' for i in range(len(sc_hdr))}),
+            _table_row(sc_hdr, styles, {
+                i: 'cell_wh' if i >= 3 else 'cell_w' for i in range(len(sc_hdr))
+            }),
         ]
         sum_ca = sum_paid = 0.0
         for sc in sorted(sc_list, key=lambda x: (x.get('sc_no') or '')):
@@ -484,30 +577,39 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
             pct = (paid / ca * 100) if ca else 0
             sum_ca += ca
             sum_paid += paid
+            sc_no = (sc.get('sc_no') or '').strip()
             sc_rows.append(_table_row([
-                _plain(sc.get('sc_no'), 10),
-                _sc_category(sc.get('sc_no')),
-                _plain(sc.get('company_name_en') or sc.get('company_name_zh'), 28),
-                _money(ca), _money(paid), _money(rem), _pct(pct),
-            ], styles, {3: 'cell_r', 4: 'cell_r', 5: 'cell_r', 6: 'cell_r'}))
+                sc_no,
+                _sc_category(sc_no),
+                _company_primary(sc),
+                _money_num(ca), _money_num(paid), _money_num(rem), _pct(pct),
+            ], styles, {3: 'cell_r', 4: 'cell_r', 5: 'cell_r', 6: 'cell_r'},
+               plain_cols={0, 1, 3, 4, 5, 6}))
         sc_rows.append(_table_row(
-            ['合計', '', '', _money(sum_ca), _money(sum_paid), _money(sum_ca - sum_paid), ''],
+            ['合計', '', '', _money_num(sum_ca), _money_num(sum_paid), _money_num(sum_ca - sum_paid), ''],
             styles, {3: 'cell_r', 4: 'cell_r', 5: 'cell_r'},
+            plain_cols={3, 4, 5},
         ))
         sc_tbl = Table(
             sc_rows,
-            colWidths=[18 * mm, 16 * mm, 38 * mm, 26 * mm, 26 * mm, 26 * mm, 16 * mm],
+            colWidths=_cols_mm([22, 20, 35, 27, 27, 27, 12]),
             repeatRows=1,
         )
         sc_tbl.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#334155')),
+            ('BACKGROUND', (0, 0), (-1, 0), _HDR),
             ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f1f5f9')),
-            ('ALIGN', (3, 0), (-2, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTNAME', (0, 0), (1, -1), font_name),
+            ('FONTNAME', (3, 0), (-1, -1), font_name),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
             ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
             ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
             ('TOPPADDING', (0, 0), (-1, -1), 3),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (3, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (3, 0), (-1, -1), 4),
         ]))
         story.append(sc_tbl)
     else:

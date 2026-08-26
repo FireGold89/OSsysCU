@@ -283,6 +283,8 @@ def parse_modern_row(row_vals, source_file, source_sheet, col_map=None, finance_
     trade = safe_str(row_vals[9]) if len(row_vals) > 9 else None
     if not trade:
         trade = safe_str(row_vals[8]) if len(row_vals) > 8 else None
+    trade_scope = safe_str(row_vals[8]) if len(row_vals) > 8 else None
+    trade_override = safe_str(row_vals[9]) if len(row_vals) > 9 else None
 
     contract_days = safe_float(row_vals[19]) if len(row_vals) > 19 else None
     if contract_days is not None:
@@ -293,6 +295,8 @@ def parse_modern_row(row_vals, source_file, source_sheet, col_map=None, finance_
         'doc_type': doc_type,
         'awarded': awarded,
         'site_name': safe_str(row_vals[7]) if len(row_vals) > 7 else None,
+        'trade_scope': trade_scope,
+        'trade_override': trade_override,
         'trade_category': trade,
         'description': safe_str(row_vals[10]) if len(row_vals) > 10 else None,
         'person_in_charge': safe_str(row_vals[11]) if len(row_vals) > 11 else rec.get('person_in_charge'),

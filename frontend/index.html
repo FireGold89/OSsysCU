@@ -11,9 +11,12 @@
       var theme = saved === 'light' || saved === 'dark' ? saved
         : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
       document.documentElement.setAttribute('data-theme', theme);
+      if (localStorage.getItem('qs_sidebar_collapsed') === '1') {
+        document.documentElement.classList.add('sidebar-collapsed');
+      }
     })();
   </script>
-  <link rel="stylesheet" href="css/style.css?v=20260715e">
+    <link rel="stylesheet" href="css/style.css?v=20260815g">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -34,11 +37,13 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <div class="logo-icon">🏗️</div>
-      <h1>QS付款管理</h1>
-      <p>Mepork Engineering</p>
+      <div class="sidebar-expand-only">
+        <h1>QS付款管理</h1>
+        <p>Mepork Engineering</p>
+      </div>
     </div>
 
-    <div class="project-selector">
+    <div class="project-selector sidebar-expand-only">
       <label>當前項目</label>
       <select id="projectSelect">
         <option value="">— 請選擇項目 —</option>
@@ -46,45 +51,66 @@
     </div>
 
     <nav class="sidebar-nav">
-      <div class="nav-section-title">主要功能</div>
-      <div class="nav-item active" data-page="dashboard" onclick="App.navigate('dashboard')">
-        <span class="nav-icon">📊</span> 儀表板
+      <div class="nav-section-title sidebar-expand-only">主要功能</div>
+      <div class="nav-item active" data-page="dashboard" onclick="App.navigate('dashboard')" title="項目概覽">
+        <span class="nav-icon">📊</span><span class="nav-label">項目概覽</span>
       </div>
-      <div class="nav-item" data-page="payments" onclick="App.navigate('payments')">
-        <span class="nav-icon">💰</span> 付款登記
+      <div class="nav-item" data-page="iso-docs" onclick="App.navigate('iso-docs')" title="ISO 文件">
+        <span class="nav-icon">📑</span><span class="nav-label">ISO 文件</span>
+      </div>
+      <div class="nav-item" data-page="payments" onclick="App.navigate('payments')" title="分判付款登記">
+        <span class="nav-icon">💰</span><span class="nav-label">分判付款登記</span>
         <span class="nav-badge" id="payBadge">0</span>
       </div>
-      <div class="nav-item" data-page="subcontractors" onclick="App.navigate('subcontractors')">
-        <span class="nav-icon">🏢</span> 分判及支出
+      <div class="nav-item" data-page="sc-vo-reg" onclick="App.navigate('sc-vo-reg')" title="分判變更以及扣款登記">
+        <span class="nav-icon">📋</span><span class="nav-label">分判變更以及扣款登記</span>
       </div>
-      <div class="nav-item" data-page="ip-period" onclick="App.navigate('ip-period')">
-        <span class="nav-icon">🏗️</span> 糧期狀況
+      <div class="nav-item" data-page="ip-period" onclick="App.navigate('ip-period')" title="糧期狀況">
+        <span class="nav-icon">🏗️</span><span class="nav-label">糧期狀況</span>
       </div>
-      <div class="nav-item" data-page="ocr" onclick="App.navigate('ocr')">
-        <span class="nav-icon">📄</span> 發票 / 報價上傳
+      <div class="nav-item" data-page="main-con-fac" onclick="App.navigate('main-con-fac')" title="最終結算">
+        <span class="nav-icon">📑</span><span class="nav-label">最終結算</span>
       </div>
-      <div class="nav-item" data-page="reports" onclick="App.navigate('reports')">
-        <span class="nav-icon">📈</span> 財務報表
+      <div class="nav-item" data-page="sc-fac" onclick="App.navigate('sc-fac')" title="分判最終結算">
+        <span class="nav-icon">📋</span><span class="nav-label">分判最終結算</span>
+      </div>
+      <div class="nav-item" data-page="reports" onclick="App.navigate('reports')" title="財務報表">
+        <span class="nav-icon">📈</span><span class="nav-label">財務報表</span>
       </div>
 
-      <div class="nav-section-title" style="margin-top:12px">管理</div>
-      <div class="nav-item" data-page="projects" onclick="App.navigate('projects')">
-        <span class="nav-icon">📁</span> 工程項目
+      <div class="nav-section-title sidebar-expand-only" style="margin-top:12px">管理</div>
+      <div class="nav-item" data-page="projects" onclick="App.navigate('projects')" title="工程項目">
+        <span class="nav-icon">📁</span><span class="nav-label">工程項目</span>
       </div>
-      <div class="nav-item" data-page="master-list" onclick="App.navigate('master-list')">
-        <span class="nav-icon">📋</span> Master List
+      <div class="nav-item nav-item-sub nav-item-disabled" id="navProjectSettlement" data-page="project-settlement" onclick="App.openCurrentProjectSettlement()" title="請先選擇項目">
+        <span class="nav-icon">📝</span><span class="nav-label">註冊及更新</span>
       </div>
-      <div class="nav-item" data-page="staff" onclick="App.navigate('staff')">
-        <span class="nav-icon">👷</span> 項目負責人管理
+      <div class="nav-item" data-page="master-list" onclick="App.navigate('master-list')" title="Master List">
+        <span class="nav-icon">📋</span><span class="nav-label">Master List</span>
       </div>
-      <div class="nav-item" data-page="settings" onclick="App.navigate('settings')">
-        <span class="nav-icon">⚙️</span> 系統設定
+      <div class="nav-item" data-page="sc-contract-registry" onclick="App.navigate('sc-contract-registry')" title="分判合約編號">
+        <span class="nav-icon">🔗</span><span class="nav-label">分判合約編號</span>
+      </div>
+      <div class="nav-item" data-page="staff" onclick="App.navigate('staff')" title="項目負責人管理">
+        <span class="nav-icon">👷</span><span class="nav-label">項目負責人管理</span>
+      </div>
+      <div class="nav-item" data-page="settings" onclick="App.navigate('settings')" title="系統設定">
+        <span class="nav-icon">⚙️</span><span class="nav-label">系統設定</span>
       </div>
     </nav>
 
     <div class="sidebar-footer">
-      <button class="btn btn-secondary" style="width:100%;font-size:12px" onclick="App.importExcel()">
+      <div class="sidebar-auth sidebar-expand-only" id="authUserWrap" style="margin-bottom:8px;font-size:12px;color:var(--text-secondary)">
+        <span id="authUserBadge" style="display:none"></span>
+        <button type="button" class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;font-size:12px"
+          onclick="Auth.logout()" id="authLogoutBtn">登出</button>
+      </div>
+      <button type="button" class="btn btn-secondary sidebar-expand-only" style="width:100%;font-size:12px" onclick="App.importExcel()">
         📥 匯入Excel
+      </button>
+      <button type="button" class="btn btn-secondary sidebar-collapse-toggle" id="sidebarToggleFoot" title="收合側欄" aria-label="收合側欄">
+        <span class="sidebar-toggle-icon">◀</span>
+        <span class="sidebar-expand-only">收合側欄</span>
       </button>
     </div>
   </aside>
@@ -94,8 +120,9 @@
     <!-- 頂部欄 -->
     <header class="topbar">
       <div class="topbar-left">
+        <button type="button" class="sidebar-toggle-btn" id="sidebarToggle" title="收合側欄" aria-label="收合側欄" aria-expanded="true">◀</button>
         <div>
-          <div class="topbar-title" id="pageTitle">儀表板</div>
+          <div class="topbar-title" id="pageTitle">項目概覽</div>
           <div class="topbar-subtitle" id="pageSubtitle">項目財務總覽</div>
         </div>
       </div>
@@ -116,7 +143,7 @@
     <!-- 內容區 -->
     <div class="content">
 
-      <!-- ─── 儀表板 ────────────────────────── -->
+      <!-- ─── 項目概覽 ────────────────────────── -->
       <div class="page active" id="page-dashboard">
         <div id="dashboardNoProject" class="empty-state" style="display:none">
           <div class="empty-icon">📁</div>
@@ -196,17 +223,17 @@
                   <div class="stat-value small" id="dashRemainder">—</div>
                   <div class="stat-sub">Remainder</div>
                 </div>
-                <div class="stat-card danger">
+                <div class="stat-card danger dash-stat-hidden">
                   <div class="stat-label">付款進度</div>
                   <div class="stat-value" id="dashProgress">—</div>
                   <div class="stat-sub">Payment Progress</div>
                 </div>
-                <div class="stat-card info">
+                <div class="stat-card info dash-stat-hidden">
                   <div class="stat-label">付款登記數</div>
                   <div class="stat-value" id="dashPayCount">—</div>
                   <div class="stat-sub">Payment Records</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card dash-stat-hidden">
                   <div class="stat-label">判項/支出項數</div>
                   <div class="stat-value" id="dashScCount">—</div>
                   <div class="stat-sub">Sub-Contract & Expenditure</div>
@@ -219,7 +246,8 @@
           <div class="card" style="margin-bottom:20px">
             <div class="card-header">
               <div class="card-title">📋 合約金額結算 <span style="font-size:11px;color:var(--text-muted);font-weight:400">參考 Excel Project Summary</span></div>
-              <button class="btn btn-primary btn-sm" onclick="Reports.exportBossPdf()" title="一鍵生成 A4 QS 匯報表 PDF">📄 QS 匯報表</button>
+              <button class="btn btn-primary btn-sm" id="btnDashBossPdf" onclick="Reports.previewBossPdf()" title="預覽 A4 QS 匯報表">👁 預覽</button>
+              <button class="btn btn-secondary btn-sm" id="btnDashBossDocx" onclick="Reports.downloadBossDocx()" title="匯出 Word 供版面微調" hidden>📝 Word</button>
             </div>
             <div class="card-body" id="dashContractCalc">
               <div class="empty-state" style="padding:24px">載入中...</div>
@@ -287,6 +315,96 @@
         </div>
       </div>
 
+      <!-- ─── ISO 文件登記 ────────────────────────── -->
+      <div class="page" id="page-iso-docs">
+        <div id="isoDocsNoProject" class="empty-state" style="display:none;padding:64px">
+          <div class="empty-icon">📁</div>
+          <div class="empty-title">請先選擇項目</div>
+          <div class="empty-sub">在左側選擇項目後，可上傳 ISO 招標／合約文件</div>
+        </div>
+        <div id="isoDocsContent">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">ISO 文件上傳</div>
+            </div>
+            <div class="card-body iso-docs-body">
+              <div class="iso-docs-toolbar" id="isoDocsLibraryBar" hidden></div>
+              <div id="isoDocsProgress" class="iso-docs-progress" hidden></div>
+              <p class="iso-docs-hint" id="isoDocsHint">主合約及分判招標／合約 ISO 附件 · 點擊「上傳」或檔名預覽 PDF／圖片</p>
+              <p class="iso-docs-filter-note" id="isoDocsFilterNote"></p>
+              <div class="iso-view-tabs pay-page-tabs proj-modal-tabs" id="isoViewTabs">
+                <button type="button" class="proj-tab active" id="isoTabMain" onclick="IsoDocs.setView('main')">📄 主合約</button>
+                <button type="button" class="proj-tab" id="isoTabSc" onclick="IsoDocs.setView('sc')">🏗 分判商</button>
+              </div>
+              <div id="isoMainPanel">
+                <div class="iso-main-subtabs proj-modal-tabs" id="isoMainSubTabs">
+                  <button type="button" class="proj-tab active" id="isoSubTabContract" onclick="IsoDocs.setMainSubTab('contract')">合約文件</button>
+                  <button type="button" class="proj-tab" id="isoSubTabTender" onclick="IsoDocs.setMainSubTab('tender')">招標／會議</button>
+                </div>
+                <div id="isoMainMeta" class="iso-main-meta"></div>
+                <div id="isoMainGrid" class="iso-slot-grid"></div>
+              </div>
+              <div id="isoScPanel" hidden>
+                <div id="isoScCards" class="iso-sc-cards"></div>
+              </div>
+              <details class="iso-table-fallback" id="isoTableFallback">
+                <summary>展開寬表格檢視（舊版矩陣）</summary>
+                <div class="table-wrap iso-docs-table-wrap">
+                  <table class="iso-docs-table" id="isoMainTable"></table>
+                </div>
+                <div class="table-wrap iso-docs-table-wrap" style="margin-top:16px">
+                  <table class="iso-docs-table" id="isoScTable"></table>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="isoDocFileInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden
+          onchange="IsoDocs.onFileSelected(event)">
+      </div>
+
+      <!-- ISO 連結 Modal -->
+      <div class="modal-backdrop" id="isoLinkModal" onclick="if(event.target===this)IsoDocs.closeLinkModal()">
+        <div class="modal" style="max-width:520px">
+          <div class="modal-header">
+            <div class="modal-title">填寫文件連結</div>
+            <button type="button" class="modal-close" onclick="IsoDocs.closeLinkModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="form-hint" style="margin-top:0">SharePoint 或內網 URL · 不上傳本地副本</p>
+            <div class="form-group">
+              <label class="form-label">連結 URL <span class="req">*</span></label>
+              <input type="url" class="form-input" id="isoLinkUrl" placeholder="https://…">
+            </div>
+            <div class="form-group">
+              <label class="form-label">顯示名稱（選填）</label>
+              <input type="text" class="form-input" id="isoLinkLabel" placeholder="例：主合約 LOA 掃描件">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="IsoDocs.closeLinkModal()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="IsoDocs.saveLink()">💾 儲存連結</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ISO 歷史版本 Modal -->
+      <div class="modal-backdrop" id="isoVersionsModal" onclick="if(event.target===this)IsoDocs.closeVersionsModal()">
+        <div class="modal" style="max-width:560px">
+          <div class="modal-header">
+            <div class="modal-title">歷史版本 · <span id="isoVersionsTitle"></span></div>
+            <button type="button" class="modal-close" onclick="IsoDocs.closeVersionsModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="form-hint" style="margin-top:0">換檔或刪除時自動保留的舊版</p>
+            <div id="isoVersionsList" class="iso-versions-list"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="IsoDocs.closeVersionsModal()">關閉</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ─── 糧期狀況（手動編輯）──────────────────────── -->
       <div class="page" id="page-ip-period">
         <div id="ipPeriodNoProject" class="empty-state" style="display:none;padding:64px">
@@ -295,9 +413,17 @@
           <div class="empty-sub">在左側選擇項目後，可手動新增或編輯糧期記錄</div>
         </div>
         <div id="ipPeriodContent">
+          <div class="toolbar" id="ipPeriodToolbar">
+            <div class="search-wrap">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="ipPeriodSearch" placeholder="搜尋期數、日期、金額、收款記錄、分判編號…"
+                oninput="IpPeriod.search(this.value)">
+            </div>
+            <span class="badge badge-muted" id="ipPeriodSearchCount" style="display:none"></span>
+          </div>
           <div class="card" style="margin-bottom:20px">
             <div class="card-header">
-              <div class="card-title">🏗️ 糧期狀況 <span style="font-size:11px;color:var(--text-muted);font-weight:400">地盤 QS · 申請／則師批款</span></div>
+              <div class="card-title">🏗️ 糧期狀況 <span style="font-size:11px;color:var(--text-muted);font-weight:400">地盤 QS · 申請／業主批款</span></div>
             </div>
             <div class="card-body" id="ipPeriodMain">
               <div class="empty-state" style="padding:24px">載入中...</div>
@@ -322,8 +448,54 @@
         </div>
       </div>
 
-      <!-- ─── 付款登記 ──────────────────────── -->
+      <!-- ─── 分判付款登記（含判項及支出分頁）──────────────── -->
       <div class="page" id="page-payments">
+        <div class="pay-page-tabs proj-modal-tabs">
+          <button type="button" class="proj-tab" id="payTabSc" onclick="Payments.setTab('sc')">📋 分判合約登記表</button>
+          <button type="button" class="proj-tab active" id="payTabRecords" onclick="Payments.setTab('records')">💰 付款登記</button>
+          <button type="button" class="proj-tab" id="payTabOcr" onclick="Payments.setTab('ocr')">📄 發票 / 報價上傳</button>
+        </div>
+
+        <div id="payPanelSc" hidden>
+          <div class="toolbar">
+            <div class="search-wrap">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="scSearch" placeholder="搜尋判項編號、公司名..." oninput="SC.search(this.value)">
+            </div>
+            <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合約／判項</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="SC.expandAllGroups()">展開全部</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="SC.collapseAllGroups()">收合全部</button>
+          </div>
+          <p class="pay-panel-hint">M = 物料 · SC = 分判 · O = 其他支出 · 報價單／分判合約 · 點擊子項可查看付款登記</p>
+          <div class="card" style="margin-bottom:0">
+            <div class="card-header">
+              <div class="card-title">📋 分判合約登記表
+                <span class="badge badge-muted" id="scCount">0 項</span>
+              </div>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>判項編號</th>
+                    <th>公司名稱</th>
+                    <th>工程描述</th>
+                    <th style="text-align:right">修訂判項金額 (J)</th>
+                    <th style="text-align:right">累計已付</th>
+                    <th>報價／合約</th>
+                    <th>OA／保固金</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="scTableBody">
+                  <tr><td colspan="8"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="payPanelRecords">
         <div class="toolbar">
           <div class="search-wrap">
             <span class="search-icon">🔍</span>
@@ -332,8 +504,18 @@
           <select class="form-input" id="payFilterSc" style="width:auto;min-width:160px" onchange="Payments.filterBySc(this.value)">
             <option value="">全部判項編號</option>
           </select>
-          <button class="btn btn-primary" onclick="Payments.openAdd()">➕ 新增記錄</button>
+          <select class="form-input" id="payFilterType" style="width:auto;min-width:140px" onchange="Payments.filterBySc()">
+            <option value="">全部類型</option>
+            <option value="normal">普通付款</option>
+            <option value="interim_cert">中期糧款計算書</option>
+          </select>
+          <button class="btn btn-primary" onclick="Payments.openAdd()">➕ 新增付款登記</button>
+          <button class="btn btn-secondary" onclick="Payments.openAdd('interim_cert')">📋 新增中期糧款計算書</button>
           <button class="btn btn-secondary" onclick="Payments.exportCsv()">📤 匯出CSV</button>
+          <div class="col-picker-wrap" id="payColPickerWrap">
+            <button type="button" class="btn btn-secondary btn-sm" id="payColPickerBtn" onclick="Payments.toggleColPicker(event)">⚙️ 欄位</button>
+            <div class="col-picker-panel" id="payColPickerPanel" hidden></div>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:0">
@@ -342,24 +524,24 @@
               <span class="badge badge-muted" id="payCount">0 條</span>
             </div>
             <div style="font-size:12px;color:var(--text-secondary)">
-              合計已付: <strong id="payTotalPaid" style="color:var(--success)">HK$0</strong>
+              合計已付: <strong id="payTotalPaid">HK$0.00</strong>
             </div>
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
-            <table>
+            <table class="pay-records-table">
               <thead id="payTableHead">
                 <tr>
-                  <th class="th-sortable" data-sort="seq_no" onclick="Payments.sortBy('seq_no')">#<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="invoice_date" onclick="Payments.sortBy('invoice_date')">發票日期<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="invoice_no" onclick="Payments.sortBy('invoice_no')">發票號碼<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="sc_no" onclick="Payments.sortBy('sc_no')">判項編號<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="company" onclick="Payments.sortBy('company')">公司名稱<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="description" onclick="Payments.sortBy('description')">工程描述<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable th-num" data-sort="contract_amount" onclick="Payments.sortBy('contract_amount')">判項金額<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable th-num" data-sort="paid_amount" onclick="Payments.sortBy('paid_amount')">已付金額<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable th-num" data-sort="remainder_amount" onclick="Payments.sortBy('remainder_amount')">餘額<span class="sort-icon">↕</span></th>
-                  <th class="th-sortable" data-sort="oa_ref" onclick="Payments.sortBy('oa_ref')">OA狀態<span class="sort-icon">↕</span></th>
-                  <th>操作</th>
+                  <th class="pay-col-seq th-sortable" data-col="seq" data-sort="seq_no" onclick="Payments.sortBy('seq_no')">#<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-date th-sortable" data-col="date" data-sort="invoice_date" onclick="Payments.sortBy('invoice_date')">發票日期<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-inv th-sortable" data-col="inv" data-sort="invoice_no" onclick="Payments.sortBy('invoice_no')">發票號碼<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-sc th-sortable" data-col="sc" data-sort="sc_no" onclick="Payments.sortBy('sc_no')">判項編號<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-co th-sortable" data-col="co" data-sort="company" onclick="Payments.sortBy('company')">公司名稱<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-desc th-sortable" data-col="desc" data-sort="description" onclick="Payments.sortBy('description')">工程描述<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-amt th-sortable th-num" data-col="contract" data-sort="contract_amount" onclick="Payments.sortBy('contract_amount')">判項金額<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-amt th-sortable th-num" data-col="paid" data-sort="paid_amount" onclick="Payments.sortBy('paid_amount')">已付金額<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-amt th-sortable th-num" data-col="remainder" data-sort="remainder_amount" onclick="Payments.sortBy('remainder_amount')">餘額<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-oa th-sortable" data-col="oa" data-sort="oa_ref" onclick="Payments.sortBy('oa_ref')">OA狀態<span class="sort-icon">↕</span></th>
+                  <th class="pay-col-act" data-col="act">操作</th>
                 </tr>
               </thead>
               <tbody id="payTableBody">
@@ -368,44 +550,10 @@
             </table>
           </div>
         </div>
-      </div>
-
-      <!-- ─── 分判及支出 ───────────────────────── -->
-      <div class="page" id="page-subcontractors">
-        <div class="toolbar">
-          <div class="search-wrap">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="scSearch" placeholder="搜尋判項編號、公司名..." oninput="SC.search(this.value)">
-          </div>
-          <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增判項</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="SC.expandAllGroups()">展開全部</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="SC.collapseAllGroups()">收合全部</button>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px">M = 物料 · SC = 分判 · O = 其他支出 · 點擊分組列（如 M-011）可收合/展開 · 點擊子項可查看付款登記</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>判項編號</th>
-                <th>公司名稱</th>
-                <th>工程描述</th>
-                <th style="text-align:right">修訂判項金額 (J)</th>
-                <th style="text-align:right">累計已付</th>
-                <th>報價單</th>
-                <th>OA 狀態/日期</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="scTableBody">
-              <tr><td colspan="8"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
 
-      <!-- ─── 發票·報價識別 ───────────────────────── -->
-      <div class="page" id="page-ocr">
-        <div class="form-row" style="align-items:flex-start">
+        <div id="payPanelOcr" hidden>
+        <div class="form-row pay-ocr-layout" style="align-items:flex-start">
           <!-- 上傳區 -->
           <div>
             <div class="card">
@@ -554,16 +702,90 @@
             </div>
           </div>
         </div>
+        </div>
+      </div>
+
+      <!-- ─── 分判變更以及扣款登記 ───────────────────────── -->
+      <div class="page" id="page-sc-vo-reg">
+        <div id="svrQuickAdd" class="sv-quick-add" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+        <div class="toolbar">
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="svrSearch" placeholder="搜尋判項、VO/CC 編號、內容、公司名…" oninput="ScVoReg.search(this.value)">
+          </div>
+          <select class="form-input" id="svrFilterSc" style="width:auto;min-width:180px" onchange="ScVoReg.filterBySc()">
+            <option value="">全部判項編號</option>
+          </select>
+          <select class="form-input" id="svrFilterType" style="width:auto;min-width:140px" onchange="ScVoReg.filterByType()">
+            <option value="">全部類型</option>
+            <option value="vo">變更工程</option>
+            <option value="deduction">扣款</option>
+          </select>
+          <button class="btn btn-primary" onclick="ScVoReg.openAdd()">➕ 新增變更登記</button>
+          <button class="btn btn-secondary" onclick="ScVoReg.openTplManager()">⚙️ 管理範本</button>
+          <button class="btn btn-secondary" onclick="ScVoReg.exportCsv()">📤 匯出 CSV</button>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div class="card-title">📋 分判變更以及扣款登記
+              <span class="badge badge-muted" id="svrCount">0 條</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">Sub-Con VO · 變更工程及扣款 · 模板快速新增 · 中期糧款多選套用</div>
+          </div>
+          <div class="table-wrap svr-matrix-wrap" style="border:none;border-radius:0">
+            <table class="svr-matrix-table">
+              <thead>
+                <tr>
+                  <th rowspan="2">判項編號</th>
+                  <th rowspan="2">公司名稱</th>
+                  <th colspan="4" class="svr-th-vo">變更工程</th>
+                  <th colspan="3" class="svr-th-ded">扣款</th>
+                  <th rowspan="2">糧款套用</th>
+                  <th rowspan="2">操作</th>
+                </tr>
+                <tr>
+                  <th class="svr-th-vo">變更工程編號</th>
+                  <th class="svr-th-vo">變更內容</th>
+                  <th class="svr-th-vo th-num">變更金額</th>
+                  <th class="svr-th-vo">審批表 PDF</th>
+                  <th class="svr-th-ded">扣款編號</th>
+                  <th class="svr-th-ded">扣款內容</th>
+                  <th class="svr-th-ded th-num">扣款金額</th>
+                </tr>
+              </thead>
+              <tbody id="svrTableBody">
+                <tr><td colspan="11"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 主合約最終結算（PPT p19） ─────────────────── -->
+      <div class="page" id="page-main-con-fac">
+        <div id="mcfContent">
+          <div class="empty-state" style="padding:40px">載入中…</div>
+        </div>
+      </div>
+
+      <!-- ─── 分判最終結算（PPT p20–21） ─────────────────── -->
+      <div class="page" id="page-sc-fac">
+        <div id="scFacContent">
+          <div class="empty-state" style="padding:40px">載入中…</div>
+        </div>
       </div>
 
       <!-- ─── 財務報表 ──────────────────────── -->
       <div class="page" id="page-reports">
         <div class="toolbar" style="margin-bottom:16px">
-          <button class="btn btn-primary" onclick="Reports.exportBossPdf()" id="btnBossPdf">
-            📄 QS 匯報表 PDF（A4）
+          <button class="btn btn-primary" onclick="Reports.previewBossPdf()" id="btnBossPdf">
+            👁 預覽 QS 匯報表
+          </button>
+          <button class="btn btn-secondary" onclick="Reports.downloadBossDocx()" id="btnBossDocx" hidden>
+            📝 匯出 Word
           </button>
           <span style="font-size:11px;color:var(--text-muted);align-self:center">
-            一鍵生成：利潤結算 · 糧期 · 分判明細 · 關注事項
+            A4 · 利潤結算 · 糧期 · 分判明細 · 關注事項
           </span>
         </div>
         <div class="card" style="margin-bottom:20px">
@@ -599,7 +821,6 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">📊 分判及支出明細</div>
-            <button class="btn btn-secondary btn-sm" onclick="Reports.exportCsv()">📤 匯出</button>
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
@@ -627,10 +848,77 @@
       <div class="page" id="page-projects">
         <div class="toolbar">
           <button class="btn btn-primary" onclick="Projects.openAdd()">➕ 新增項目</button>
-          <button class="btn btn-secondary" onclick="App.importExcel()">📥 從Excel匯入</button>
+          <button class="btn btn-secondary" onclick="Projects.importSummary()">📥 匯入 Summary</button>
+          <button class="btn btn-secondary" onclick="Projects.syncSummaryRef()">🔄 同步 Ref/Summary.xlsx</button>
+          <button class="btn btn-secondary" onclick="App.importExcel()">📥 地盤付款表</button>
+          <input type="file" id="projSummaryFile" accept=".xlsx,.xls" hidden onchange="Projects.onSummaryFile(this)">
+          <div style="flex:1"></div>
+          <div class="col-picker-wrap" id="projColPickerWrap">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.toggleColPicker(event)">⚙️ 欄位</button>
+            <div class="col-picker-panel" id="projColPickerPanel" hidden></div>
+          </div>
+          <div class="proj-view-toggle">
+            <button type="button" class="proj-view-btn active" id="projViewList" onclick="Projects.setView('list')" title="列表">☰ 列表</button>
+            <button type="button" class="proj-view-btn" id="projViewCard" onclick="Projects.setView('card')" title="卡片">▦ 卡片</button>
+          </div>
         </div>
-        <div class="stats-grid" id="projectCards">
-          <div class="empty-state" style="padding:40px;grid-column:1/-1">載入中...</div>
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Summary — 工程項目</div>
+              <div class="card-sub" id="projSummarySub">MP合約編號 · 會計編號 · 主合約 · 客方／承判 · 負責人 · 金額 · 利潤率 · 狀態（點欄位標題排序）</div>
+            </div>
+            <div class="card-sub" id="projSummaryCount">—</div>
+          </div>
+          <div id="projListView">
+            <div class="table-wrap proj-summary-wrap" style="border:none;border-radius:0">
+              <table class="proj-summary-table">
+                <thead id="projSummaryHead">
+                  <tr>
+                    <th class="col-code th-sortable" data-col="mp_code" data-sort="mp_code" onclick="Projects.sortBy('mp_code')">MP合約編號<span class="sort-icon">↕</span></th>
+                    <th class="col-account th-sortable" data-col="account_code" data-sort="account_code" onclick="Projects.sortBy('account_code')">會計編號<span class="sort-icon">↕</span></th>
+                    <th class="col-title th-sortable" data-col="title" data-sort="title" onclick="Projects.sortBy('title')">主合約名稱<span class="sort-icon">↕</span></th>
+                    <th class="col-parties th-sortable" data-col="parties" data-sort="parties" onclick="Projects.sortBy('parties')">客方／承判<span class="sort-icon">↕</span></th>
+                    <th class="col-person th-sortable" data-col="person" data-sort="person" onclick="Projects.sortBy('person')">負責人<span class="sort-icon">↕</span></th>
+                    <th class="col-amt td-amount th-sortable th-num" data-col="contract_amount" data-sort="contract_amount" onclick="Projects.sortBy('contract_amount')">MP承建<span class="sort-icon">↕</span></th>
+                    <th class="col-rate td-amount th-sortable th-num" data-col="profit_pct" data-sort="current_profit_pct" onclick="Projects.sortBy('current_profit_pct')">利潤率<span class="sort-icon">↕</span></th>
+                    <th class="col-status th-sortable" data-col="status" data-sort="status" onclick="Projects.sortBy('status')">狀態<span class="sort-icon">↕</span></th>
+                    <th class="col-actions" data-col="act"></th>
+                  </tr>
+                </thead>
+                <tbody id="projSummaryBody">
+                  <tr><td colspan="9"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div id="projCardView" class="stats-grid proj-card-grid" style="display:none;padding:16px">
+            <div class="empty-state" style="grid-column:1/-1;padding:40px">載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 註冊及更新 · 項目金額結算（第5頁）── -->
+      <div class="page" id="page-project-settlement">
+        <div class="toolbar">
+          <button type="button" class="btn btn-secondary" onclick="Projects.backToList()">← 返回工程項目</button>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:15px" id="settlePageTitle">項目金額結算</div>
+            <div style="font-size:12px;color:var(--text-muted)" id="settlePageSub">—</div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(Projects._settleProjectId, 'cover')">✏️ 編輯 Cover Page</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToMainConFac()">📑 主合約最終結算</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToScFac()">📋 分判最終結算</button>
+          <button type="button" class="btn btn-primary" onclick="Projects.saveSettlement()">💾 儲存</button>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">項目金額結算</div>
+            <div class="card-sub">A–E 由系統計算；可覆寫 C 及結算日期</div>
+          </div>
+          <div class="card-body" id="settleBody">
+            <div class="empty-state" style="padding:48px">請從工程項目選擇「註冊及更新」</div>
+          </div>
         </div>
       </div>
 
@@ -655,8 +943,15 @@
             <button class="btn btn-secondary btn-sm" onclick="MasterList.search()">搜尋</button>
           </div>
           <div class="toolbar-right">
+            <button class="btn btn-primary btn-sm" onclick="MasterList.openAdd()">➕ 新增報價／標書</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.openPreview()">📤 上傳預覽</button>
+            <button class="btn btn-secondary btn-sm" onclick="MasterList.openAutoLink()">🔗 自動配對</button>
+            <button class="btn btn-secondary btn-sm" onclick="MasterTradeCats.openManage()">📂 工作範疇</button>
             <button class="btn btn-primary btn-sm" onclick="MasterList.openSync()">🔄 同步 Master List</button>
+            <div class="col-picker-wrap" id="masterColPickerWrap">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="MasterList.toggleColPicker(event)">⚙️ 欄位</button>
+              <div class="col-picker-panel" id="masterColPickerPanel" hidden></div>
+            </div>
           </div>
         </div>
         <div class="master-scope-banner" id="masterStatScope" hidden>
@@ -664,14 +959,14 @@
           <span class="master-scope-text"></span>
         </div>
         <div class="stats-grid" id="masterStats">
-          <div class="stat-card"><div class="stat-label">主檔總數</div><div class="stat-value" id="masterStatTotal">—</div></div>
+          <div class="stat-card"><div class="stat-label">報價／標書總數</div><div class="stat-value" id="masterStatTotal">—</div></div>
           <div class="stat-card success"><div class="stat-label">中標</div><div class="stat-value" id="masterStatAwarded">—</div></div>
           <div class="stat-card warning"><div class="stat-label">未配對項目</div><div class="stat-value" id="masterStatUnlinked">—</div></div>
           <div class="stat-card"><div class="stat-label">上次匯入</div><div class="stat-value small" id="masterStatLastImport" style="font-size:13px">—</div></div>
         </div>
         <div class="card">
           <div class="card-header">
-            <div class="card-title">📋 報價／標書主檔</div>
+            <div class="card-title">📋 報價／標書清單</div>
             <div class="card-sub" id="masterListCount">—</div>
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
@@ -689,10 +984,72 @@
         <div class="card" style="margin-top:16px">
           <div class="card-header"><div class="card-title">ℹ️ 匯入模組說明</div></div>
           <div class="card-body" style="font-size:13px;color:var(--text-secondary);line-height:1.6">
-            <p>報價編號結尾字母（Excel E 欄）為<strong>編號慣例</strong>，例 <code>MS/Q1241/24/kp</code>；<strong>項目負責人</strong>以主檔姓名欄為準，可由不同同事跟進同一報價。</p>
-            <p>預設只載入<strong>當前年份</strong>主檔（約千筆），可改選「全部年份」；選擇會記住於本機。</p>
-            <p><strong>Master List</strong>（本頁）：公司級 <code>Quotation &amp; Contract number.xlsx</code>，Phase 1 只同步 QS 主檔；財務 Admin 欄位（發票、支票等）稍後 Phase 2 處理。</p>
+            <p>報價編號結尾字母（Excel E 欄）為<strong>編號慣例</strong>，例 <code>MS/Q1241/24/kp</code>；<strong>項目負責人</strong>以 Master List 姓名欄為準，可由不同同事跟進同一報價。</p>
+            <p>預設只載入<strong>當年</strong>報價／標書（約千筆），可改選「全部年份」；選擇會記住於本機。</p>
+            <p><strong>Master List</strong>（本頁）：公司級 <code>Quotation &amp; Contract number.xlsx</code>，Phase 1 只同步 QS 報價／標書欄；財務 Admin 欄位（發票、支票等）稍後 Phase 2 處理。</p>
             <p><strong>Payment Status Table</strong>（側欄「從 Excel 匯入」）：地盤判項／付款／糧期，仍用 <code>excel_importer_payment.py</code>。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 分判工程合約編號（MS/C）──────────────── -->
+      <div class="page" id="page-sc-contract-registry">
+        <div class="toolbar">
+          <div class="toolbar-left scr-toolbar-filters">
+            <input type="text" class="form-input" id="scrSearch" placeholder="搜尋 MS/C、公司、項目編號…" style="max-width:220px" onkeydown="if(event.key==='Enter')ScContractRegistry.search()">
+            <select class="form-input scr-filter-select" id="scrYearFilter" onchange="ScContractRegistry.search()">
+              <option value="">全部年份</option>
+            </select>
+            <select class="form-input scr-filter-select" id="scrPersonFilter" onchange="ScContractRegistry.search()">
+              <option value="">全部負責同事</option>
+            </select>
+            <select class="form-input scr-filter-select" id="scrCompanyFilter" onchange="ScContractRegistry.search()">
+              <option value="">全部外判公司</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.search()">搜尋</button>
+          </div>
+          <div class="toolbar-right">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.syncFromRef()">🔄 同步 Ref Excel</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="ScContractRegistry.openAdd()">➕ 新增 MS/C</button>
+            <div class="col-picker-wrap" id="scrColPickerWrap">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.toggleColPicker(event)">⚙️ 欄位</button>
+              <div class="col-picker-panel" id="scrColPickerPanel" hidden></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-body" style="font-size:12px;color:var(--text-muted);line-height:1.6">
+            <strong>分判工程合約編號</strong>（QS MS/C）· 對應 P1 PDF「Sub-Contracts No.」。<br>
+            2023 年起 MS/C 新格式：<code>MS/C月份-序號/年份/負責人</code>；2023 前為 <code>YYYY/MP/…</code> 舊格式，一併顯示。
+            批量維護可編輯 <code>Ref/分判工程合約編號 YYYY.xlsx</code> 後按「同步 Ref Excel」。
+            <span id="scrStatMeta" style="margin-left:8px"></span>
+          </div>
+        </div>
+        <div class="card scr-list-card">
+          <div class="card-header">
+            <div class="card-title">🔗 MS/C 分判合約編號表</div>
+            <div class="card-sub" id="scrListCount">—</div>
+          </div>
+          <div class="table-wrap scr-table-wrap" style="border:none;border-radius:0">
+            <table class="scr-registry-table">
+              <thead id="scrTableHead">
+                <tr>
+                  <th class="scr-col-ms th-sortable" data-col="ms" data-sort="sub_contract_no" onclick="ScContractRegistry.sortBy('sub_contract_no')">合約編號<span class="sort-icon">↕</span></th>
+                  <th class="scr-col-co th-sortable" data-col="co" data-sort="company" onclick="ScContractRegistry.sortBy('company')">外判公司<span class="sort-icon">↕</span></th>
+                  <th class="scr-col-works" data-col="works">工程項目</th>
+                  <th class="scr-col-proj th-sortable" data-col="proj" data-sort="project_code" onclick="ScContractRegistry.sortBy('project_code')">項目編號<span class="sort-icon">↕</span></th>
+                  <th class="scr-col-person th-sortable" data-col="person" data-sort="person" onclick="ScContractRegistry.sortBy('person')">負責同事<span class="sort-icon">↕</span></th>
+                  <th class="scr-col-amt td-amount" data-col="amt">分判合約合額</th>
+                  <th class="scr-col-flag" data-col="countersign" title="合約會簽表">會簽</th>
+                  <th class="scr-col-flag" data-col="partner" title="合作伙伴">伙伴</th>
+                  <th class="scr-col-flag" data-col="tender" title="定標會議紀錄">定標</th>
+                  <th class="scr-col-actions" data-col="act"></th>
+                </tr>
+              </thead>
+              <tbody id="scrContent">
+                <tr><td colspan="10"><div class="empty-state" style="padding:40px">載入中…</div></td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -715,7 +1072,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">👷 項目負責人管理</div>
-            <div class="card-sub">以 Master List 主檔「項目負責人」為準 · 可補充聯絡資料</div>
+            <div class="card-sub">以 Master List 姓名欄「項目負責人」為準 · 可補充聯絡資料</div>
           </div>
           <div class="table-wrap" style="border:none;border-radius:0">
             <table>
@@ -738,7 +1095,7 @@
         </div>
         <div class="card" style="margin-top:16px">
           <div class="card-body" style="font-size:13px;color:var(--text-secondary);line-height:1.6">
-            <p><strong>項目負責人</strong>名單以 Master List 主檔「項目負責人」欄為準自動列出；「建立對應」可補充電郵、部門等聯絡資料供工程項目選用。</p>
+            <p><strong>項目負責人</strong>名單以 Master List「項目負責人」欄為準自動列出；「建立對應」可補充電郵、部門等聯絡資料供工程項目選用。</p>
             <p>已略過縮寫（如 jy、km）及多人並列（如 Joe Yu, Neelson）等非正式寫法；同一負責人多種拼寫會合併統計。</p>
             <p>報價編號尾碼（如 <code>/kp</code>）僅為編號規則，<strong>不等同</strong>現時跟進人；同一報價可由不同負責人接手。</p>
             <p><strong>權限角色</strong>現僅作記錄；日後登入時將依角色控制 QS／財務／管理等功能範圍。</p>
@@ -748,7 +1105,8 @@
 
       <!-- ─── 系統設定 ──────────────────────── -->
       <div class="page" id="page-settings">
-        <div class="card" style="max-width:600px">
+        <div class="settings-page-stack">
+        <div class="card" style="max-width:640px">
           <div class="card-header">
             <div class="card-title">⚙️ 系統設定</div>
           </div>
@@ -814,6 +1172,49 @@
             </div>
           </div>
         </div>
+
+        <div class="card settings-doc-card">
+          <div class="card-header">
+            <div class="card-title">📁 文件管理設定</div>
+          </div>
+          <div class="card-body">
+            <p class="settings-doc-intro">ISO 及公司文件庫連結集中管理 · ISO 文件頁按「本項目 → 公司全局」順序開啟</p>
+            <div class="form-group">
+              <label class="form-label">公司文件庫 URL（全局）</label>
+              <input type="url" class="form-input" id="settingDocLibraryUrl"
+                placeholder="https://company.sharepoint.com/sites/QS/Shared Documents/">
+              <div class="form-hint">SharePoint 或 QS 部門文件庫根目錄 · 顯示「開公司文件庫」</div>
+            </div>
+            <div class="section-title" style="margin-top:16px">各項目文件庫連結</div>
+            <div class="toolbar" style="margin-bottom:10px">
+              <div class="search-wrap" style="max-width:320px">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="settingDocProjectSearch" placeholder="搜尋項目代碼、名稱…"
+                  oninput="Settings.filterDocProjects(this.value)">
+              </div>
+            </div>
+            <div class="table-wrap settings-doc-table-wrap">
+              <table class="settings-doc-table">
+                <thead>
+                  <tr>
+                    <th>項目代碼</th>
+                    <th>項目名稱</th>
+                    <th>狀態</th>
+                    <th>文件庫 URL（本項目）</th>
+                  </tr>
+                </thead>
+                <tbody id="settingDocProjectBody">
+                  <tr><td colspan="4" class="td-muted" style="padding:20px;text-align:center">載入中…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:14px">
+              <button class="btn btn-primary" onclick="Settings.saveDocLibrary()">💾 儲存文件管理設定</button>
+              <button class="btn btn-secondary" onclick="Settings.loadDocLibrary()">↩️ 重設</button>
+            </div>
+          </div>
+        </div>
+        </div>
       </div>
 
     </div><!-- /content -->
@@ -824,11 +1225,25 @@
 <div class="modal-backdrop" id="payModal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title" id="payModalTitle">新增付款登記</div>
+      <div class="modal-title" id="payModalTitle">新增分判付款登記</div>
       <button class="modal-close" onclick="Payments.closeModal()">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="payModalId">
+      <div class="form-group">
+        <label class="form-label">選擇付款類型</label>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="payType" id="payTypeNormal" value="normal" checked onchange="Payments.onPayTypeChange()">
+            普通付款
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="payType" id="payTypeInterim" value="interim_cert" onchange="Payments.onPayTypeChange()">
+            承判商工程中期糧款計算書
+          </label>
+        </div>
+      </div>
+      <div id="payNormalForm">
       <div class="section-title">基本資料</div>
       <div class="form-row-3">
         <div class="form-group">
@@ -904,18 +1319,82 @@
           <input type="text" class="form-input" id="fOaNo">
         </div>
       </div>
-      <div class="form-row-3">
+      <div class="form-row" id="payBcRow">
         <div class="form-group">
-          <label class="form-label">MC IP No.</label>
-          <input type="text" class="form-input" id="fMcIpNo" placeholder="IP-01">
+          <label class="form-label">Backcharge to Sub</label>
+          <select class="form-input" id="fBcToSub">
+            <option value="">— 選擇判項編號／公司 —</option>
+          </select>
         </div>
         <div class="form-group">
-          <label class="form-label">B/C to Sub</label>
-          <input type="text" class="form-input" id="fBcToSub">
+          <label class="form-label">Backcharge 金額 (HK$)</label>
+          <div class="amount-input-wrap">
+            <input type="number" class="form-input" id="fBackchargeAmt" placeholder="0" step="0.01">
+          </div>
+        </div>
+      </div>
+      <input type="hidden" id="fMcIpNo">
+      <input type="hidden" id="fSubIpNo">
+      <div id="payInterimExtras" style="display:none">
+        <hr class="divider">
+        <div class="section-title">後加 / 扣款（今期套用）</div>
+        <div class="form-group">
+          <label class="form-label">VO、扣款及標準調整項 <span style="color:var(--text-muted);font-weight:400">（新增時自動勾選未套用項）</span></label>
+          <div id="fScVoPickList" class="sc-vo-pick-list"></div>
+          <div class="form-hint" id="fScVoHint">未套用 VO／扣款會自動勾選 · 後加/改→B 行 · 標準加/減→加:/減:列</div>
+        </div>
+        <div class="form-row form-row-3">
+          <div class="form-group">
+            <label class="form-label">後加/改 VO (HK$) <span style="color:var(--text-muted);font-weight:400">→ B 行</span></label>
+            <div class="amount-input-wrap">
+              <input type="number" class="form-input" id="fVoTotal" placeholder="0" step="0.01" readonly style="opacity:0.85">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">標準加項 (HK$) <span style="color:var(--text-muted);font-weight:400">→ 加: 列</span></label>
+            <div class="amount-input-wrap">
+              <input type="number" class="form-input" id="fAddTotal" placeholder="0" step="0.01" readonly style="opacity:0.85">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">扣款合計 (HK$) <span style="color:var(--text-muted);font-weight:400">→ 減: 列</span></label>
+            <div class="amount-input-wrap">
+              <input type="number" class="form-input" id="fDeductionTotal" placeholder="0" step="0.01" readonly style="opacity:0.85">
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">加項小計 (HK$) <span style="color:var(--text-muted);font-weight:400">B 行 + 加: 列</span></label>
+            <div class="amount-input-wrap">
+              <input type="number" class="form-input" id="fAddSubtotal" placeholder="0" step="0.01" readonly style="opacity:0.85">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">今期暫批淨額 (HK$) <span style="color:var(--text-muted);font-weight:400">→ 總計</span></label>
+            <div class="amount-input-wrap">
+              <input type="number" class="form-input" id="fNetCertTotal" placeholder="0" step="0.01" readonly style="opacity:0.85;font-weight:600">
+            </div>
+          </div>
+        </div>
+        <div class="section-title" style="margin-top:8px">計算書備註（A / B / C 行）</div>
+        <div class="form-hint" style="margin-bottom:10px">A、C 可手改。B 行備註＝<strong>變更內容</strong>（每條 VO）；<strong>扣款內容</strong>在計算書「減:」列，不在 B 行。</div>
+        <div class="form-group">
+          <label class="form-label">A 行備註 <span style="color:var(--text-muted);font-weight:400">→ 原合約</span></label>
+          <input type="text" class="form-input" id="fLineRemarkA" placeholder="例：45% Work Done"
+            oninput="Payments.onLineRemarkInput('A')">
+          <div class="form-hint ic-line-remark-hint" id="fLineRemarkAHint"></div>
         </div>
         <div class="form-group">
-          <label class="form-label">Sub-IP No.</label>
-          <input type="text" class="form-input" id="fSubIpNo">
+          <label class="form-label">B 行備註 <span style="color:var(--text-muted);font-weight:400">→ 每條 VO（計算書展開 B1/B2…）</span></label>
+          <div id="fVoRemarkList" class="vo-remark-list"></div>
+          <div class="form-hint ic-line-remark-hint" id="fLineRemarkBHint"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">C 行備註 <span style="color:var(--text-muted);font-weight:400">→ Material On Site</span></label>
+          <input type="text" class="form-input" id="fLineRemarkC" placeholder="可留空"
+            oninput="Payments.onLineRemarkInput('C')">
+          <div class="form-hint ic-line-remark-hint" id="fLineRemarkCHint"></div>
         </div>
       </div>
       <div class="form-group">
@@ -927,17 +1406,249 @@
         <label class="form-label">原發票文件</label>
         <button type="button" class="btn btn-secondary btn-sm" onclick="Payments.viewModalPdf()">📄 查看原 PDF</button>
       </div>
+      </div><!-- /payNormalForm -->
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="Payments.closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="Payments.saveModal()">💾 儲存</button>
+      <button class="btn btn-primary" id="payNextBtn" style="display:none" onclick="Payments.goInterimPreview()">下一步 →</button>
+      <button class="btn btn-primary" id="paySaveBtn" onclick="Payments.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：中期糧款計算書預覽 ───────────────────────────── -->
+<div class="modal-backdrop" id="payCertModal">
+  <div class="modal" style="max-width:920px;width:96%">
+    <div class="modal-header">
+      <div class="modal-title">承判商工程中期糧款計算書 — 預覽</div>
+      <button class="modal-close" onclick="Payments.closeCertModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:75vh;overflow:auto;padding:0">
+      <div id="payCertPreview" class="interim-cert-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="payCertBackBtn" onclick="Payments.closeCertModal()">返回</button>
+      <button class="btn btn-primary" id="payCertSubmitBtn" onclick="Payments.submitInterimCert()">提交</button>
+      <button class="btn btn-secondary" id="payCertEditBtn" style="display:none" onclick="Payments.editSavedCert()">返回修改</button>
+      <button class="btn btn-primary" id="payCertRestoreBtn" style="display:none" onclick="Payments.restoreAndEditCert()">繼續編輯</button>
+      <button class="btn btn-secondary" id="payCertWithdrawBtn" style="display:none" onclick="Payments.withdrawCert()">還原至提交前</button>
+      <button class="btn btn-secondary" onclick="Payments.printInterimCert()">🖨️ 打印</button>
+      <button class="btn btn-secondary" onclick="Payments.downloadInterimCert()">⬇️ 下載 PDF</button>
+      <button class="btn btn-secondary" onclick="Payments.downloadInterimCertDocx()">📄 下載 Word</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：分判變更以及扣款登記 ─────────────────────── -->
+<div class="modal-backdrop" id="svrModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title" id="svrModalTitle">新增變更登記</div>
+      <button class="modal-close" onclick="ScVoReg.closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="svrModalId">
+      <input type="hidden" id="svrLineCode">
+      <div class="form-group">
+        <label class="form-label">項目範本 <span style="color:var(--text-muted);font-weight:400">快速填寫</span></label>
+        <select class="form-input" id="svrTemplate" onchange="ScVoReg.onTemplatePick()">
+          <option value="">— 自訂 —</option>
+        </select>
+        <div class="form-hint">選範本會自動填類型、編號、描述；仍可在下方完整登記</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">選擇登記類型</label>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="svrRegType" value="vo" checked onchange="ScVoReg.onTypeChange()">
+            1. 變更工程
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="radio" name="svrRegType" value="deduction" onchange="ScVoReg.onTypeChange()">
+            2. 扣款
+          </label>
+        </div>
+      </div>
+      <div class="section-title">基本資料</div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">序號 <span style="color:var(--text-muted);font-weight:400">自動編號</span></label>
+          <input type="text" class="form-input" id="svrSeqNo" placeholder="儲存時自動分配" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">發票日期</label>
+          <input type="date" class="form-input" id="svrInvDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">發票號碼</label>
+          <input type="text" class="form-input" id="svrInvNo" placeholder="INV-001">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="svrQuotGroup">
+          <label class="form-label">報價單號碼</label>
+          <input type="text" class="form-input" id="svrQuotNo" placeholder="Q-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">判項編號 <span class="required">*</span></label>
+          <select class="form-input" id="svrScNo" onchange="ScVoReg.onScChange(this.value)">
+            <option value="">— 選擇判項編號 —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">公司名稱（英文）</label>
+          <input type="text" class="form-input" id="svrCompanyEn">
+        </div>
+        <div class="form-group">
+          <label class="form-label">公司名稱（中文）</label>
+          <input type="text" class="form-input" id="svrCompanyZh">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">工程/服務描述</label>
+        <input type="text" class="form-input" id="svrServiceDesc">
+      </div>
+      <hr class="divider">
+      <div class="section-title">金額</div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label" id="svrAmtLabel">變更金額 (HK$) <span class="required">*</span></label>
+          <div class="amount-input-wrap">
+            <input type="number" class="form-input" id="svrAmount" placeholder="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="svrContentLabel">變更內容</label>
+          <input type="text" class="form-input" id="svrContent" placeholder="變更描述">
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="svrRefLabel">變更工程編號</label>
+          <input type="text" class="form-input" id="svrRefNo" placeholder="VO-001" oninput="ScVoReg.onRefInput()">
+          <div class="form-hint" id="svrRefHint">按判項自動編號（VO/CC 各自遞增），可手改</div>
+        </div>
+      </div>
+      <div class="form-hint" id="svrDedAmtHint" style="display:none;margin-top:-8px;margin-bottom:8px">扣款金額輸入正數，系統自動存為負數</div>
+      <hr class="divider">
+      <div id="svrAuthSection">
+        <div class="section-title">付款授權</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">OA參考</label>
+            <input type="text" class="form-input" id="svrOaRef" placeholder="OK / -">
+          </div>
+          <div class="form-group">
+            <label class="form-label">OA編號</label>
+            <input type="text" class="form-input" id="svrOaNo">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">主合約變更編號</label>
+          <input type="text" class="form-input" id="svrMainContractVoNo" placeholder="MC-VO-001">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">合約價格變更審批表</label>
+            <input type="file" class="form-input" id="svrApprovalFile" accept=".pdf,.png,.jpg,.jpeg">
+            <div id="svrApprovalExisting" class="form-hint" style="display:none"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">報價單上傳</label>
+            <input type="file" class="form-input" id="svrQuotationFile" accept=".pdf,.png,.jpg,.jpeg">
+            <div id="svrQuotationExisting" class="form-hint" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">備注</label>
+        <textarea class="form-input" id="svrRemark" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ScVoReg.closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="ScVoReg.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：項目範本管理 ───────────────────────────────── -->
+<div class="modal-backdrop" id="svrTplModal">
+  <div class="modal modal-lg svr-tpl-modal">
+    <div class="modal-header">
+      <div class="modal-title">⚙️ 項目範本管理</div>
+      <button class="modal-close" onclick="ScVoReg.closeTplManager()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="svr-tpl-tabs">
+        <button type="button" class="btn btn-secondary btn-sm svr-tpl-tab active" data-tab="sc_vo" onclick="ScVoReg.setTplTab('sc_vo')">登記範本（VO / 扣款）</button>
+        <button type="button" class="btn btn-secondary btn-sm svr-tpl-tab" data-tab="cert_standard" onclick="ScVoReg.setTplTab('cert_standard')">糧款標準行</button>
+      </div>
+      <p class="form-hint svr-tpl-hint">範本供快速新增與中期糧款計算書使用；內建範本可編輯但不可刪除。</p>
+      <div class="svr-tpl-toolbar">
+        <button type="button" class="btn btn-primary btn-sm" onclick="ScVoReg.openTplForm()">➕ 新增範本</button>
+      </div>
+      <div class="table-wrap svr-tpl-table-wrap">
+        <table class="svr-tpl-table">
+          <thead id="svrTplTableHead"></thead>
+          <tbody id="svrTplTableBody">
+            <tr><td colspan="8"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="svrTplFormPanel" class="svr-tpl-form-panel" style="display:none">
+        <div class="section-title" id="svrTplFormTitle">編輯範本</div>
+        <input type="hidden" id="svrTplFormMode">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">代碼 <span class="required">*</span></label>
+            <input type="text" class="form-input" id="svrTplCode" placeholder="ded_custom">
+            <div class="form-hint" id="svrTplCodeHint">小寫英數與底線；儲存後不可改</div>
+          </div>
+          <div class="form-group" id="svrTplTypeGroup">
+            <label class="form-label" id="svrTplTypeLabel">類型</label>
+            <select class="form-input" id="svrTplType">
+              <option value="vo">變更工程 (VO)</option>
+              <option value="deduction">扣款</option>
+            </select>
+          </div>
+          <div class="form-group" style="max-width:100px">
+            <label class="form-label">排序</label>
+            <input type="number" class="form-input" id="svrTplSort" value="0" step="1">
+          </div>
+        </div>
+        <div class="form-row" id="svrTplRefRow">
+          <div class="form-group">
+            <label class="form-label">參考編號前綴</label>
+            <input type="text" class="form-input" id="svrTplRefNo" placeholder="VO / CC">
+          </div>
+          <div class="form-group">
+            <label class="form-label">描述</label>
+            <input type="text" class="form-input" id="svrTplDescription" placeholder="顯示名稱">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">計算書標籤</label>
+          <input type="text" class="form-input" id="svrTplCertLabel" placeholder="減: Contra Charge（扣款／標準減項用）">
+        </div>
+        <label class="svr-tpl-active-label">
+          <input type="checkbox" id="svrTplActive" checked> 啟用
+        </label>
+        <div class="svr-tpl-form-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="ScVoReg.closeTplForm()">取消</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="ScVoReg.saveTplForm()">💾 儲存範本</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ScVoReg.closeTplManager()">關閉</button>
     </div>
   </div>
 </div>
 
 <!-- ─── 模態框：新增/編輯項目 ─────────────────────────────────── -->
 <div class="modal-backdrop" id="projectModal">
-  <div class="modal">
+  <div class="modal modal-lg">
     <div class="modal-header">
       <div class="modal-title" id="projModalTitle">新增項目</div>
       <button class="modal-close" onclick="Projects.closeModal()">✕</button>
@@ -945,77 +1656,256 @@
     <div class="modal-body">
       <input type="hidden" id="projModalId">
       <input type="hidden" id="pQuotationNo">
-      <div class="form-row">
-        <div class="form-group" style="flex:1">
-          <label class="form-label">項目代碼 <span class="required">*</span></label>
-          <input type="text" class="form-input" id="pCode" placeholder="MS/Q001/26/jy">
-          <div class="form-hint">對應 Master List 報價編號</div>
+      <div id="projTabBasic" class="proj-form-ppt">
+
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">項目代碼 <span class="required">*</span></label>
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <input type="text" class="form-input" id="pCode" placeholder="MS/Q001/26/jy" style="flex:1">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickFromMaster()" title="從 Master List 帶入">📋</button>
+            </div>
+            <div class="form-hint">對應 Master List 報價編號</div>
+          </div>
+          <div class="form-group" style="min-width:140px">
+            <label class="form-label">狀態</label>
+            <select class="form-input" id="pStatus">
+              <option value="Active">進行中</option>
+              <option value="Completed">已完成</option>
+              <option value="On Hold">暫停</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group" style="align-self:flex-end">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickFromMaster()">📋 從 Master List 選擇</button>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">主合約名稱（中文）</label>
+            <input type="text" class="form-input" id="pNameZh" placeholder="港鐵九龍灣站健身室擴展工程">
+          </div>
+          <div class="form-group">
+            <label class="form-label">MP合約編號</label>
+            <div class="mp-codes-editor" id="pMpCodesEditor">
+              <div class="mp-codes-list" id="pMpCodesList"></div>
+              <div class="mp-codes-add">
+                <input type="text" class="form-input" id="pMpCodeInput" placeholder="Q1241_24"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();Projects.addMpCode()}">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.addMpCode()">＋</button>
+              </div>
+            </div>
+            <div class="form-hint" id="pMpCodesHint">首個為主編號</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">工程編號 Job No.</label>
+            <input type="text" class="form-input" id="pJobNo" placeholder="">
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group" style="flex:1">
-          <label class="form-label">項目負責人</label>
-          <select class="form-input" id="pPersonSelect">
-            <option value="">— 選擇項目負責人 —</option>
-          </select>
-          <div class="form-hint">與 Master List「項目負責人」同名；可獨立於報價編號尾碼</div>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">主合約名稱（英文）</label>
+            <input type="text" class="form-input" id="pNameEn" placeholder="MTR C9644-24C Extension of Fitness Room...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">工程分類</label>
+            <select class="form-input" id="pCatL1" onchange="Projects.onCategoryL1Change()">
+              <option value="">— 一級大類 —</option>
+            </select>
+            <select class="form-input" id="pCatL2" style="margin-top:6px" onchange="Projects.onCategoryL2Change()">
+              <option value="">— 二級分類 —</option>
+            </select>
+            <div class="form-hint" id="pCatScopeHint"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">會計編號</label>
+            <input type="text" class="form-input" id="pAccountCode" placeholder="N27">
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">狀態</label>
-          <select class="form-input" id="pStatus">
-            <option value="Active">進行中</option>
-            <option value="Completed">已完成</option>
-            <option value="On Hold">暫停</option>
-          </select>
+
+        <div class="form-row-4 proj-doc-row">
+          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_main_contract">
+            <label class="form-label">上傳附件（主合約 · LOA）</label>
+            <div class="proj-doc-actions" id="projDoc_main_loa">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_main_contract')">📎 主合約</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_loa')">📎 LOA</button>
+            </div>
+            <div class="proj-doc-filelist" id="projDocList_main_loa"></div>
+          </div>
+          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_signoff">
+            <label class="form-label">上傳附件（投標會簽表）</label>
+            <div class="proj-doc-actions" id="projDoc_signoff">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_signoff')">📎 上傳</button>
+            </div>
+            <div class="proj-doc-filelist" id="projDocList_signoff"></div>
+          </div>
+          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_email">
+            <label class="form-label">電郵記錄</label>
+            <div class="proj-doc-actions" id="projDoc_email">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_email')">📎 上傳</button>
+            </div>
+            <div class="proj-doc-filelist" id="projDocList_email"></div>
+          </div>
+          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_related">
+            <label class="form-label">相關文件</label>
+            <div class="proj-doc-actions" id="projDoc_related">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_related')">📎 上傳</button>
+            </div>
+            <div class="proj-doc-filelist" id="projDocList_related"></div>
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">項目名稱（英文）</label>
-          <input type="text" class="form-input" id="pNameEn" placeholder="MTR C9644-24C Extension of Fitness Room...">
+        <input type="file" id="projDocFileInput" accept=".pdf,.png,.jpg,.jpeg" hidden onchange="Projects.onProjDocFile(this)">
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">主承建商</label>
+            <input type="text" class="form-input" id="pMc" placeholder="Mepork Engineering...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">客方</label>
+            <input type="text" class="form-input" id="pClient" placeholder="MTR">
+          </div>
+          <div class="form-group">
+            <label class="form-label">第二客方</label>
+            <input type="text" class="form-input" id="pClient2" placeholder="聯營客方（如有）">
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">項目名稱（中文）</label>
-          <input type="text" class="form-input" id="pNameZh" placeholder="港鐵九龍灣站健身室擴展工程">
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">MP落標價 (HK$)</label>
+            <div class="proj-inline-field">
+              <input type="number" class="form-input" id="pTenderSum" placeholder="0" step="0.01">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment3_sot_sor')" title="SOT &amp; SOR">📎 SOT &amp; SOR</button>
+            </div>
+            <div class="proj-doc-filelist" id="projDoc_sot_sor"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">(A) MP承建金額 (HK$)</label>
+            <input type="number" class="form-input" id="pAmt" placeholder="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">預計利潤率 (%)</label>
+            <input type="number" class="form-input" id="pAnticipatedProfitPct" placeholder="" step="0.01">
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">客戶</label>
-          <input type="text" class="form-input" id="pClient" placeholder="MTR">
+
+        <div class="proj-form-divider"></div>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">主合約開工日</label>
+            <input type="date" class="form-input" id="pMcCommence">
+          </div>
+          <div class="form-group">
+            <label class="form-label">預計完工日</label>
+            <input type="date" class="form-input" id="pCompletionDate">
+          </div>
+          <div class="form-group">
+            <label class="form-label">實際完工 PC Cert.</label>
+            <input type="date" class="form-input" id="pPcCertDate">
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">主承建商</label>
-          <input type="text" class="form-input" id="pMc" placeholder="Mepork Engineering...">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">MP開工日</label>
+            <input type="date" class="form-input" id="pMpCommence">
+          </div>
+          <div class="form-group">
+            <label class="form-label">延遲完工日</label>
+            <input type="date" class="form-input" id="pExtendedCompletion">
+          </div>
+          <div class="form-group">
+            <label class="form-label">保修期（月）</label>
+            <input type="number" class="form-input" id="pDlpMonths" placeholder="" step="1">
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">(A) 承建金額 (HK$)</label>
-          <div class="amount-input-wrap">
-            <input type="number" class="form-input" id="pAmt" placeholder="0">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">項目負責人</label>
+            <select class="form-input" id="pPersonSelect">
+              <option value="">— 選擇項目負責人 —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">負責 QS</label>
+            <select class="form-input" id="pQsSelect">
+              <option value="">— 選擇負責 QS —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">工期（日數）</label>
+            <input type="text" class="form-input" id="pConstructionDays" placeholder="390 或 12/2024 - 01/2026 (390天)">
+          </div>
+        </div>
+
+        <div class="proj-form-divider"></div>
+
+        <div class="form-row-3" id="projSectionRetention">
+          <div class="form-group">
+            <label class="form-label">保固金 (HK$)</label>
+            <input type="number" class="form-input" id="pRetentionMaxAmt" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">保固金 (%)</label>
+            <input type="number" class="form-input" id="pRetentionPct" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">最高保固金 (%)</label>
+            <input type="number" class="form-input" id="pRetentionMaxPct" step="0.01">
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">財務會作調撥（人工分攤）(HK$)</label>
-          <div class="amount-input-wrap">
+          <label class="form-label">保固金退還</label>
+          <div class="proj-retention-options">
+            <label class="proj-retention-opt">
+              <input type="checkbox" id="pRetentionNaOn" onchange="Projects.onRetentionModeChange()">
+              <span>不適用</span>
+            </label>
+            <label class="proj-retention-opt proj-retention-opt-date">
+              <input type="checkbox" id="pRetentionOneOffOn" onchange="Projects.onRetentionModeChange()">
+              <span class="proj-retention-label">一次性退還保證金</span>
+              <input type="date" class="form-input proj-retention-date" id="pRetentionDateOneOff" disabled
+                onfocus="Projects.enableRetentionOption('one_off')" onclick="event.stopPropagation()">
+            </label>
+            <label class="proj-retention-opt proj-retention-opt-date">
+              <input type="checkbox" id="pRetentionFirstHalfOn" onchange="Projects.onRetentionModeChange()">
+              <span class="proj-retention-label">退還第一期保證金</span>
+              <input type="date" class="form-input proj-retention-date" id="pRetentionDateFirstHalf" disabled
+                onfocus="Projects.enableRetentionOption('first')" onclick="event.stopPropagation()">
+            </label>
+            <label class="proj-retention-opt proj-retention-opt-date">
+              <input type="checkbox" id="pRetentionSecondHalfOn" onchange="Projects.onRetentionModeChange()">
+              <span class="proj-retention-label">退還第二期保證金</span>
+              <input type="date" class="form-input proj-retention-date" id="pRetentionDateSecondHalf" disabled
+                onfocus="Projects.enableRetentionOption('second')" onclick="event.stopPropagation()">
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="max-width:240px">
+            <label class="form-label">保修完成日</label>
+            <input type="date" class="form-input" id="pDlpCertDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="max-width:240px">
+            <label class="form-label">MP工程帳目總結算日</label>
+            <input type="date" class="form-input" id="pMpFacDate">
+          </div>
+        </div>
+
+        <div class="proj-form-divider"></div>
+        <div class="section-title">待辦</div>
+        <div class="form-hint" style="margin:-4px 0 12px">以下欄位稍後整理 · 功能仍可使用</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">財務會作調撥（人工分攤）(HK$)</label>
             <input type="number" class="form-input" id="pLabour" placeholder="0" step="0.01">
           </div>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-group">
-          <label class="form-label">開工日期</label>
-          <input type="date" class="form-input" id="pStartDate">
+          <label class="form-label">備注</label>
+          <textarea class="form-input" id="pNotes" rows="2"></textarea>
         </div>
-        <div class="form-group"></div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">備注</label>
-        <textarea class="form-input" id="pNotes" rows="2"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -1034,29 +1924,52 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="scModalId">
+      <div class="form-group">
+        <label class="form-label">判項類型</label>
+        <select class="form-input" id="scEntryType" onchange="SC.onEntryTypeChange()">
+          <option value="quotation">報價單</option>
+          <option value="contract">分判合約</option>
+        </select>
+      </div>
       <div class="form-row-3">
         <div class="form-group">
           <label class="form-label">判項編號 <span class="required">*</span></label>
-          <input type="text" class="form-input" id="scNo" placeholder="M-011 / SC-019 / O-012">
+          <div class="ocr-new-sc-row">
+            <select class="form-input ocr-sc-prefix" id="scNoPrefix" onchange="SC.onScPrefixChange()">
+              <option value="SC">SC — 分包</option>
+              <option value="M">M — 材料/設備</option>
+              <option value="O">O — 其他支出</option>
+            </select>
+            <input type="text" class="form-input" id="scNo" placeholder="SC-001" oninput="SC.onScNoInput()">
+          </div>
+          <div class="form-hint" id="scNoHint">選分類後自動帶出下一序號，可改</div>
         </div>
         <div class="form-group">
-          <label class="form-label">報價單號</label>
+          <label class="form-label" id="scQuotNoLabel">報價單號</label>
           <input type="text" class="form-input" id="scQuotNo" placeholder="Q-001">
         </div>
-        <div class="form-group">
+        <div class="form-group" id="scQuotDateWrap">
           <label class="form-label">報價日期</label>
           <input type="date" class="form-input" id="scQuotDate">
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">報價單上的日期</div>
+          <div class="form-hint">報價單上的日期</div>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">MS/C 分判合約編號</label>
+        <input type="text" class="form-input" id="scMsContractNo" list="scMsContractList"
+          placeholder="選擇 MS/C 編號，或人手輸入 例：MS/C07-1/25/jc"
+          oninput="SC.onMsCInput()" onchange="SC.onMsCInput()" autocomplete="off">
+        <datalist id="scMsContractList"></datalist>
+        <div class="form-hint" id="scMsContractHint">可從「分判合約編號表」選擇，或人手輸入；留空則儲存後依公司／項目自動配對</div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">公司名稱（英文）</label>
-          <input type="text" class="form-input" id="scCompanyEn">
+          <label class="form-label">公司名稱（中文）</label>
+          <input type="text" class="form-input" id="scCompanyZh" oninput="SC.scheduleMsCHint()">
         </div>
         <div class="form-group">
-          <label class="form-label">公司名稱（中文）</label>
-          <input type="text" class="form-input" id="scCompanyZh">
+          <label class="form-label">公司名稱（英文）</label>
+          <input type="text" class="form-input" id="scCompanyEn" oninput="SC.scheduleMsCHint()">
         </div>
       </div>
       <div class="form-group sc-desc-block">
@@ -1118,9 +2031,13 @@
         <div class="form-group">
           <label class="form-label">OA日期</label>
           <input type="date" class="form-input" id="scOaDate">
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">放入 OA 系統的日期（Excel O 欄）</div>
+          <div class="form-hint">放入 OA 系統的日期（Excel O 欄）</div>
         </div>
-        <div class="form-group"></div>
+        <div class="form-group" id="scRetentionWrap" hidden>
+          <label class="form-label">Retention Sum</label>
+          <input type="number" class="form-input" id="scRetentionSum" placeholder="0.00" step="0.01">
+          <div class="form-hint">分判合約保固金／保留款</div>
+        </div>
       </div>
       <div class="form-row" id="scPaidRow">
         <div class="form-group">
@@ -1133,7 +2050,7 @@
           <input type="text" class="form-input" id="scRemainAmt" readonly style="opacity:0.85" placeholder="—">
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="scOaStatusRow">
         <div class="form-group">
           <label class="form-label">OA狀態</label>
           <input type="text" class="form-input" id="scOaStatus" placeholder="OK / -">
@@ -1283,7 +2200,7 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group ip-col-frozen-hidden">
           <label class="form-label">申請日期</label>
           <input type="date" class="form-input" id="ipAppliedDate">
         </div>
@@ -1293,16 +2210,26 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group ip-col-frozen-hidden">
           <label class="form-label">申請金額</label>
           <input type="number" step="0.01" class="form-input" id="ipAppAmt" placeholder="0.00">
         </div>
         <div class="form-group">
-          <label class="form-label">則師批款</label>
+          <label class="form-label">業主批款</label>
           <input type="number" step="0.01" class="form-input" id="ipCertAmt" placeholder="0.00">
         </div>
       </div>
-      <div class="form-row">
+      <div class="ip-cert-section">
+        <div class="form-label" style="margin-bottom:8px">IP Cert. 附件</div>
+        <div class="ip-receipt-attach-row">
+          <input type="file" id="ipCertFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+            onchange="IpPeriod.onIpCertFileSelected(event)">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickIpCertFile()">📄 上傳 IP Cert.</button>
+          <span class="form-hint" id="ipCertAttachHint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</span>
+        </div>
+        <div id="ipCertAttachList" class="ip-receipt-attach-list"></div>
+      </div>
+      <div class="form-row ip-col-frozen-hidden">
         <div class="form-group">
           <label class="form-label">分包支出</label>
           <input type="number" step="0.01" class="form-input" id="ipSubconPaid" placeholder="0.00">
@@ -1311,6 +2238,64 @@
           <label class="form-label">分包批款日</label>
           <input type="date" class="form-input" id="ipSubconCertDate">
         </div>
+      </div>
+      <div class="ip-receipt-section">
+        <div class="form-label" style="margin-bottom:8px">收款記錄（支票／過數）</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">方式</label>
+            <select class="form-input" id="ipReceiptMethod" onchange="IpPeriod.onReceiptMethodChange()">
+              <option value="">— 未填 —</option>
+              <option value="cheque">支票</option>
+              <option value="transfer">過數</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">收款日期</label>
+            <input type="date" class="form-input" id="ipReceiptDate" onchange="IpPeriod._updateReceiptPreview()">
+          </div>
+        </div>
+        <div id="ipReceiptChequeFields" class="form-row" style="display:none">
+          <div class="form-group">
+            <label class="form-label">支票號碼</label>
+            <input type="text" class="form-input" id="ipReceiptChequeNo" placeholder="#828310" oninput="IpPeriod._updateReceiptPreview()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">銀行</label>
+            <div class="ip-bank-combo" id="ipReceiptBankCombo">
+              <button type="button" class="form-input ip-bank-combo-trigger" id="ipReceiptBankTrigger"
+                onclick="IpPeriod.toggleBankDropdown(event)" aria-haspopup="listbox" aria-expanded="false">
+                <span class="ip-bank-combo-label" id="ipReceiptBankLabel">— 請選擇銀行 —</span>
+                <span class="ip-bank-chevron" aria-hidden="true">▾</span>
+              </button>
+              <input type="hidden" id="ipReceiptBank" value="">
+              <div class="ip-bank-dropdown" id="ipReceiptBankDropdown" hidden>
+                <input type="text" class="form-input ip-bank-search" id="ipReceiptBankSearch"
+                  placeholder="搜尋代碼或銀行名稱…" oninput="IpPeriod.filterBankSelect()" autocomplete="off">
+                <ul class="ip-bank-list" id="ipReceiptBankList" role="listbox"></ul>
+              </div>
+            </div>
+            <div class="ip-bank-custom-row">
+              <span class="ip-bank-custom-label">或自填</span>
+              <input type="text" class="form-input ip-bank-custom" id="ipReceiptBankCustom"
+                inputmode="numeric" maxlength="3" placeholder="3 位代碼，如 061"
+                oninput="IpPeriod.onBankCustomInput()">
+            </div>
+            <div class="form-hint" id="ipReceiptBankHint">主流本地銀行，或自填 3 位代碼</div>
+          </div>
+        </div>
+        <div id="ipReceiptTransferFields" class="form-group" style="display:none">
+          <label class="form-label">過數備註</label>
+          <input type="text" class="form-input" id="ipReceiptNote" placeholder="轉帳參考／備註" oninput="IpPeriod._updateReceiptPreview()">
+        </div>
+        <div class="form-hint" id="ipReceiptPreview"></div>
+        <div class="ip-receipt-attach-row">
+          <input type="file" id="ipReceiptFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+            onchange="IpPeriod.onReceiptFileSelected(event)">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickReceiptFile()">📎 上傳支票附件</button>
+          <span class="form-hint" id="ipReceiptAttachHint">PDF / PNG / JPG</span>
+        </div>
+        <div id="ipReceiptAttachList" class="ip-receipt-attach-list"></div>
       </div>
       <div id="ipPctHint" class="form-hint" style="margin-top:4px"></div>
     </div>
@@ -1339,14 +2324,30 @@
 
 <!-- ─── 文件預覽（PDF / 圖片）──────────────────────────────── -->
 <div class="doc-viewer-backdrop" id="docViewerModal" onclick="DocViewer.onBackdrop(event)">
-  <div class="doc-viewer-panel" onclick="event.stopPropagation()">
+  <div class="doc-viewer-panel" id="docViewerPanel" onclick="event.stopPropagation()">
     <div class="doc-viewer-header">
-      <div class="doc-viewer-title" id="docViewerTitle">文件預覽</div>
+      <div class="doc-viewer-heading">
+        <div class="doc-viewer-title" id="docViewerTitle">文件預覽</div>
+        <div class="doc-viewer-subtitle" id="docViewerSubtitle" style="display:none"></div>
+      </div>
       <div class="doc-viewer-actions">
+        <button type="button" class="btn btn-secondary btn-sm" id="docViewerPrint" onclick="DocViewer.print()">🖨️ 打印</button>
         <a class="btn btn-secondary btn-sm" id="docViewerOpenTab" href="#" target="_blank" rel="noopener">新分頁開啟</a>
         <a class="btn btn-secondary btn-sm" id="docViewerDownload" href="#" download>下載</a>
         <button type="button" class="modal-close" onclick="DocViewer.close()" title="關閉">✕</button>
       </div>
+    </div>
+    <div class="doc-viewer-theme-bar" id="docViewerThemeBar" style="display:none">
+      <label class="doc-viewer-theme-label" id="docViewerThemeLabel" for="docViewerTheme">打印主題</label>
+      <select id="docViewerTheme" class="form-input doc-viewer-theme-select"></select>
+      <span class="doc-viewer-bar-sep" id="docViewerAppendixSep" style="display:none" aria-hidden="true"></span>
+      <span class="doc-viewer-appendix-label" id="docViewerAppendixLabel" style="display:none">空白附錄</span>
+      <label class="doc-viewer-appendix-opt" id="docViewerAppendixVoWrap" style="display:none">
+        <input type="checkbox" id="docViewerAppendixVo"> 附錄 I（無 VO 時仍列印）
+      </label>
+      <label class="doc-viewer-appendix-opt" id="docViewerAppendixContraWrap" style="display:none">
+        <input type="checkbox" id="docViewerAppendixContra"> 附錄 II（無 Contra 時仍列印）
+      </label>
     </div>
     <div class="doc-viewer-body" id="docViewerBody">
       <div class="doc-viewer-loading" id="docViewerLoading">載入文件中...</div>
@@ -1359,6 +2360,9 @@
         <a class="btn btn-primary btn-sm" id="docViewerErrorLink" href="#" target="_blank" rel="noopener" style="margin-top:12px">嘗試新分頁開啟</a>
       </div>
     </div>
+    <div class="doc-viewer-resize-e" id="docViewerResizeE" title="拖曳調整寬度" aria-hidden="true"></div>
+    <div class="doc-viewer-resize-s" id="docViewerResizeS" title="拖曳調整高度" aria-hidden="true"></div>
+    <div class="doc-viewer-resize-se" id="docViewerResizeSE" title="拖曳調整大小（雙擊還原）" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -1387,6 +2391,36 @@
     <div class="modal-footer" id="masterSyncFooter" style="display:none">
       <button class="btn btn-secondary" onclick="MasterList.closeSyncModal()">關閉</button>
       <button class="btn btn-primary" id="masterConfirmSyncBtn" onclick="MasterList.confirmSync()">確認同步至資料庫</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：Master 自動配對 ───────────────────────────────── -->
+<div class="modal-backdrop" id="masterAutoLinkModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">自動配對工程項目</div>
+      <button class="modal-close" onclick="MasterList.closeAutoLinkModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" style="margin-bottom:12px">
+        依報價編號比對工程項目。MP 合約編號會將 Q 序號<strong>補零至 4 位</strong>（如 MS/Q178/25 → Q0178_25）。同一會計項目可含多個 MP 合約。只處理尚未配對的報價／標書。
+      </p>
+      <div id="masterAutoLinkLoading" class="empty-state" style="padding:24px">分析中…</div>
+      <div id="masterAutoLinkResult" style="display:none">
+        <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+          <div class="stat-card"><div class="stat-label">掃描筆數</div><div class="stat-value" id="masterAutoLinkScanned">—</div></div>
+          <div class="stat-card success"><div class="stat-label">可配對</div><div class="stat-value" id="masterAutoLinkMatched">—</div></div>
+          <div class="stat-card warning"><div class="stat-label">略過</div><div class="stat-value" id="masterAutoLinkSkipped">—</div></div>
+        </div>
+        <div id="masterAutoLinkScope" class="form-hint" style="margin-bottom:12px"></div>
+        <div id="masterAutoLinkTable"></div>
+        <div id="masterAutoLinkSkippedHint" class="form-hint" style="margin-top:12px;display:none"></div>
+      </div>
+    </div>
+    <div class="modal-footer" id="masterAutoLinkFooter" style="display:none">
+      <button class="btn btn-secondary" onclick="MasterList.closeAutoLinkModal()">取消</button>
+      <button class="btn btn-primary" id="masterAutoLinkConfirmBtn" onclick="MasterList.confirmAutoLink()">確認配對</button>
     </div>
   </div>
 </div>
@@ -1423,22 +2457,12 @@
 <div class="modal-backdrop" id="masterEditModal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title">編輯 Master List</div>
+      <div class="modal-title" id="masterEditModalTitle">編輯報價／標書</div>
       <button class="modal-close" onclick="MasterList.closeEditModal()">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="masterEditRowId">
       <input type="hidden" id="masterEditQuotationNo">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">報價編號</label>
-          <input type="text" class="form-input" id="masterEditQuotDisplay" readonly>
-        </div>
-        <div class="form-group">
-          <label class="form-label">日期</label>
-          <input type="date" class="form-input" id="masterEditDate">
-        </div>
-      </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">類型</label>
@@ -1449,37 +2473,77 @@
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label">日期</label>
+          <input type="date" class="form-input" id="masterEditDate" onchange="MasterList.onEditDateChange()">
+        </div>
+        <div class="form-group">
           <label class="form-label">中標</label>
           <select class="form-input" id="masterEditAwarded">
             <option value="">—</option>
             <option value="中">中</option>
           </select>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group" style="flex:1">
           <label class="form-label">項目負責人</label>
-          <input type="text" class="form-input" id="masterEditPersonName" list="masterPersonSuggestions" placeholder="Master List 負責人全名">
+          <input type="text" class="form-input" id="masterEditPersonName" list="masterPersonSuggestions" placeholder="選擇或輸入負責人全名（縮寫用於編號尾碼）" onchange="MasterList.onEditPersonChange()" onblur="MasterList.onEditPersonChange()" oninput="MasterList.onEditPersonInput()">
           <datalist id="masterPersonSuggestions"></datalist>
+        </div>
+      </div>
+      <div class="form-row" id="masterEditQuotRow">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">報價編號</label>
+          <div class="master-quot-input-row">
+            <input type="text" class="form-input" id="masterEditQuotDisplay" oninput="MasterList.onQuotNoInput()">
+            <button type="button" class="btn btn-secondary btn-sm" id="masterEditQuotRefreshBtn" hidden onclick="MasterList.refreshQuotNoSuggest(true)">↻ 自動編號</button>
+          </div>
+          <p class="form-hint" id="masterEditQuotHint"></p>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">屋苑/地點</label>
-          <input type="text" class="form-input" id="masterEditSite">
+          <input type="text" class="form-input" id="masterEditSite" list="masterSiteSuggestions" placeholder="選或輸入屋苑/地點" onchange="MasterList.onEditSiteChange()" onblur="MasterList.onEditSiteChange()">
+          <datalist id="masterSiteSuggestions"></datalist>
+          <p class="form-hint">常見選項來自已登記 Master List（依使用次數排序）</p>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">工作範疇</label>
-          <input type="text" class="form-input" id="masterEditTrade">
+          <select class="form-input" id="masterEditTradeScopeGroup" onchange="MasterTradeCats.onScopeGroupChange()">
+            <option value="">— 全部大類別 —</option>
+          </select>
+          <input type="text" class="form-input" id="masterEditTradeScope" list="masterTradeScopeList" placeholder="先選大類別，再選或輸入細項" style="margin-top:6px" oninput="MasterTradeCats.onScopeInput()" onchange="MasterTradeCats.onScopeInput()">
+          <datalist id="masterTradeScopeList"></datalist>
+          <p class="form-hint">I 欄細項（~1000+）；大類別依 Excel I→J 配對推斷。<button type="button" class="btn-link" onclick="MasterTradeCats.openManage('scope')">管理</button></p>
         </div>
+        <div class="form-group" id="masterEditEngCatWrap">
+          <label class="form-label">工程類別分類</label>
+          <div id="masterEditEngCatCollapsed" class="master-eng-cat-collapsed">
+            <span id="masterEditEngCatSummary" class="master-eng-cat-summary">同大類別：—</span>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="MasterTradeCats.expandOverride()">覆寫</button>
+          </div>
+          <div id="masterEditEngCatExpanded" class="master-eng-cat-expanded" hidden>
+            <select class="form-input" id="masterEditTradeOverride" onchange="MasterTradeCats.onOverrideChange()"></select>
+            <button type="button" class="btn-link master-eng-cat-collapse-btn" onclick="MasterTradeCats.collapseOverride()">收起（同大類別）</button>
+          </div>
+          <p class="form-hint">預設跟大類別相同；需改歸類（如「其他」）時按<strong>覆寫</strong>。<button type="button" class="btn-link" onclick="MasterTradeCats.openManage('override')">管理</button></p>
+        </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label class="form-label">業主名稱</label>
-          <input type="text" class="form-input" id="masterEditClient">
+          <input type="text" class="form-input" id="masterEditClient" list="masterClientSuggestions" placeholder="選或輸入業主名稱" onchange="MasterList.onEditClientChange()" onblur="MasterList.onEditClientChange()">
+          <datalist id="masterClientSuggestions"></datalist>
+          <p class="form-hint">常見選項來自已登記 Master List（依使用次數排序）</p>
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">內容</label>
         <textarea class="form-input" id="masterEditDesc" rows="3"></textarea>
+        <p class="form-hint">選定屋苑/地點後自動加上「屋苑 - 」前綴（與 Excel 一致）</p>
       </div>
       <div class="form-row-3">
         <div class="form-group">
@@ -1499,7 +2563,10 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">外判與否</label>
-          <input type="text" class="form-input" id="masterEditSubconType" placeholder="是 / 否">
+          <select class="form-input" id="masterEditSubconType">
+            <option value="-">-</option>
+            <option value="外判">外判</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">主分判商（QS 合約）</label>
@@ -1573,6 +2640,88 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="MasterList.closeEditModal()">取消</button>
       <button class="btn btn-primary" onclick="MasterList.saveEdit()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：工作範疇選項管理 ───────────────────────────────── -->
+<div class="modal-backdrop" id="masterTradeModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">工作範疇／工程類別</div>
+      <button class="modal-close" onclick="MasterTradeCats.closeManage()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" id="masterTradeRefHint">—</p>
+      <div class="master-trade-tabs" style="margin-bottom:12px">
+        <button type="button" class="btn btn-secondary btn-sm master-trade-tab active" data-tab="scope" onclick="MasterTradeCats._switchManageTab('scope')">I 欄 · 工作範疇</button>
+        <button type="button" class="btn btn-secondary btn-sm master-trade-tab" data-tab="override" onclick="MasterTradeCats._switchManageTab('override')">工程類別分類</button>
+        <button type="button" class="btn btn-primary btn-sm" style="margin-left:auto" onclick="MasterTradeCats.syncFromRef()">🔄 從 Excel 同步</button>
+      </div>
+      <div class="form-row" style="margin-bottom:12px;align-items:flex-end">
+        <input type="hidden" id="masterTradeAddFieldType" value="scope">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">新增選項</label>
+          <input type="text" class="form-input" id="masterTradeAddName" placeholder="輸入新選項名稱">
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="MasterTradeCats.addCategory()">➕ 新增</button>
+      </div>
+      <div id="masterTradePanelScope" class="table-wrap" style="max-height:420px;overflow:auto">
+        <table>
+          <thead>
+            <tr><th>名稱</th><th>大類別</th><th>使用次數</th><th>排序</th><th>操作</th></tr>
+          </thead>
+          <tbody id="masterTradeScopeBody"></tbody>
+        </table>
+      </div>
+      <div id="masterTradePanelOverride" class="table-wrap" style="max-height:420px;overflow:auto;display:none">
+        <table>
+          <thead>
+            <tr><th>名稱</th><th>一級</th><th>來源</th><th>使用次數</th><th>排序</th><th>操作</th></tr>
+          </thead>
+          <tbody id="masterTradeOverrideBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="MasterTradeCats.closeManage()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="masterTradeEditModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">編輯選項</div>
+      <button class="modal-close" onclick="MasterTradeCats.closeEdit()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="masterTradeEditId">
+      <div class="form-group">
+        <label class="form-label">欄位</label>
+        <select class="form-input" id="masterTradeEditFieldType">
+          <option value="scope">I 欄 · 工作範疇</option>
+          <option value="override">工程類別分類</option>
+        </select>
+      </div>
+      <div class="form-group" id="masterTradeEditGroupRow">
+        <label class="form-label">大類別（I 欄細項歸類）</label>
+        <select class="form-input" id="masterTradeEditGroup">
+          <option value="">未分類</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">名稱</label>
+        <input type="text" class="form-input" id="masterTradeEditName">
+      </div>
+      <div class="form-group">
+        <label class="form-label">排序</label>
+        <input type="number" class="form-input" id="masterTradeEditSort">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="MasterTradeCats.closeEdit()">取消</button>
+      <button class="btn btn-primary" onclick="MasterTradeCats.saveEdit()">儲存</button>
     </div>
   </div>
 </div>
@@ -1662,15 +2811,150 @@
   </div>
 </div>
 
+<!-- ─── 模態框：項目負責人 · 報價清單 ─────────────────────────── -->
+<div class="modal-backdrop" id="staffQuotModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="staffQuotModalTitle">報價清單</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px" id="staffQuotModalSub">—</div>
+      </div>
+      <button class="modal-close" onclick="StaffRoster.closeQuotModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:0">
+      <div class="table-wrap" style="border:none;border-radius:0;max-height:52vh;overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>報價編號</th>
+              <th>日期</th>
+              <th>類型</th>
+              <th>屋苑／內容</th>
+              <th>中標</th>
+              <th>配對項目</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="staffQuotTableBody">
+            <tr><td colspan="7"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="staffQuotPagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="StaffRoster.closeQuotModal()">關閉</button>
+      <button class="btn btn-secondary" onclick="StaffRoster.openInMasterList()">📋 在 Master List 查看</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：MS/C 分判合約編號 ───────────────────────────────── -->
+<div class="modal-backdrop" id="scrModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title" id="scrModalTitle">新增 MS/C</div>
+      <button class="modal-close" onclick="ScContractRegistry.closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-title">合約編號</div>
+      <div class="form-group">
+        <label class="form-label">MS/C 分判合約編號 <span class="required">*</span></label>
+        <input type="text" class="form-input" id="scrMsNo" placeholder="MS/C07-1/25/jc">
+        <div class="form-hint">MS/C月份-序號/年份/負責人</div>
+      </div>
+      <div class="section-title">基本資料</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">外判公司</label>
+          <input type="text" class="form-input" id="scrCompany">
+        </div>
+        <div class="form-group">
+          <label class="form-label">項目編號 <span class="required">*</span></label>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="scrProjectCode" placeholder="MS_Q0185_25_kp" style="flex:1">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.fillProjectFromCurrent()">目前項目</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">工程項目</label>
+        <textarea class="form-input" id="scrWorks" rows="2"></textarea>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">負責同事</label>
+          <select class="form-input" id="scrPerson">
+            <option value="">— 選擇負責同事 —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">分判合約合額 (HK$)</label>
+          <input type="number" class="form-input" id="scrAmount" step="0.01" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sheet</label>
+          <input type="text" class="form-input" id="scrSheet" placeholder="2026">
+        </div>
+      </div>
+      <div class="section-title">合約狀態（對照 Excel）</div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">合約會簽表</label>
+          <input type="text" class="form-input" id="scrCountersign" placeholder="✔ / NA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">合作伙伴</label>
+          <input type="text" class="form-input" id="scrPartner" placeholder="NA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">定標會議紀錄</label>
+          <input type="text" class="form-input" id="scrTenderMinutes" placeholder="✔ / NA">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">Final Account</label>
+          <input type="text" class="form-input" id="scrFinalAccount">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Final Account Statement</label>
+          <input type="text" class="form-input" id="scrFinalAccountStatement">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ISO</label>
+          <input type="text" class="form-input" id="scrIso">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Remark</label>
+        <input type="text" class="form-input" id="scrRemark">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ScContractRegistry.closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="ScContractRegistry.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
-<script src="js/main.js?v=20260714d"></script>
-<script src="js/payments.js?v=20260714d"></script>
-<script src="js/projects.js?v=20260715a"></script>
-<script src="js/ip_period.js?v=20260715e"></script>
-<script src="js/ocr.js?v=20260714a"></script>
-<script src="js/reports.js?v=20260714c"></script>
-<script src="js/ip_reconcile.js?v=20260714a"></script>
-<script src="js/master_list.js?v=20260717a"></script>
-<script src="js/staff.js?v=20260708e"></script>
+<script src="js/main.js?v=20260816a"></script>
+<script src="js/col_picker.js?v=20260813k"></script>
+<script src="js/iso_docs.js?v=20260814e"></script>
+<script src="js/payments.js?v=20260815u"></script>
+<script src="js/sc_vo_reg.js?v=20260815b"></script>
+<script src="js/main_con_fac.js?v=20260808i"></script>
+<script src="js/sc_fac.js?v=20260813p"></script>
+<script src="js/projects.js?v=20260814e"></script>
+<script src="js/hk_banks.js?v=20260805c"></script>
+<script src="js/ip_period.js?v=20260805h"></script>
+<script src="js/ocr.js?v=20260814a"></script>
+<script src="js/reports.js?v=20260815-layout2"></script>
+<script src="js/ip_reconcile.js?v=20260805a"></script>
+<script src="js/master_trade.js?v=20260813z"></script>
+<script src="js/master_list.js?v=20260815a"></script>
+<script src="js/sc_contract_registry.js?v=20260814c"></script>
+<script src="js/staff.js?v=20260815a"></script>
 </body>
 </html>

@@ -30,7 +30,7 @@ const IpReconcile = {
     return parts.join(' · ') || '—';
   },
 
-  render(el, data) {
+  render(el, data, options = {}) {
     const target = typeof el === 'string' ? document.getElementById(el) : el;
     if (!target) return;
 
@@ -41,9 +41,29 @@ const IpReconcile = {
       return;
     }
 
-    const rows = data.rows || [];
+    const q = String(options.search || '').trim().toLowerCase();
+    let rows = data.rows || [];
+    if (q) {
+      rows = rows.filter(r => {
+        const site = r.site || {};
+        const admin = r.admin || {};
+        const blob = [
+          r.ip_label, r.status_label, r.status,
+          site.ip_no, admin.ip_no,
+          site.applied_date, site.certificate_date,
+          admin.invoice_date, admin.receipt_date,
+          admin.invoice_date_display, admin.receipt_date_display,
+          site.amount_display, admin.amount_display,
+          site.certified_income, admin.invoice_amount,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
     if (!rows.length) {
-      target.innerHTML = '<p class="form-hint" style="padding:12px">兩邊均無糧期資料。地盤請 sync Payment Status；行政請 sync Master List。</p>';
+      target.innerHTML = q
+        ? `<p class="form-hint" style="padding:12px">無符合「${escHtml(options.search.trim())}」的核對記錄</p>`
+        : '<p class="form-hint" style="padding:12px">兩邊均無糧期資料。地盤請 sync Payment Status；行政請 sync Master List。</p>';
       return;
     }
 
@@ -82,7 +102,7 @@ const IpReconcile = {
               <th colspan="4" class="ip-reconcile-th-admin">行政 Admin（開票／收票）</th>
             </tr>
             <tr>
-              <th>糧期</th><th>申請日</th><th>批款日</th><th>則師批款</th>
+              <th>糧期</th><th>申請日</th><th>批款日</th><th>業主批款</th>
               <th>糧期</th><th>出發票</th><th>收票</th><th>發票金額</th>
             </tr>
           </thead>

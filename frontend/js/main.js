@@ -1,6 +1,19 @@
 /* ─── main.js — 核心應用邏輯 ───────────────────────────── */
 const API = `${window.location.origin}/api`;
 
+/** 所有 /api 請求帶 Session Cookie（登入後上傳／PDF 等） */
+(function patchFetchCredentials() {
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    const opts = init ? { ...init } : {};
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url.includes('/api/') && !opts.credentials) {
+      opts.credentials = 'include';
+    }
+    return origFetch(input, opts);
+  };
+})();
+
 // ─── 主題（Light / Dark）──────────────────────────────────
 const Theme = {
   STORAGE_KEY: 'qs_theme',
@@ -72,17 +85,146 @@ const Theme = {
 
 function uploadUrl(filename) {
   if (!filename) return null;
-  return `${window.location.origin}/api/uploads/${encodeURIComponent(filename)}`;
+  const parts = String(filename).replace(/\\/g, '/').split('/').filter(Boolean).map(encodeURIComponent);
+  return `${window.location.origin}/api/uploads/${parts.join('/')}`;
 }
 
 /** 應用內文件預覽（PDF / 圖片） */
 const DocViewer = {
+  PANEL_SIZE_KEY: 'qs_doc_viewer_size',
+  _resizeInited: false,
+
+  _initResize() {
+    if (this._resizeInited) return;
+    const panel = document.getElementById('docViewerPanel');
+    const handleE = document.getElementById('docViewerResizeE');
+    const handleS = document.getElementById('docViewerResizeS');
+    const handleSE = document.getElementById('docViewerResizeSE');
+    if (!panel) return;
+    this._resizeInited = true;
+
+    const startDrag = (mode, e, cursor) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = panel.getBoundingClientRect();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = rect.width;
+      const startH = rect.height;
+      document.body.style.cursor = cursor;
+      document.body.style.userSelect = 'none';
+
+      const onMove = (ev) => {
+        let w = startW;
+        let h = startH;
+        if (mode.includes('e')) w = startW + (ev.clientX - startX);
+        if (mode.includes('s')) h = startH + (ev.clientY - startY);
+        this._setPanelSize(w, h);
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        this._savePanelSize();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    };
+
+    handleE?.addEventListener('mousedown', (e) => startDrag('e', e, 'ew-resize'));
+    handleS?.addEventListener('mousedown', (e) => startDrag('s', e, 'ns-resize'));
+    handleSE?.addEventListener('mousedown', (e) => startDrag('es', e, 'nwse-resize'));
+    handleSE?.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._resetPanelSize();
+    });
+  },
+
+  _panelLimits() {
+    const pad = 32;
+    return {
+      minW: 480,
+      minH: 320,
+      maxW: window.innerWidth - pad,
+      maxH: window.innerHeight - pad,
+    };
+  },
+
+  _setPanelSize(w, h) {
+    const panel = document.getElementById('docViewerPanel');
+    if (!panel) return;
+    const { minW, minH, maxW, maxH } = this._panelLimits();
+    panel.style.width = `${Math.round(Math.max(minW, Math.min(w, maxW)))}px`;
+    panel.style.height = `${Math.round(Math.max(minH, Math.min(h, maxH)))}px`;
+    panel.style.maxWidth = 'none';
+  },
+
+  _applySavedPanelSize() {
+    const panel = document.getElementById('docViewerPanel');
+    if (!panel) return;
+    try {
+      const raw = localStorage.getItem(this.PANEL_SIZE_KEY);
+      if (!raw) return;
+      const { w, h } = JSON.parse(raw);
+      if (w > 0 && h > 0) this._setPanelSize(w, h);
+    } catch (e) { /* ignore */ }
+  },
+
+  _savePanelSize() {
+    const panel = document.getElementById('docViewerPanel');
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    localStorage.setItem(this.PANEL_SIZE_KEY, JSON.stringify({
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+    }));
+  },
+
+  _resetPanelSize() {
+    const panel = document.getElementById('docViewerPanel');
+    if (!panel) return;
+    panel.style.width = '';
+    panel.style.height = '';
+    panel.style.maxWidth = '';
+    localStorage.removeItem(this.PANEL_SIZE_KEY);
+  },
+
   async open(filePath, title = '文件預覽') {
     const url = uploadUrl(filePath);
     if (!url) {
       toast('此記錄沒有 PDF', 'warning');
       return;
     }
+    const ext = (filePath.split('.').pop() || '').toLowerCase();
+    const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
+    return this.openUrl(url, title, {
+      kind: isImage ? 'image' : 'pdf',
+      downloadName: filePath.split('/').pop(),
+    });
+  },
+
+  async openBlob(blob, title = '文件預覽', opts = {}) {
+    this._revokeBlob();
+    const blobUrl = URL.createObjectURL(blob);
+    this._blobUrl = blobUrl;
+    return this.openUrl(blobUrl, title, { ...opts, skipHead: true });
+  },
+
+  _revokeBlob() {
+    if (this._blobUrl) {
+      URL.revokeObjectURL(this._blobUrl);
+      this._blobUrl = null;
+    }
+  },
+
+  async openUrl(url, title = '文件預覽', opts = {}) {
+    const {
+      kind = 'pdf', downloadUrl, downloadName, skipHead = false,
+      themes, theme, onThemeChange, subtitle,
+      appendixOptions, onAppendixChange,
+    } = opts;
     const modal = document.getElementById('docViewerModal');
     const frame = document.getElementById('docViewerFrame');
     const img = document.getElementById('docViewerImg');
@@ -92,11 +234,31 @@ const DocViewer = {
     const errLink = document.getElementById('docViewerErrorLink');
     const openTab = document.getElementById('docViewerOpenTab');
     const download = document.getElementById('docViewerDownload');
+    const printBtn = document.getElementById('docViewerPrint');
 
     document.getElementById('docViewerTitle').textContent = title;
+    const subEl = document.getElementById('docViewerSubtitle');
+    if (subEl) {
+      if (subtitle) {
+        subEl.textContent = subtitle;
+        subEl.style.display = '';
+      } else {
+        subEl.textContent = '';
+        subEl.style.display = 'none';
+      }
+    }
+    const dlHref = downloadUrl || url;
     if (openTab) openTab.href = url;
-    if (download) { download.href = url; download.download = filePath.split('/').pop(); }
+    if (download) {
+      download.href = dlHref;
+      if (downloadName) download.download = downloadName;
+      else download.removeAttribute('download');
+    }
     if (errLink) errLink.href = url;
+    if (printBtn) printBtn.style.display = kind === 'pdf' ? '' : 'none';
+    this._syncThemePicker({
+      themes, theme, onThemeChange, appendixOptions, onAppendixChange,
+    });
 
     frame.style.display = 'none';
     frame.src = 'about:blank';
@@ -104,18 +266,19 @@ const DocViewer = {
     img.removeAttribute('src');
     errBox.style.display = 'none';
     loading.style.display = '';
+    this._initResize();
+    this._applySavedPanelSize();
     modal.classList.add('open');
     this._onKey = (e) => { if (e.key === 'Escape') this.close(); };
     document.addEventListener('keydown', this._onKey);
 
-    const ext = (filePath.split('.').pop() || '').toLowerCase();
     const showError = (msg) => {
       loading.style.display = 'none';
       if (errMsg) errMsg.textContent = msg;
       errBox.style.display = '';
     };
 
-    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+    if (kind === 'image') {
       img.onload = () => { loading.style.display = 'none'; };
       img.onerror = () => {
         img.style.display = 'none';
@@ -129,9 +292,10 @@ const DocViewer = {
     frame.onload = () => { loading.style.display = 'none'; };
     frame.onerror = () => showError('無法載入 PDF，請用「新分頁開啟」');
     frame.style.display = 'block';
-    frame.src = `${url}#view=FitH`;
+    frame.src = `${url}${url.includes('#') ? '' : '#view=FitH'}`;
 
-    // 輕量檢查（不阻擋預覽；部分伺服器不支援 HEAD）
+    if (skipHead) return;
+
     try {
       const r = await fetch(url, { method: 'HEAD' });
       if (!r.ok) {
@@ -146,8 +310,99 @@ const DocViewer = {
     } catch (e) { /* 仍嘗試 iframe 載入 */ }
   },
 
+  setLoading(on) {
+    const loading = document.getElementById('docViewerLoading');
+    const frame = document.getElementById('docViewerFrame');
+    if (loading) loading.style.display = on ? '' : 'none';
+    if (frame && on) frame.style.display = 'none';
+  },
+
+  _syncThemePicker(opts) {
+    const bar = document.getElementById('docViewerThemeBar');
+    const sel = document.getElementById('docViewerTheme');
+    const themeLabel = document.getElementById('docViewerThemeLabel');
+    const apxSep = document.getElementById('docViewerAppendixSep');
+    const apxLabel = document.getElementById('docViewerAppendixLabel');
+    const voWrap = document.getElementById('docViewerAppendixVoWrap');
+    const contraWrap = document.getElementById('docViewerAppendixContraWrap');
+    const voChk = document.getElementById('docViewerAppendixVo');
+    const contraChk = document.getElementById('docViewerAppendixContra');
+    if (!bar || !sel) return;
+
+    const themes = opts?.themes;
+    const hasThemes = !!themes?.length;
+    const apx = opts?.appendixOptions;
+    const hasVoOpt = apx?.vo != null;
+    const hasContraOpt = apx?.contra != null;
+    const hasAppendix = hasVoOpt || hasContraOpt;
+
+    if (!hasThemes && !hasAppendix) {
+      bar.style.display = 'none';
+      sel.onchange = null;
+      this._themeChangeHandler = null;
+      this._appendixChangeHandler = null;
+      return;
+    }
+
+    bar.style.display = 'flex';
+    if (themeLabel) themeLabel.style.display = hasThemes ? '' : 'none';
+    sel.style.display = hasThemes ? '' : 'none';
+    if (hasThemes) {
+      sel.innerHTML = themes.map(t => {
+        const id = escHtml(t.id);
+        const label = escHtml(t.label);
+        const on = t.id === opts.theme ? ' selected' : '';
+        return `<option value="${id}"${on}>${label}</option>`;
+      }).join('');
+      this._themeChangeHandler = opts.onThemeChange || null;
+      sel.onchange = () => {
+        const fn = this._themeChangeHandler;
+        if (fn) fn(sel.value);
+      };
+    } else {
+      sel.onchange = null;
+      this._themeChangeHandler = null;
+    }
+
+    if (apxSep) apxSep.style.display = hasThemes && hasAppendix ? '' : 'none';
+    if (apxLabel) apxLabel.style.display = hasAppendix ? '' : 'none';
+    if (voWrap) voWrap.style.display = hasVoOpt ? '' : 'none';
+    if (contraWrap) contraWrap.style.display = hasContraOpt ? '' : 'none';
+    if (voChk && hasVoOpt) {
+      voChk.checked = !!apx.vo.checked;
+      voChk.onchange = () => {
+        const fn = this._appendixChangeHandler;
+        if (fn) fn('vo', voChk.checked);
+      };
+    }
+    if (contraChk && hasContraOpt) {
+      contraChk.checked = !!apx.contra.checked;
+      contraChk.onchange = () => {
+        const fn = this._appendixChangeHandler;
+        if (fn) fn('contra', contraChk.checked);
+      };
+    }
+    this._appendixChangeHandler = opts.onAppendixChange || null;
+  },
+
+  print() {
+    const frame = document.getElementById('docViewerFrame');
+    if (!frame?.contentWindow) {
+      toast('請先開啟 PDF 預覽', 'warning');
+      return;
+    }
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch (e) {
+      toast('無法直接打印，請用「新分頁開啟」後打印', 'warning');
+    }
+  },
+
   close() {
     if (this._onKey) document.removeEventListener('keydown', this._onKey);
+    this._revokeBlob();
+    this._syncThemePicker(null);
     const modal = document.getElementById('docViewerModal');
     if (modal) modal.classList.remove('open');
     const frame = document.getElementById('docViewerFrame');
@@ -202,10 +457,42 @@ function fmtInputNum(num, decimals = FMT_DECIMALS) {
   return n.toFixed(decimals);
 }
 
-function fmtIpExpenditure(val) {
+/** 支出金額：會計括號格式 (HK$1,500.00)，零值不加括號 */
+function fmtExpense(val, decimals = FMT_DECIMALS) {
+  if (val == null || val === '') return '—';
   const n = parseFloat(val);
-  if (isNaN(n) || n === 0) return fmtAcct(0);
+  if (isNaN(n)) return '—';
+  if (n === 0) return fmtAcct(0);
   return fmtAcct(n < 0 ? n : -Math.abs(n));
+}
+
+function fmtIpExpenditure(val) {
+  return fmtExpense(val);
+}
+
+/** 金額色調：負數 → 紅；role=expense 正值（支出）→ 紅；role=income 正值 → 綠 */
+function amtClass(num, role = 'auto') {
+  const n = parseFloat(num);
+  if (isNaN(n) || num === '' || num == null) return '';
+  if (n < 0) return 'negative';
+  if (role === 'expense' && n > 0) return 'negative';
+  if (role === 'income' && n > 0) return 'positive';
+  return '';
+}
+
+function setAmtEl(el, num, role = 'auto') {
+  if (!el) return;
+  if (num == null || num === '') {
+    el.textContent = '—';
+  } else if (role === 'expense') {
+    el.textContent = fmtExpense(num);
+  } else {
+    const n = parseFloat(num);
+    el.textContent = !isNaN(n) && n < 0 ? fmtAcct(num) : fmt(num);
+  }
+  el.classList.remove('negative', 'positive');
+  const cls = amtClass(num, role);
+  if (cls) el.classList.add(cls);
 }
 
 /** 項目名稱中英欄位（兼容舊 project_name） */
@@ -235,35 +522,47 @@ function projectNameParts(p) {
   return { en, zh };
 }
 
+/** 單行項目名稱（中文優先，無中文則英文） */
 function projectNameOneLine(p, maxLen) {
   const { en, zh } = projectNameParts(p);
-  let s = en && zh ? `${en} · ${zh}` : (en || zh || p?.project_code || '—');
+  let s = zh || en || p?.project_code || '—';
   if (maxLen && s.length > maxLen) s = s.slice(0, maxLen) + '...';
   return s;
 }
 
+/** 項目名稱 HTML（中文主行，英文副行） */
 function projectNameHtml(p) {
   const { en, zh } = projectNameParts(p);
   if (!en && !zh) return escHtml(p?.project_code || '—');
-  if (en && zh) {
-    return `<span class="proj-name-en">${escHtml(en)}</span><span class="proj-name-zh">${escHtml(zh)}</span>`;
+  const primary = zh || en;
+  const secondary = zh && en && zh !== en ? en : '';
+  if (!secondary) {
+    return `<span class="proj-name-en">${escHtml(primary)}</span>`;
   }
-  return `<span class="proj-name-en">${escHtml(en || zh)}</span>`;
+  return `<span class="proj-name-en">${escHtml(primary)}</span><span class="proj-name-zh">${escHtml(secondary)}</span>`;
 }
 
-/** 表格公司名稱：英上、中下（對應 Excel Company Name / Company Name in Chinese） */
+/** 表格公司名稱：中文優先，英文副行 */
 function formatCompanyNameHtml(en, zh) {
   const e = (en || '').trim();
   const z = (zh || '').trim();
   if (!e && !z) return '—';
-  const enHtml = escHtml(e || z);
-  if (!z || z === e) {
-    return `<div class="proj-name-block"><div class="proj-name-en">${enHtml}</div></div>`;
+  const primary = z || e;
+  const secondary = z && e && z !== e ? e : '';
+  if (!secondary) {
+    return `<div class="proj-name-block"><div class="proj-name-en">${escHtml(primary)}</div></div>`;
   }
-  return `<div class="proj-name-block"><div class="proj-name-en">${enHtml}</div><div class="proj-name-zh">${escHtml(z)}</div></div>`;
+  return `<div class="proj-name-block"><div class="proj-name-en">${escHtml(primary)}</div><div class="proj-name-zh">${escHtml(secondary)}</div></div>`;
 }
 
-/** 付款記錄公司名稱（缺中文時從分判商主檔補） */
+/** 單行公司名稱（中文優先） */
+function formatCompanyPrimary(en, zh) {
+  const e = (en || '').trim();
+  const z = (zh || '').trim();
+  return z || e || '—';
+}
+
+/** 付款記錄公司名稱（缺中文時從分判商資料補） */
 function paymentCompanyNameHtml(row) {
   let en = row?.company_name_en;
   let zh = row?.company_name_zh;
@@ -352,11 +651,15 @@ function updateDashIpTotals(ip) {
   );
   if (!hasAny) {
     incomeEl.textContent = expEl.textContent = advEl.textContent = '—';
+    [incomeEl, expEl, advEl].forEach(el => el.classList.remove('negative', 'positive'));
     return;
   }
   incomeEl.textContent = fmtAcct(t.total_income);
+  incomeEl.classList.toggle('positive', parseFloat(t.total_income) > 0);
   expEl.textContent = fmtIpExpenditure(t.total_expenditure);
+  expEl.classList.add('negative');
   advEl.textContent = fmtAcct(t.advance);
+  advEl.classList.toggle('negative', parseFloat(t.advance) < 0);
   const advCard = advEl.closest('.stat-card');
   if (advCard) {
     advCard.classList.toggle('danger', parseFloat(t.advance) < 0);
@@ -364,23 +667,27 @@ function updateDashIpTotals(ip) {
   }
 }
 
-function renderContractCalc(calc, containerId) {
-  const el = document.getElementById(containerId);
-  if (!el || !calc) return;
+function contractCalcTableHtml(calc) {
+  if (!calc) return '';
   const rateClass = calc.profit_rate < 0 ? 'negative' : 'positive';
-  el.innerHTML = `
+  return `
     <table class="contract-calc-table">
       <tbody>
         <tr><td class="calc-label">(A) 承建金額</td><td class="calc-value">${fmtAcct(calc.main_contract_amount)}</td></tr>
-        <tr><td class="calc-label">(B) 分判及代支小計</td><td class="calc-value">${fmtAcct(calc.sub_total_b)}</td></tr>
-        <tr><td class="calc-label">(C) 除外合約收費項目</td><td class="calc-value ${calc.excluded_c < 0 ? 'negative' : ''}">${fmtAcct(calc.excluded_c)}</td></tr>
-        <tr><td class="calc-label">財務會作調撥（人工分攤）</td><td class="calc-value highlight">${fmtAcct(calc.labour_allocation)}</td></tr>
-        <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+調撥</td><td class="calc-value">${fmtAcct(calc.total_d)}</td></tr>
-        <tr><td class="calc-label">(E) = (A)−(D) 預計利潤</td><td class="calc-value ${rateClass}">${fmtAcct(calc.profit_e)}</td></tr>
+        <tr><td class="calc-label">(B) 分判及代支小計</td><td class="calc-value ${amtClass(calc.sub_total_b, 'expense')}">${fmtExpense(calc.sub_total_b)}</td></tr>
+        <tr><td class="calc-label">(C) 除外合約收費項目</td><td class="calc-value ${amtClass(calc.excluded_c, 'expense')}">${fmtExpense(calc.excluded_c)}</td></tr>
+        <tr><td class="calc-label">財務會作調撥（人工分攤）</td><td class="calc-value ${amtClass(calc.labour_allocation, 'expense')}">${fmtExpense(calc.labour_allocation)}</td></tr>
+        <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+調撥</td><td class="calc-value ${amtClass(calc.total_d, 'expense')}">${fmtExpense(calc.total_d)}</td></tr>
+        <tr><td class="calc-label">(E) = (A) - (D) 預計利潤</td><td class="calc-value ${rateClass}">${fmtAcct(calc.profit_e)}</td></tr>
         <tr><td class="calc-label">預計利潤率</td><td class="calc-value ${rateClass}">${fmtPct(calc.profit_rate)}</td></tr>
       </tbody>
-    </table>
-  `;
+    </table>`;
+}
+
+function renderContractCalc(calc, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el || !calc) return;
+  el.innerHTML = contractCalcTableHtml(calc);
 }
 
 function fmtDate(str) {
@@ -515,9 +822,15 @@ async function api(method, path, body, opts = {}) {
     const fetchOpts = {
       method,
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
     };
     if (body) fetchOpts.body = JSON.stringify(body);
     const r = await fetch(API + path, fetchOpts);
+    if (r.status === 401 && !path.startsWith('/auth/')) {
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login.html?next=${next}`;
+      throw new Error('請先登入');
+    }
     const text = await r.text();
     let json;
     try {
@@ -533,6 +846,106 @@ async function api(method, path, body, opts = {}) {
   }
 }
 
+// ─── 側欄收合 ───────────────────────────────────────────────
+const Sidebar = {
+  KEY: 'qs_sidebar_collapsed',
+
+  init() {
+    const collapsed = localStorage.getItem(this.KEY) === '1';
+    this.apply(collapsed, false);
+    document.getElementById('sidebarToggle')?.addEventListener('click', () => this.toggle());
+    document.getElementById('sidebarToggleFoot')?.addEventListener('click', () => this.toggle());
+  },
+
+  toggle() {
+    const sidebar = document.getElementById('sidebar');
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      sidebar?.classList.toggle('open');
+      return;
+    }
+    const collapsed = !document.documentElement.classList.contains('sidebar-collapsed');
+    this.apply(collapsed, true);
+  },
+
+  closeMobile() {
+    document.getElementById('sidebar')?.classList.remove('open');
+  },
+
+  apply(collapsed, persist) {
+    document.documentElement.classList.toggle('sidebar-collapsed', collapsed);
+    if (persist) {
+      localStorage.setItem(this.KEY, collapsed ? '1' : '0');
+    }
+    const label = collapsed ? '展開側欄' : '收合側欄';
+    ['sidebarToggle', 'sidebarToggleFoot'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.title = label;
+      el.setAttribute('aria-label', label);
+      el.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
+  },
+};
+
+// ─── 登入 ─────────────────────────────────────────────────
+const Auth = {
+  user: null,
+  authRequired: false,
+
+  async ensure() {
+    try {
+      const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
+      const json = await r.json();
+      if (!json.success) throw new Error(json.error || '無法驗證登入狀態');
+      const data = json.data || {};
+      this.authRequired = !!data.auth_required;
+      this.user = data.user || null;
+      if (this.authRequired && !this.user) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login.html?next=${next}`;
+        return false;
+      }
+      this.applyUi();
+      return true;
+    } catch (e) {
+      toast(e.message || '登入驗證失敗', 'error');
+      return false;
+    }
+  },
+
+  isAdmin() {
+    return this.user?.role === 'admin';
+  },
+
+  applyUi() {
+    const badge = document.getElementById('authUserBadge');
+    const logoutBtn = document.getElementById('authLogoutBtn');
+    const authWrap = document.getElementById('authUserWrap');
+    const settingsNav = document.querySelector('.nav-item[data-page="settings"]');
+    const showAuth = this.authRequired && this.user;
+    if (authWrap) authWrap.style.display = showAuth ? '' : 'none';
+    if (logoutBtn) logoutBtn.style.display = showAuth ? '' : 'none';
+    if (badge) {
+      if (showAuth) {
+        badge.textContent = this.user.username + (this.isAdmin() ? ' · 管理員' : '');
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    if (settingsNav) {
+      settingsNav.style.display = this.authRequired && !this.isAdmin() ? 'none' : '';
+    }
+  },
+
+  async logout() {
+    try {
+      await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch (e) {}
+    window.location.href = '/login.html';
+  },
+};
+
 // ─── App 主控制器 ───────────────────────────────────────────
 const App = {
   currentProject: null,
@@ -543,13 +956,17 @@ const App = {
 
   async init() {
     Theme.init();
+    Sidebar.init();
+    const ok = await Auth.ensure();
+    if (!ok) return;
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-view-pdf');
       if (!btn) return;
       e.preventDefault();
       e.stopPropagation();
       const path = btn.getAttribute('data-pdf-path');
-      if (path) DocViewer.open(path, '付款單據 PDF');
+      const title = btn.getAttribute('data-doc-title') || '文件預覽';
+      if (path) DocViewer.open(path, title);
     });
 
     await this.loadProjects();
@@ -562,12 +979,14 @@ const App = {
     } else if (this.projects.length > 0) {
       await this.selectProject(this.projects[0].id);
     }
+    this._updateProjectSettlementNav();
     this.navigate('dashboard');
   },
 
   async loadProjects() {
     this.projects = await api('GET', '/projects') || [];
     const sel = document.getElementById('projectSelect');
+    const curId = this.currentProject?.id;
     sel.innerHTML = '<option value="">— 請選擇項目 —</option>';
     this.projects.forEach(p => {
       const opt = document.createElement('option');
@@ -575,6 +994,16 @@ const App = {
       opt.textContent = `${p.project_code}${projectNameOneLine(p) !== p.project_code ? ' — ' + projectNameOneLine(p, 40) : ''}`;
       sel.appendChild(opt);
     });
+    if (curId != null && curId !== '') {
+      const fresh = this.projects.find(p => p.id == curId);
+      if (fresh) {
+        sel.value = String(curId);
+        if (this.currentProject) Object.assign(this.currentProject, fresh);
+        const badge = document.getElementById('currentProjectCode');
+        if (badge) badge.textContent = fresh.project_code;
+        document.getElementById('currentProjectBadge').style.display = '';
+      }
+    }
     // 更新工程項目頁
     Projects.render(this.projects);
   },
@@ -590,6 +1019,7 @@ const App = {
         document.getElementById('projectSelect').value = '';
         document.getElementById('currentProjectBadge').style.display = 'none';
         document.getElementById('btnQuickAdd').style.display = 'none';
+        this._updateProjectSettlementNav();
         this._closeProjectModals();
         this._resetProjectFilters();
         await this._refreshProjectViews(switchSeq);
@@ -605,8 +1035,9 @@ const App = {
       document.getElementById('projectSelect').value = String(id);
       document.getElementById('currentProjectCode').textContent = this.currentProject.project_code;
       document.getElementById('currentProjectBadge').style.display = '';
-      document.getElementById('btnQuickAdd').style.display = '';
+      document.getElementById('btnQuickAdd').style.display = 'none';
 
+      this._updateProjectSettlementNav();
       this._closeProjectModals();
       this._resetProjectFilters();
 
@@ -623,19 +1054,49 @@ const App = {
     return this.currentPage || document.querySelector('.nav-item.active')?.dataset.page || 'dashboard';
   },
 
+  _updateProjectSettlementNav() {
+    const el = document.getElementById('navProjectSettlement');
+    if (!el) return;
+    const p = this.currentProject;
+    const has = !!p?.id;
+    el.classList.toggle('nav-item-disabled', !has);
+    el.title = has
+      ? `註冊及更新 · ${p.project_code}`
+      : '請先選擇項目';
+  },
+
+  openCurrentProjectSettlement() {
+    const p = this.currentProject;
+    if (!p?.id) {
+      toast('請先在上方選擇項目', 'warn');
+      return;
+    }
+    Projects.openSettlement(p.id);
+  },
+
   _closeProjectModals() {
     Payments.closeModal?.();
     SC.closeModal?.();
     SC.closePayModal?.();
     IpPeriod.closeModal?.();
     IpPeriod.closeMetaModal?.();
+    ScVoReg.closeModal?.();
+    ScVoReg.closeTplManager?.();
   },
 
   _resetProjectFilters() {
     const payFilter = document.getElementById('payFilterSc');
     const paySearch = document.getElementById('paySearch');
+    const scSearch = document.getElementById('scSearch');
+    const svrSearch = document.getElementById('svrSearch');
+    const svrFilterSc = document.getElementById('svrFilterSc');
+    const svrFilterType = document.getElementById('svrFilterType');
     if (payFilter) payFilter.value = '';
     if (paySearch) paySearch.value = '';
+    if (scSearch) scSearch.value = '';
+    if (svrSearch) svrSearch.value = '';
+    if (svrFilterSc) svrFilterSc.value = '';
+    if (svrFilterType) svrFilterType.value = '';
   },
 
   async _refreshProjectViews(switchSeq) {
@@ -650,10 +1111,31 @@ const App = {
       Reports.load(switchSeq),
     ]);
     if (switchSeq !== this._projectSwitchSeq) return;
+    const active = this._getActivePage();
+    if (active === 'iso-docs') IsoDocs.load();
+    if (active === 'sc-vo-reg') { ScVoReg.populateScFilter(); ScVoReg.load(); }
+    if (active === 'main-con-fac') MainConFac.load();
+    if (active === 'sc-fac') ScFac.load();
     OCR.reset();
   },
 
-  navigate(page) {
+  navigate(page, options = null) {
+    Sidebar.closeMobile();
+    if (page === 'settings' && Auth.authRequired && !Auth.isAdmin()) {
+      toast('需要管理員權限', 'warning');
+      return;
+    }
+    if (page === 'subcontractors') {
+      options = options && typeof options === 'object' ? options : {};
+      options.tab = options.tab || 'sc';
+      page = 'payments';
+    }
+    if (page === 'ocr') {
+      options = options && typeof options === 'object' ? options : {};
+      options.tab = options.tab || 'ocr';
+      page = 'payments';
+    }
+    if (page === 'sc-vo') page = 'sc-vo-reg';
     this.currentPage = page;
     // 隱藏所有頁面
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -665,30 +1147,47 @@ const App = {
 
     // 更新頁面標題
     const titles = {
-      dashboard: ['儀表板', '項目財務總覽'],
-      payments: ['付款登記', 'Sub-Contract 付款登記'],
-      subcontractors: ['分判及支出', 'M=物料 · SC=分判 · O=其他支出'],
+      dashboard: ['項目概覽', '項目財務總覽'],
+      'iso-docs': ['ISO文件登記', 'ISO 文件上傳 · 主合約及分判招標合約附件'],
+      payments: ['分判付款登記', '發票／中期糧款計算書登記'],
+      'sc-vo-reg': ['分判變更以及扣款登記', 'Sub-Con VO · 變更工程及扣款 · 模板快速新增'],
       'ip-period': ['糧期狀況', '地盤中期糧款手動編輯'],
-      ocr: ['發票 / 報價上傳', '上傳發票、報價，自動識別並登記付款'],
+      'main-con-fac': ['最終結算', 'Main Con Final Account · 工程帳目總結算'],
+      'sc-fac': ['分判最終結算', 'SC Final Account · 每判項 PDF（3 頁）'],
       reports: ['財務報表', '付款統計分析'],
-      projects: ['工程項目', '管理地盤工程項目'],
-      'master-list': ['Master List', '公司報價／標書主檔（Phase 1）'],
-      staff: ['項目負責人管理', 'Master List 項目負責人主檔 · 工程項目選人'],
+      projects: ['工程項目', '管理地盤工程項目 · Summary · 註冊及更新'],
+      'project-settlement': ['註冊及更新', '項目金額結算（Cover Page 第5頁）'],
+      'master-list': ['Master List', '公司報價／標書清單（Phase 1）'],
+      'sc-contract-registry': ['分判合約編號', 'MS/C 分判工程合約編號表 · P1 PDF'],
+      staff: ['項目負責人管理', 'Master List 項目負責人 · 工程項目選人'],
       settings: ['系統設定', 'OCR與系統配置'],
     };
     const [title, sub] = titles[page] || ['', ''];
     document.getElementById('pageTitle').textContent = title;
     document.getElementById('pageSubtitle').textContent = sub;
 
+    const quickAdd = document.getElementById('btnQuickAdd');
+    if (quickAdd) quickAdd.style.display = 'none';
+
     // 載入頁面數據
     if (page === 'dashboard') Dashboard.load();
-    else if (page === 'payments') Payments.load();
-    else if (page === 'subcontractors') SC.load();
+    else if (page === 'iso-docs') IsoDocs.load();
+    else if (page === 'payments') {
+      if (options?.tab) Payments._pendingTab = options.tab;
+      if (options?.openPaymentId) Payments._pendingOpenPaymentId = options.openPaymentId;
+      Payments.load();
+    }
+    else if (page === 'sc-vo-reg') { ScVoReg.populateScFilter(); ScVoReg.load(); }
+    else if (page === 'main-con-fac') MainConFac.load();
+    else if (page === 'sc-fac') ScFac.load();
     else if (page === 'ip-period') IpPeriod.load();
     else if (page === 'reports') Reports.load();
+    else if (page === 'projects') Projects.load();
     else if (page === 'master-list') MasterList.load();
+    else if (page === 'sc-contract-registry') ScContractRegistry.load();
     else if (page === 'staff') StaffRoster.refresh();
     else if (page === 'settings') Settings.load();
+    else if (page === 'project-settlement') Projects.loadSettlement();
   },
 
   quickAddPayment() {
@@ -755,8 +1254,8 @@ const Dashboard = {
 
     updateDashProjectHero(summary.project || p, summary.ip_period);
 
-    document.getElementById('dashTotalPaid').textContent = fmt(totalPaid);
-    document.getElementById('dashRemainder').textContent = fmt(totalRem);
+    setAmtEl(document.getElementById('dashTotalPaid'), totalPaid, 'expense');
+    setAmtEl(document.getElementById('dashRemainder'), totalRem, 'expense');
     document.getElementById('dashProgress').textContent = progress !== '—' ? `${progress}%` : '—';
 
     updateDashIpTotals(summary.ip_period);
@@ -770,7 +1269,7 @@ const Dashboard = {
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
 
     renderContractCalc(summary.contract_calc, 'dashContractCalc');
-    renderSiteIpPeriod(summary.ip_period, 'dashSiteIp', { editable: false });
+    renderSiteIpPeriod(summary.ip_period, 'dashSiteIp', { editable: false, hideProjectMeta: true });
 
     // 最近記錄
     const recent = (payments || []).slice(0, 8);
@@ -784,7 +1283,7 @@ const Dashboard = {
           <td>${fmtRefNo(r.sc_no)}</td>
           <td class="td-company-name">${paymentCompanyNameHtml(r)}</td>
           <td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description || '—'}</td>
-          <td class="td-amount positive">${fmt(r.paid_amount)}</td>
+          <td class="td-amount ${amtClass(r.paid_amount, 'expense')}">${fmtExpense(r.paid_amount)}</td>
           <td class="td-mono td-muted">${r.invoice_no || '—'}</td>
         </tr>
       `).join('');
@@ -868,6 +1367,9 @@ const Dashboard = {
 
 // ─── Settings ──────────────────────────────────────────────
 const Settings = {
+  _docProjects: [],
+  _docProjectFilter: '',
+
   async load() {
     const data = await api('GET', '/settings');
     if (data) {
@@ -878,6 +1380,7 @@ const Settings = {
       document.getElementById('settingOcrMode').value = data.ocr_mode || 'auto';
       document.getElementById('settingCompany').value = data.company_name || '';
     }
+    await this.loadDocLibrary();
     // 顯示OCR引擎狀態
     try {
       const engRes = await api('GET', '/ocr/engines');
@@ -912,7 +1415,100 @@ const Settings = {
       company_name: document.getElementById('settingCompany').value,
     });
     toast('設定已儲存', 'success');
-  }
+  },
+
+  async loadDocLibrary() {
+    const search = document.getElementById('settingDocProjectSearch');
+    if (search) search.value = '';
+    this._docProjectFilter = '';
+    try {
+      const data = await api('GET', '/settings/doc-library');
+      document.getElementById('settingDocLibraryUrl').value = data?.global_url || '';
+      this._docProjects = data?.projects || [];
+      this._renderDocProjectTable();
+    } catch (e) {
+      const tbody = document.getElementById('settingDocProjectBody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="4" class="td-muted" style="padding:20px;text-align:center">載入失敗</td></tr>';
+      }
+    }
+  },
+
+  filterDocProjects(q) {
+    this._syncDocProjectInputs();
+    this._docProjectFilter = (q || '').trim().toLowerCase();
+    this._renderDocProjectTable();
+  },
+
+  _syncDocProjectInputs() {
+    document.querySelectorAll('.setting-doc-proj-url').forEach(inp => {
+      const id = parseInt(inp.dataset.projectId, 10);
+      const p = (this._docProjects || []).find(x => x.id === id);
+      if (p) p.doc_library_url = inp.value.trim();
+    });
+  },
+
+  _renderDocProjectTable() {
+    const tbody = document.getElementById('settingDocProjectBody');
+    if (!tbody) return;
+    const q = this._docProjectFilter;
+    const rows = (this._docProjects || []).filter(p => {
+      if (!q) return true;
+      const hay = `${p.project_code || ''} ${p.project_name_zh || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="td-muted" style="padding:20px;text-align:center">沒有符合的項目</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(p => {
+      const code = escHtml(p.project_code || '—');
+      const name = escHtml(p.project_name_zh || '—');
+      const st = projectStatusInfo(p.status);
+      const url = escHtml(p.doc_library_url || '');
+      return `<tr data-project-id="${p.id}">
+        <td class="settings-doc-code">${code}</td>
+        <td class="settings-doc-name">${name}</td>
+        <td><span class="badge badge-${st.badge}" style="font-size:10px">${st.label}</span></td>
+        <td><input type="url" class="form-input setting-doc-proj-url" data-project-id="${p.id}"
+          value="${url}" placeholder="https://.../${code}/ISO/"></td>
+      </tr>`;
+    }).join('');
+  },
+
+  _collectDocProjectUrls() {
+    return (this._docProjects || []).map(p => ({
+      id: p.id,
+      doc_library_url: p.doc_library_url || '',
+    }));
+  },
+
+  async saveDocLibrary() {
+    this._syncDocProjectInputs();
+    showLoading('儲存文件管理設定…');
+    try {
+      await api('POST', '/settings/doc-library', {
+        global_url: document.getElementById('settingDocLibraryUrl').value.trim(),
+        projects: this._collectDocProjectUrls(),
+      });
+      if (typeof IsoDocs !== 'undefined') IsoDocs._globalDocUrl = undefined;
+      await App.loadProjects();
+      const curId = App.currentProject?.id;
+      if (curId) {
+        const fresh = App.projects.find(p => p.id == curId);
+        if (fresh) {
+          App.currentProject = fresh;
+          if (App._getActivePage?.() === 'iso-docs') IsoDocs.load();
+        }
+      }
+      await this.loadDocLibrary();
+      toast('文件管理設定已儲存', 'success');
+    } catch (e) {
+      toast(e.message || '儲存失敗', 'error');
+    } finally {
+      hideLoading();
+    }
+  },
 };
 
 // ─── 初始化 ────────────────────────────────────────────────
