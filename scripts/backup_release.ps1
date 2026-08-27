@@ -19,6 +19,27 @@ function Get-AppVersion {
     return "unknown"
 }
 
+function Write-FinalBackupZip {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDir,
+        [Parameter(Mandatory = $true)][string]$ZipPath
+    )
+    if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
+
+    $parent = Split-Path $SourceDir -Parent
+    $name = Split-Path $SourceDir -Leaf
+
+    # Prefer tar: avoids Compress-Archive file-lock on nested source.zip (Win10+)
+    if (Get-Command tar -ErrorAction SilentlyContinue) {
+        & tar -a -cf $ZipPath -C $parent $name
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $ZipPath)) { return }
+        if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($SourceDir, $ZipPath)
+}
+
 $Version = Get-AppVersion
 $Commit = (git rev-parse HEAD).Trim()
 $CommitShort = (git rev-parse --short HEAD).Trim()
@@ -39,6 +60,10 @@ git archive --format=zip -o $SourceZip HEAD
 if (-not (Test-Path $SourceZip)) {
     throw "git archive 失敗"
 }
+# 釋放 git 對 source.zip 的 handle，避免後續壓縮失敗
+[System.GC]::Collect()
+[System.GC]::WaitForPendingFinalizers()
+Start-Sleep -Milliseconds 200
 
 # 本機資料庫（若存在）
 $DbCopied = $false
@@ -78,10 +103,12 @@ $Manifest = @{
 
 $Manifest | Set-Content (Join-Path $DestDir "MANIFEST.json") -Encoding UTF8
 
-# 總檔 zip
+# Final zip: tar first; Compress-Archive can fail on nested source.zip locks
 $FinalZip = Join-Path $OutDir "$FolderName.zip"
-if (Test-Path $FinalZip) { Remove-Item $FinalZip -Force }
-Compress-Archive -Path (Join-Path $DestDir "*") -DestinationPath $FinalZip -Force
+Write-FinalBackupZip -SourceDir $DestDir -ZipPath $FinalZip
+if (-not (Test-Path $FinalZip)) {
+    throw "建立最終壓縮檔失敗"
+}
 
 Write-Host ""
 Write-Host "=== OSsysCU 備份完成 ===" -ForegroundColor Green
