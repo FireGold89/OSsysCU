@@ -356,6 +356,32 @@
   animation: vault-glow-rise var(--vault-anim-duration) ease forwards;
 }
 
+/* 動畫結束／跳轉前保持全開，避免移除 class 時門扇彈回關閉 */
+.login-page.vault-hold-open .vault-wheel,
+.vault-entry-overlay.vault-hold-open .vault-wheel {
+  animation: none !important;
+  transform: rotate(90deg);
+  opacity: 0;
+}
+
+.login-page.vault-hold-open .vault-door--left,
+.vault-entry-overlay.vault-hold-open .vault-door--left {
+  animation: none !important;
+  transform: translate3d(-100%, 0, 0);
+}
+
+.login-page.vault-hold-open .vault-door--right,
+.vault-entry-overlay.vault-hold-open .vault-door--right {
+  animation: none !important;
+  transform: translate3d(100%, 0, 0);
+}
+
+.login-page.vault-hold-open .vault-glow,
+.vault-entry-overlay.vault-hold-open .vault-glow {
+  animation: none !important;
+  opacity: 1;
+}
+
 /* 主頁進場覆蓋 */
 .vault-entry-overlay {
   position: fixed;
@@ -369,6 +395,16 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.6s ease;
+}
+
+.vault-entry-overlay.vault-hold-open {
+  opacity: 1;
+  transition: opacity 0.55s ease;
+}
+
+.vault-entry-overlay.vault-hold-open.vault-fade-out {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .vault-entry-overlay .vault-scene {

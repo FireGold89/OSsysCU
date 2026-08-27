@@ -13,7 +13,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=20260815g">
-  <link rel="stylesheet" href="css/vault-login.css?v=20260827-ux1">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <style>
     body.login-page {
       min-height: 100vh;
@@ -150,7 +150,6 @@
     function finishVault() {
       if (vaultTimer) clearTimeout(vaultTimer);
       vaultTimer = null;
-      document.body.classList.remove('vault-opening');
       const status = document.getElementById('vaultStatus');
       const skipBtn = document.getElementById('vaultSkipBtn');
       if (status) status.classList.remove('show');
@@ -160,7 +159,15 @@
       }
       const done = vaultFinishFn;
       vaultFinishFn = null;
-      if (done) done();
+      if (done) {
+        // 保持全開畫面再跳轉，避免移除 vault-opening 時門扇彈回關閉
+        document.body.classList.remove('vault-opening');
+        document.body.classList.add('vault-hold-open');
+        sessionStorage.setItem('qs_vault_hold_open', '1');
+        requestAnimationFrame(() => requestAnimationFrame(done));
+        return;
+      }
+      document.body.classList.remove('vault-opening');
     }
 
     function playVaultOpen(onDone) {

@@ -989,6 +989,7 @@ const Auth = {
   revealApp() {
     document.documentElement.classList.remove('auth-pending');
     document.documentElement.classList.add('auth-ready');
+    if (typeof VaultEntry !== 'undefined') VaultEntry.fadeOutHoldOpen();
     hideLoading();
   },
 
@@ -1163,6 +1164,7 @@ const Auth = {
 const VaultEntry = {
   _timer: null,
   _doneTimer: null,
+  _holdEl: null,
 
   totalMs() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1181,7 +1183,28 @@ const VaultEntry = {
     if (skipBtn) skipBtn.hidden = true;
     if (!el) return;
     el.hidden = true;
-    el.classList.remove('vault-entry-animate', 'vault-entry-done');
+    el.classList.remove('vault-entry-animate', 'vault-entry-done', 'vault-hold-open', 'vault-fade-out');
+    if (this._holdEl === el) this._holdEl = null;
+  },
+
+  /** 登入頁開門後跳轉：主頁承接全開光效，避免閃回關門 */
+  showHoldOpenFromLogin() {
+    if (!sessionStorage.getItem('qs_vault_hold_open')) return false;
+    sessionStorage.removeItem('qs_vault_hold_open');
+    const el = document.getElementById('vaultEntryOverlay');
+    if (!el) return false;
+    el.hidden = false;
+    el.classList.add('vault-hold-open');
+    document.getElementById('loadingOverlay')?.classList.remove('show');
+    this._holdEl = el;
+    return true;
+  },
+
+  fadeOutHoldOpen() {
+    const el = this._holdEl;
+    if (!el?.classList.contains('vault-hold-open')) return;
+    el.classList.add('vault-fade-out');
+    setTimeout(() => this._finish(el), 560);
   },
 
   skip() {
@@ -1218,6 +1241,7 @@ const App = {
   _projectSwitchSeq: 0,
 
   async init() {
+    VaultEntry.showHoldOpenFromLogin();
     const ok = await Auth.ensure();
     if (!ok) return;
     VaultEntry.playIfNeeded();
