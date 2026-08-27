@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '20260827-qs-mgmt'
+APP_VERSION = '20260827-login-gate'
 
 
 def _preload_pdf_font():

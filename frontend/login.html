@@ -13,7 +13,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=20260815g">
-  <link rel="stylesheet" href="css/vault-login.css?v=20260827e">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827g">
   <style>
     body.login-page {
       min-height: 100vh;
@@ -122,7 +122,7 @@
       if (reduced) return 400;
       const root = getComputedStyle(document.documentElement);
       const ms = parseInt(root.getPropertyValue('--vault-total-ms'), 10);
-      return Number.isFinite(ms) ? ms : 9200;
+      return Number.isFinite(ms) ? ms : 16500;
     }
 
     function playVaultOpen(onDone) {

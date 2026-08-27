@@ -16,8 +16,19 @@
       }
     })();
   </script>
+  <style>
+    /* 驗證登入前不顯示主介面，只顯示載入遮罩 */
+    html.auth-pending .layout,
+    html.auth-pending .toast-container {
+      visibility: hidden;
+    }
+    html.auth-pending #loadingOverlay {
+      display: flex !important;
+    }
+  </style>
+  <script>document.documentElement.classList.add('auth-pending');</script>
     <link rel="stylesheet" href="css/style.css?v=20260815g">
-  <link rel="stylesheet" href="css/vault-login.css?v=20260827e">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827g">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -40,7 +51,7 @@
 </div>
 
 <!-- ─── 載入中 ───────────────────────────────────────────── -->
-<div class="loading-overlay" id="loadingOverlay">
+<div class="loading-overlay show" id="loadingOverlay">
   <div class="spinner"></div>
   <span style="color:var(--text-secondary);font-size:13px" id="loadingText">載入中...</span>
 </div>
@@ -2978,7 +2989,7 @@
 </div>
 
 <!-- Scripts -->
-<script src="js/main.js?v=20260827e"></script>
+<script src="js/main.js?v=20260827h"></script>
 <script src="js/col_picker.js?v=20260813k"></script>
 <script src="js/iso_docs.js?v=20260814e"></script>
 <script src="js/payments.js?v=20260815u"></script>

@@ -903,6 +903,12 @@ const Auth = {
   _idleTimer: null,
   _touchTimer: null,
 
+  revealApp() {
+    document.documentElement.classList.remove('auth-pending');
+    document.documentElement.classList.add('auth-ready');
+    hideLoading();
+  },
+
   async ensure() {
     try {
       const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
@@ -914,6 +920,7 @@ const Auth = {
         this.authRequired = false;
         this.user = null;
         this.applyUi();
+        this.revealApp();
         return true;
       }
       if (!json.success) throw new Error(json.error || '無法驗證登入狀態');
@@ -931,6 +938,7 @@ const Auth = {
         return false;
       }
       this.applyUi();
+      this.revealApp();
       if (this.authRequired && this.user) {
         this.startIdleWatch(data.idle_timeout_seconds);
       }
@@ -939,6 +947,7 @@ const Auth = {
       this.authRequired = false;
       this.user = null;
       this.applyUi();
+      this.revealApp();
       toast(e.message || '登入驗證失敗', 'error');
       return true;
     }
@@ -1036,7 +1045,7 @@ const VaultEntry = {
     if (reduced) return 400;
     const root = getComputedStyle(document.documentElement);
     const ms = parseInt(root.getPropertyValue('--vault-total-ms'), 10);
-    return Number.isFinite(ms) ? ms : 9200;
+    return Number.isFinite(ms) ? ms : 16500;
   },
 
   playIfNeeded() {
@@ -1066,11 +1075,11 @@ const App = {
   _projectSwitchSeq: 0,
 
   async init() {
+    const ok = await Auth.ensure();
+    if (!ok) return;
     VaultEntry.playIfNeeded();
     Theme.init();
     Sidebar.init();
-    const ok = await Auth.ensure();
-    if (!ok) return;
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-view-pdf');
       if (!btn) return;

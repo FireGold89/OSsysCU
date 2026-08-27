@@ -1,8 +1,8 @@
 /* ─── 登入頁 · 全屏夾萬門 ─────────────────────────────────── */
 
 :root {
-  --vault-total-ms: 9200;
-  --vault-anim-duration: 9s;
+  --vault-total-ms: 16500;
+  --vault-anim-duration: 16s;
 }
 
 .login-page {
@@ -233,39 +233,82 @@
   opacity: 1;
 }
 
-/* ─── 開門 keyframes（9 秒：转轮 0–44%≈4s 转 180°，开门 44–100%≈5s）─── */
+/* ─── 開門 keyframes（16s：转轮 5s → 微开 → 停 2s → 震動 → 慢速全开）─── */
 @keyframes vault-wheel-turn {
   0%   { transform: rotate(0deg); opacity: 1; }
-  44%  { transform: rotate(180deg); opacity: 1; }
-  52%  { transform: rotate(180deg); opacity: 0; }
-  100% { transform: rotate(180deg); opacity: 0; }
+  31%  { transform: rotate(90deg); opacity: 1; }
+  36%  { transform: rotate(90deg); opacity: 0; }
+  100% { transform: rotate(90deg); opacity: 0; }
 }
 
 @keyframes vault-door-left-open {
-  0%, 44%  { transform: translate3d(0, 0, 0); }
-  100%     { transform: translate3d(-100%, 0, 0); }
+  0%, 31% {
+    transform: translate3d(0, 0, 0);
+  }
+  31% {
+    animation-timing-function: ease-out;
+  }
+  34% {
+    transform: translate3d(-5%, 0, 0);
+    animation-timing-function: linear;
+  }
+  34%, 46% {
+    transform: translate3d(-5%, 0, 0);
+  }
+  46.8% { transform: translate3d(-3.8%, 0, 0); }
+  47.6% { transform: translate3d(-6.2%, 0, 0); }
+  48.4% { transform: translate3d(-4.1%, 0, 0); }
+  49.2% { transform: translate3d(-5.8%, 0, 0); }
+  49.5% {
+    transform: translate3d(-5%, 0, 0);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  100% { transform: translate3d(-100%, 0, 0); }
 }
 
 @keyframes vault-door-right-open {
-  0%, 44%  { transform: translate3d(0, 0, 0); }
-  100%     { transform: translate3d(100%, 0, 0); }
+  0%, 31% {
+    transform: translate3d(0, 0, 0);
+  }
+  31% {
+    animation-timing-function: ease-out;
+  }
+  34% {
+    transform: translate3d(5%, 0, 0);
+    animation-timing-function: linear;
+  }
+  34%, 46% {
+    transform: translate3d(5%, 0, 0);
+  }
+  46.8% { transform: translate3d(3.8%, 0, 0); }
+  47.6% { transform: translate3d(6.2%, 0, 0); }
+  48.4% { transform: translate3d(4.1%, 0, 0); }
+  49.2% { transform: translate3d(5.8%, 0, 0); }
+  49.5% {
+    transform: translate3d(5%, 0, 0);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  100% { transform: translate3d(100%, 0, 0); }
 }
 
 @keyframes vault-glow-rise {
-  0%, 40%  { opacity: 0; }
+  0%, 30%  { opacity: 0; }
+  34%      { opacity: 0.12; }
+  46%      { opacity: 0.22; }
+  49.5%    { opacity: 0.35; }
   100%     { opacity: 1; }
 }
 
 .login-page.vault-opening .vault-wheel {
-  animation: vault-wheel-turn var(--vault-anim-duration) ease-out forwards;
+  animation: vault-wheel-turn var(--vault-anim-duration) linear forwards;
 }
 
 .login-page.vault-opening .vault-door--left {
-  animation: vault-door-left-open var(--vault-anim-duration) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: vault-door-left-open var(--vault-anim-duration) linear forwards;
 }
 
 .login-page.vault-opening .vault-door--right {
-  animation: vault-door-right-open var(--vault-anim-duration) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: vault-door-right-open var(--vault-anim-duration) linear forwards;
 }
 
 .login-page.vault-opening .vault-glow {
@@ -293,15 +336,15 @@
 }
 
 .vault-entry-overlay.vault-entry-animate .vault-wheel {
-  animation: vault-wheel-turn var(--vault-anim-duration) ease-out forwards;
+  animation: vault-wheel-turn var(--vault-anim-duration) linear forwards;
 }
 
 .vault-entry-overlay.vault-entry-animate .vault-door--left {
-  animation: vault-door-left-open var(--vault-anim-duration) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: vault-door-left-open var(--vault-anim-duration) linear forwards;
 }
 
 .vault-entry-overlay.vault-entry-animate .vault-door--right {
-  animation: vault-door-right-open var(--vault-anim-duration) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: vault-door-right-open var(--vault-anim-duration) linear forwards;
 }
 
 .vault-entry-overlay.vault-entry-animate .vault-glow {

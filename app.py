@@ -9,7 +9,7 @@ import uuid
 import re
 from io import BytesIO
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, send_from_directory, send_file, session
+from flask import Flask, request, jsonify, send_from_directory, send_file, session, redirect
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
@@ -97,9 +97,21 @@ def auth_touch():
 
 
 # ─── 前端路由 ───────────────────────────────────────────────────────────
+def _serve_index():
+    """未登入且啟用 auth 時直接導向登入頁，避免先渲染主介面"""
+    if auth.is_enabled() and not auth.current_user():
+        return redirect('/login.html')
+    return send_from_directory(FRONTEND_DIR, 'index.html')
+
+
 @app.route('/')
 def index():
-    return send_from_directory(FRONTEND_DIR, 'index.html')
+    return _serve_index()
+
+
+@app.route('/index.html')
+def index_html():
+    return _serve_index()
 
 
 @app.route('/css/<path:filename>')
