@@ -1,8 +1,8 @@
 /* ─── 登入頁 · 全屏夾萬門 ─────────────────────────────────── */
 
 :root {
-  --vault-total-ms: 16500;
-  --vault-anim-duration: 16s;
+  --vault-total-ms: 12000;
+  --vault-anim-duration: 12s;
 }
 
 .login-page {
@@ -231,6 +231,47 @@
 
 .vault-status.show {
   opacity: 1;
+}
+
+.vault-skip-btn {
+  position: fixed;
+  bottom: 4%;
+  right: 4%;
+  z-index: 9300;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: rgba(248, 250, 252, 0.9);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, background 0.2s ease;
+}
+
+.vault-skip-btn.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vault-skip-btn:hover {
+  background: rgba(30, 41, 59, 0.85);
+}
+
+.login-vault-pref {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.login-vault-pref input {
+  accent-color: var(--accent, #3b82f6);
 }
 
 /* ─── 開門 keyframes（16s：转轮 5s → 微开 → 停 2s → 震動 → 慢速全开）─── */

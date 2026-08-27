@@ -27,8 +27,8 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=20260815g">
-  <link rel="stylesheet" href="css/vault-login.css?v=20260827g">
+    <link rel="stylesheet" href="css/style.css?v=20260827-ux1">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827-ux1">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -48,6 +48,7 @@
       <span class="vault-wheel-spoke"></span>
     </div>
   </div>
+  <button type="button" class="vault-skip-btn" id="vaultEntrySkip" hidden onclick="VaultEntry.skip()">跳過動畫</button>
 </div>
 
 <!-- ─── 載入中 ───────────────────────────────────────────── -->
@@ -169,8 +170,17 @@
       </div>
     </header>
 
+    <div class="idle-warn-banner" id="idleWarnBanner" hidden role="alert">
+      <span>Session 將在 <strong id="idleWarnMinutes">5</strong> 分鐘內因閒置而登出</span>
+      <button type="button" class="btn btn-primary btn-sm" onclick="Auth.extendSession()">繼續使用</button>
+    </div>
+
     <!-- 內容區 -->
     <div class="content">
+      <div class="content-loading-overlay" id="contentLoadingOverlay" aria-hidden="true">
+        <div class="spinner"></div>
+        <span id="contentLoadingHint">載入項目資料…</span>
+      </div>
 
       <!-- ─── 項目概覽 ────────────────────────── -->
       <div class="page active" id="page-dashboard">
@@ -556,7 +566,7 @@
               合計已付: <strong id="payTotalPaid">HK$0.00</strong>
             </div>
           </div>
-          <div class="table-wrap" style="border:none;border-radius:0">
+          <div class="table-wrap table-scroll-y" style="border:none;border-radius:0">
             <table class="pay-records-table">
               <thead id="payTableHead">
                 <tr>
@@ -761,7 +771,7 @@
             </div>
             <div style="font-size:11px;color:var(--text-muted)">Sub-Con VO · 變更工程及扣款 · 模板快速新增 · 中期糧款多選套用</div>
           </div>
-          <div class="table-wrap svr-matrix-wrap" style="border:none;border-radius:0">
+          <div class="table-wrap svr-matrix-wrap table-scroll-y" style="border:none;border-radius:0">
             <table class="svr-matrix-table">
               <thead>
                 <tr>
@@ -851,7 +861,7 @@
           <div class="card-header">
             <div class="card-title">📊 分判及支出明細</div>
           </div>
-          <div class="table-wrap" style="border:none;border-radius:0">
+          <div class="table-wrap table-scroll-y" style="border:none;border-radius:0">
             <table>
               <thead>
                 <tr>
@@ -998,7 +1008,7 @@
             <div class="card-title">📋 報價／標書清單</div>
             <div class="card-sub" id="masterListCount">—</div>
           </div>
-          <div class="table-wrap" style="border:none;border-radius:0">
+          <div class="table-wrap table-scroll-y" style="border:none;border-radius:0">
             <table>
               <thead id="masterTableHead">
                 <tr></tr>
@@ -1103,7 +1113,7 @@
             <div class="card-title">👷 項目負責人管理</div>
             <div class="card-sub">以 Master List 姓名欄「項目負責人」為準 · 可補充聯絡資料</div>
           </div>
-          <div class="table-wrap" style="border:none;border-radius:0">
+          <div class="table-wrap table-scroll-y" style="border:none;border-radius:0">
             <table>
               <thead>
                 <tr>
@@ -2984,7 +2994,7 @@
 </div>
 
 <!-- Scripts -->
-<script src="js/main.js?v=20260827h"></script>
+<script src="js/main.js?v=20260827-ux1"></script>
 <script src="js/col_picker.js?v=20260813k"></script>
 <script src="js/iso_docs.js?v=20260814e"></script>
 <script src="js/payments.js?v=20260815u"></script>

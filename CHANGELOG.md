@@ -4,6 +4,19 @@
 
 ## [未發布]
 
+`APP_VERSION`: `20260827-ux-desktop`
+
+### 改善
+- **桌面 UX Phase 1**：登入開門動畫可跳過並記住偏好；預設動畫縮短至 12 秒
+- **切換項目**：內容區局部 loading（側欄／頂欄保持可操作）
+- **項目下拉／徽章**：顯示報價編號（`quotation_no` 優先）
+- **Dashboard**：最近付款列點擊直達該筆付款詳情
+- **Topbar**：已選項目時於概覽／付款頁顯示「➕ 新增記錄」
+- **長表**：sticky 表頭（付款、Master List、負責人、報表、分判 VO 等）
+- **Modal**：Esc 關閉、開啟時自動 focus
+- **Session**：閒置登出前 5 分鐘頂部預警，可一鍵延長
+- **Toast**：`warn` 別名自動對應 `warning` 樣式
+
 `APP_VERSION`: `20260827-staff-roster`
 
 ### 改善

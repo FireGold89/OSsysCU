@@ -13,7 +13,7 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=20260815g">
-  <link rel="stylesheet" href="css/vault-login.css?v=20260827g">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827-ux1">
   <style>
     body.login-page {
       min-height: 100vh;
@@ -105,38 +105,88 @@
             autocomplete="current-password" required placeholder="請輸入密碼">
         </div>
         <button type="submit" class="btn btn-primary login-submit" id="loginBtn">登入</button>
+        <label class="login-vault-pref">
+          <input type="checkbox" id="vaultSkipPref">
+          <span>跳過開門動畫（記住偏好）</span>
+        </label>
       </form>
       <div class="login-foot">內部系統 · 請使用公司配發帳號</div>
     </div>
   </div>
 
   <div class="vault-status" id="vaultStatus" aria-live="polite">開啟中…</div>
+  <button type="button" class="vault-skip-btn" id="vaultSkipBtn" hidden>跳過動畫</button>
 
   <script>
     const API = `${window.location.origin}/api`;
+    const VAULT_SKIP_KEY = 'qs_vault_skip';
     const params = new URLSearchParams(window.location.search);
     const nextUrl = params.get('next') || '/';
+
+    const vaultSkipPref = document.getElementById('vaultSkipPref');
+    if (vaultSkipPref) {
+      vaultSkipPref.checked = localStorage.getItem(VAULT_SKIP_KEY) === '1';
+      vaultSkipPref.addEventListener('change', () => {
+        if (vaultSkipPref.checked) localStorage.setItem(VAULT_SKIP_KEY, '1');
+        else localStorage.removeItem(VAULT_SKIP_KEY);
+      });
+    }
+
+    function vaultSkipped() {
+      return localStorage.getItem(VAULT_SKIP_KEY) === '1';
+    }
 
     function vaultTotalMs() {
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduced) return 400;
       const root = getComputedStyle(document.documentElement);
       const ms = parseInt(root.getPropertyValue('--vault-total-ms'), 10);
-      return Number.isFinite(ms) ? ms : 16500;
+      return Number.isFinite(ms) ? ms : 12000;
+    }
+
+    let vaultFinishFn = null;
+    let vaultTimer = null;
+
+    function finishVault() {
+      if (vaultTimer) clearTimeout(vaultTimer);
+      vaultTimer = null;
+      document.body.classList.remove('vault-opening');
+      const status = document.getElementById('vaultStatus');
+      const skipBtn = document.getElementById('vaultSkipBtn');
+      if (status) status.classList.remove('show');
+      if (skipBtn) {
+        skipBtn.hidden = true;
+        skipBtn.classList.remove('show');
+      }
+      const done = vaultFinishFn;
+      vaultFinishFn = null;
+      if (done) done();
     }
 
     function playVaultOpen(onDone) {
+      vaultFinishFn = onDone;
+      if (vaultSkipped()) {
+        finishVault();
+        return;
+      }
       const status = document.getElementById('vaultStatus');
       const shell = document.querySelector('.login-shell');
+      const skipBtn = document.getElementById('vaultSkipBtn');
       if (shell) shell.classList.add('vault-hidden');
+      if (skipBtn) {
+        skipBtn.hidden = false;
+        skipBtn.classList.add('show');
+      }
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           document.body.classList.add('vault-opening');
           if (status) status.classList.add('show');
         });
       });
-      setTimeout(onDone, vaultTotalMs());
+      vaultTimer = setTimeout(finishVault, vaultTotalMs());
     }
+
+    document.getElementById('vaultSkipBtn')?.addEventListener('click', finishVault);
 
     async function checkAlreadyIn() {
       try {

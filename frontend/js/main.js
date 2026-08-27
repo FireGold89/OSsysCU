@@ -522,6 +522,20 @@ function projectNameParts(p) {
   return { en, zh };
 }
 
+/** 側欄／下拉用：報價編號 — 項目名 */
+function projectSelectLabel(p, maxLen = 40) {
+  const qno = (p?.quotation_no || '').trim();
+  const code = (p?.project_code || '').trim();
+  const head = qno || code;
+  const name = projectNameOneLine(p, maxLen);
+  if (name && name !== head) return `${head} — ${name}`;
+  return head || '—';
+}
+
+function projectBadgeCode(p) {
+  return (p?.quotation_no || p?.project_code || '—').trim();
+}
+
 /** 單行項目名稱（中文優先，無中文則英文） */
 function projectNameOneLine(p, maxLen) {
   const { en, zh } = projectNameParts(p);
@@ -805,16 +819,83 @@ function hideLoading() {
   document.getElementById('loadingOverlay').classList.remove('show');
 }
 
+function showContentLoading(text = '載入項目資料…') {
+  const content = document.querySelector('.content');
+  const hint = document.getElementById('contentLoadingHint');
+  if (hint) hint.textContent = text;
+  content?.classList.add('content-loading');
+}
+
+function hideContentLoading() {
+  document.querySelector('.content')?.classList.remove('content-loading');
+}
+
 function toast(msg, type = 'info') {
+  if (type === 'warn') type = 'warning';
   const container = document.getElementById('toastContainer');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-  el.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${msg}</span>`;
+  el.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${escHtml(msg)}</span>`;
   container.appendChild(el);
   el.onclick = () => el.remove();
   setTimeout(() => el.remove(), 4000);
 }
+
+const VAULT_SKIP_KEY = 'qs_vault_skip';
+
+function vaultAnimationSkipped() {
+  return localStorage.getItem(VAULT_SKIP_KEY) === '1';
+}
+
+const ModalA11y = {
+  _prevFocus: null,
+
+  init() {
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const modals = [
+        ...document.querySelectorAll('.modal-backdrop.open'),
+        ...document.querySelectorAll('#docViewerModal.open'),
+      ];
+      const top = modals[modals.length - 1];
+      if (!top) return;
+      e.preventDefault();
+      const closeBtn = top.querySelector('.modal-close');
+      if (closeBtn) closeBtn.click();
+      else if (top.id === 'docViewerModal' && typeof DocViewer !== 'undefined') DocViewer.close?.();
+      else top.classList.remove('open');
+    });
+
+    const obs = new MutationObserver(() => this._onDomChange());
+    obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  },
+
+  _topModalEl() {
+    const backdrops = [...document.querySelectorAll('.modal-backdrop.open')];
+    if (backdrops.length) {
+      return backdrops[backdrops.length - 1].querySelector('.modal') || backdrops[backdrops.length - 1];
+    }
+    const doc = document.getElementById('docViewerModal');
+    return doc?.classList.contains('open') ? doc : null;
+  },
+
+  _onDomChange() {
+    const modal = this._topModalEl();
+    if (modal) {
+      if (!this._prevFocus) this._prevFocus = document.activeElement;
+      const focusable = modal.querySelector(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable && !modal.contains(document.activeElement)) focusable.focus();
+      return;
+    }
+    if (this._prevFocus) {
+      try { this._prevFocus.focus(); } catch (err) { /* ignore */ }
+      this._prevFocus = null;
+    }
+  },
+};
 
 async function api(method, path, body, opts = {}) {
   const silent = opts.silent === true;
@@ -902,6 +983,8 @@ const Auth = {
   _lastActivity: 0,
   _idleTimer: null,
   _touchTimer: null,
+  _idleWarnShown: false,
+  IDLE_WARN_BEFORE_SEC: 300,
 
   revealApp() {
     document.documentElement.classList.remove('auth-pending');
@@ -959,7 +1042,12 @@ const Auth = {
     if (!sec || sec < 60) return;
     this.idleTimeoutSec = sec;
     this._lastActivity = Date.now();
-    const mark = () => { this._lastActivity = Date.now(); };
+    this._idleWarnShown = false;
+    this._hideIdleWarn();
+    const mark = () => {
+      this._lastActivity = Date.now();
+      if (this._idleWarnShown) this._hideIdleWarn();
+    };
     this._activityMark = mark;
     ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach((ev) => {
       document.addEventListener(ev, mark, { passive: true });
@@ -983,14 +1071,47 @@ const Auth = {
       clearInterval(this._touchTimer);
       this._touchTimer = null;
     }
+    this._hideIdleWarn();
+  },
+
+  _showIdleWarn(minutesLeft) {
+    const el = document.getElementById('idleWarnBanner');
+    if (!el) return;
+    this._idleWarnShown = true;
+    const mins = document.getElementById('idleWarnMinutes');
+    if (mins) mins.textContent = String(Math.max(1, minutesLeft));
+    el.hidden = false;
+  },
+
+  _hideIdleWarn() {
+    this._idleWarnShown = false;
+    const el = document.getElementById('idleWarnBanner');
+    if (el) el.hidden = true;
+  },
+
+  async extendSession() {
+    this._lastActivity = Date.now();
+    this._hideIdleWarn();
+    try {
+      await fetch(`${API}/auth/touch`, { method: 'POST', credentials: 'include' });
+      toast('Session 已延長', 'success');
+    } catch (e) {
+      toast('無法延長 Session', 'warning');
+    }
   },
 
   _checkIdle() {
     if (!this.authRequired || !this.user || !this.idleTimeoutSec) return;
     const elapsed = (Date.now() - this._lastActivity) / 1000;
-    if (elapsed >= this.idleTimeoutSec) {
+    const remaining = this.idleTimeoutSec - elapsed;
+    if (remaining <= 0) {
+      this._hideIdleWarn();
       toast('閒置逾時，請重新登入', 'warning');
       this.logout();
+      return;
+    }
+    if (remaining <= this.IDLE_WARN_BEFORE_SEC && !this._idleWarnShown) {
+      this._showIdleWarn(Math.ceil(remaining / 60));
     }
   },
 
@@ -1040,28 +1161,50 @@ const Auth = {
 
 // ─── 金庫開門進場（登入後）────────────────────────────────
 const VaultEntry = {
+  _timer: null,
+  _doneTimer: null,
+
   totalMs() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) return 400;
     const root = getComputedStyle(document.documentElement);
     const ms = parseInt(root.getPropertyValue('--vault-total-ms'), 10);
-    return Number.isFinite(ms) ? ms : 16500;
+    return Number.isFinite(ms) ? ms : 12000;
+  },
+
+  _finish(el) {
+    if (this._timer) clearTimeout(this._timer);
+    if (this._doneTimer) clearTimeout(this._doneTimer);
+    this._timer = null;
+    this._doneTimer = null;
+    const skipBtn = document.getElementById('vaultEntrySkip');
+    if (skipBtn) skipBtn.hidden = true;
+    if (!el) return;
+    el.hidden = true;
+    el.classList.remove('vault-entry-animate', 'vault-entry-done');
+  },
+
+  skip() {
+    this._finish(document.getElementById('vaultEntryOverlay'));
   },
 
   playIfNeeded() {
+    if (vaultAnimationSkipped()) return;
     if (!sessionStorage.getItem('qs_vault_enter')) return;
     sessionStorage.removeItem('qs_vault_enter');
     const el = document.getElementById('vaultEntryOverlay');
     if (!el) return;
     el.hidden = false;
+    const skipBtn = document.getElementById('vaultEntrySkip');
+    if (skipBtn) {
+      skipBtn.hidden = false;
+      skipBtn.classList.add('show');
+    }
     const total = this.totalMs();
     requestAnimationFrame(() => {
       el.classList.add('vault-entry-animate');
-      setTimeout(() => el.classList.add('vault-entry-done'), total - 200);
-      setTimeout(() => {
-        el.hidden = true;
-        el.classList.remove('vault-entry-animate', 'vault-entry-done');
-      }, total + 300);
+      this._doneTimer = setTimeout(() => el.classList.add('vault-entry-done'), total - 200);
+      this._timer = setTimeout(() => this._finish(el), total + 300);
     });
   },
 };
@@ -1080,6 +1223,7 @@ const App = {
     VaultEntry.playIfNeeded();
     Theme.init();
     Sidebar.init();
+    ModalA11y.init();
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-view-pdf');
       if (!btn) return;
@@ -1112,7 +1256,7 @@ const App = {
     this.projects.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
-      opt.textContent = `${p.project_code}${projectNameOneLine(p) !== p.project_code ? ' — ' + projectNameOneLine(p, 40) : ''}`;
+      opt.textContent = projectSelectLabel(p, 40);
       sel.appendChild(opt);
     });
     if (curId != null && curId !== '') {
@@ -1121,7 +1265,7 @@ const App = {
         sel.value = String(curId);
         if (this.currentProject) Object.assign(this.currentProject, fresh);
         const badge = document.getElementById('currentProjectCode');
-        if (badge) badge.textContent = fresh.project_code;
+        if (badge) badge.textContent = projectBadgeCode(fresh);
         document.getElementById('currentProjectBadge').style.display = '';
       }
     }
@@ -1131,7 +1275,7 @@ const App = {
 
   async selectProject(id) {
     const switchSeq = ++this._projectSwitchSeq;
-    showLoading('載入項目資料…');
+    showContentLoading('載入項目資料…');
     try {
       if (!id) {
         this.currentProject = null;
@@ -1139,7 +1283,7 @@ const App = {
         localStorage.removeItem('qs_project_id');
         document.getElementById('projectSelect').value = '';
         document.getElementById('currentProjectBadge').style.display = 'none';
-        document.getElementById('btnQuickAdd').style.display = 'none';
+        this._syncQuickAddBtn();
         this._updateProjectSettlementNav();
         this._closeProjectModals();
         this._resetProjectFilters();
@@ -1154,10 +1298,10 @@ const App = {
 
       localStorage.setItem('qs_project_id', id);
       document.getElementById('projectSelect').value = String(id);
-      document.getElementById('currentProjectCode').textContent = this.currentProject.project_code;
+      document.getElementById('currentProjectCode').textContent = projectBadgeCode(this.currentProject);
       document.getElementById('currentProjectBadge').style.display = '';
-      document.getElementById('btnQuickAdd').style.display = 'none';
 
+      this._syncQuickAddBtn();
       this._updateProjectSettlementNav();
       this._closeProjectModals();
       this._resetProjectFilters();
@@ -1167,8 +1311,15 @@ const App = {
 
       await this._refreshProjectViews(switchSeq);
     } finally {
-      if (switchSeq === this._projectSwitchSeq) hideLoading();
+      if (switchSeq === this._projectSwitchSeq) hideContentLoading();
     }
+  },
+
+  _syncQuickAddBtn() {
+    const btn = document.getElementById('btnQuickAdd');
+    if (!btn) return;
+    const show = !!this.currentProject?.id && ['dashboard', 'payments'].includes(this._getActivePage());
+    btn.style.display = show ? '' : 'none';
   },
 
   _getActivePage() {
@@ -1224,15 +1375,30 @@ const App = {
     Payments.populateScFilter();
     OCR.populateScOptions();
 
-    await Promise.all([
-      Dashboard.load(switchSeq),
-      Payments.load(switchSeq),
-      SC.load(switchSeq),
-      IpPeriod.load(switchSeq),
-      Reports.load(switchSeq),
-    ]);
-    if (switchSeq !== this._projectSwitchSeq) return;
+    const loaders = {
+      dashboard: () => Dashboard.load(switchSeq),
+      payments: () => Payments.load(switchSeq),
+      'ip-period': () => IpPeriod.load(switchSeq),
+      reports: () => Reports.load(switchSeq),
+    };
     const active = this._getActivePage();
+
+    if (loaders[active]) {
+      await loaders[active]();
+    } else if (active === 'dashboard' || !this.currentProject) {
+      await Dashboard.load(switchSeq);
+    }
+    if (switchSeq !== this._projectSwitchSeq) return;
+
+    const bgLoads = [];
+    if (active !== 'dashboard') bgLoads.push(Dashboard.load(switchSeq));
+    if (active !== 'payments') bgLoads.push(Payments.load(switchSeq));
+    bgLoads.push(SC.load(switchSeq));
+    if (active !== 'ip-period') bgLoads.push(IpPeriod.load(switchSeq));
+    if (active !== 'reports') bgLoads.push(Reports.load(switchSeq));
+    await Promise.all(bgLoads);
+
+    if (switchSeq !== this._projectSwitchSeq) return;
     if (active === 'iso-docs') IsoDocs.load();
     if (active === 'sc-vo-reg') { ScVoReg.populateScFilter(); ScVoReg.load(); }
     if (active === 'main-con-fac') MainConFac.load();
@@ -1287,8 +1453,7 @@ const App = {
     document.getElementById('pageTitle').textContent = title;
     document.getElementById('pageSubtitle').textContent = sub;
 
-    const quickAdd = document.getElementById('btnQuickAdd');
-    if (quickAdd) quickAdd.style.display = 'none';
+    this._syncQuickAddBtn();
 
     // 載入頁面數據
     if (page === 'dashboard') Dashboard.load();
@@ -1399,7 +1564,7 @@ const Dashboard = {
       tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:24px">暫無付款登記</div></td></tr>`;
     } else {
       tbody.innerHTML = recent.map(r => `
-        <tr onclick="App.navigate('payments')">
+        <tr class="dash-recent-row" onclick="App.navigate('payments', { openPaymentId: ${r.id} })" title="點擊開啟此筆付款">
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
           <td>${fmtRefNo(r.sc_no)}</td>
           <td class="td-company-name">${paymentCompanyNameHtml(r)}</td>
