@@ -309,7 +309,7 @@ def generate_boss_qs_report_docx(summary: dict, sc_list: list | None = None,
         _add_para(doc, '暫無判項/支出項', size=9, space_after=6)
 
     _add_para(doc,
-              f'本報告由 QS 付款管理系統自動生成 · {report_date} · 僅供內部管理參考',
+              f'本報告由 QS 管理系統自動生成 · {report_date} · 僅供內部管理參考',
               size=8, color=_MUTED_COLOR, space_after=0)
 
     out = BytesIO()

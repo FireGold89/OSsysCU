@@ -617,7 +617,7 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
 
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(
-        f'本報告由 QS 付款管理系統自動生成 · {report_date} · 僅供內部管理參考',
+        f'本報告由 QS 管理系統自動生成 · {report_date} · 僅供內部管理參考',
         styles['small'],
     ))
 

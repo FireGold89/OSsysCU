@@ -1,5 +1,5 @@
 """
-app.py — QS付款管理系統 Flask API主程式
+app.py — QS管理系統 Flask API主程式
 啟動: python app.py
 訪問: http://localhost:5000
 """
@@ -2248,7 +2248,7 @@ if __name__ == '__main__':
 
     port = int(os.environ.get('PORT', 5000))
     print('=' * 60)
-    print('  QS付款管理系統 v1.0')
+    print('  QS管理系統 v1.0')
     print(f'  訪問地址: http://localhost:{port}')
     print('=' * 60)
 

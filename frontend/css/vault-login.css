@@ -233,12 +233,12 @@
   opacity: 1;
 }
 
-/* ─── 開門 keyframes（9 秒：转轮 0–44%≈4s，开门 44–100%≈5s）─── */
+/* ─── 開門 keyframes（9 秒：转轮 0–44%≈4s 转 180°，开门 44–100%≈5s）─── */
 @keyframes vault-wheel-turn {
   0%   { transform: rotate(0deg); opacity: 1; }
-  44%  { transform: rotate(720deg); opacity: 1; }
-  52%  { transform: rotate(720deg); opacity: 0; }
-  100% { transform: rotate(720deg); opacity: 0; }
+  44%  { transform: rotate(180deg); opacity: 1; }
+  52%  { transform: rotate(180deg); opacity: 0; }
+  100% { transform: rotate(180deg); opacity: 0; }
 }
 
 @keyframes vault-door-left-open {
@@ -257,7 +257,7 @@
 }
 
 .login-page.vault-opening .vault-wheel {
-  animation: vault-wheel-turn var(--vault-anim-duration) ease-in-out forwards;
+  animation: vault-wheel-turn var(--vault-anim-duration) ease-out forwards;
 }
 
 .login-page.vault-opening .vault-door--left {
@@ -293,7 +293,7 @@
 }
 
 .vault-entry-overlay.vault-entry-animate .vault-wheel {
-  animation: vault-wheel-turn var(--vault-anim-duration) ease-in-out forwards;
+  animation: vault-wheel-turn var(--vault-anim-duration) ease-out forwards;
 }
 
 .vault-entry-overlay.vault-entry-animate .vault-door--left {

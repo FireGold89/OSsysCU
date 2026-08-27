@@ -1,5 +1,5 @@
 """
-database.py — QS付款管理系統資料庫模組
+database.py — QS管理系統資料庫模組
 SQLite 資料庫初始化與CRUD操作
 """
 import sqlite3
