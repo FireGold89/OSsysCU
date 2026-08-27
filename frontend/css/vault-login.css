@@ -1,0 +1,315 @@
+/* ─── 登入頁 · 夾萬門 ─────────────────────────────────────── */
+
+.login-page {
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  background: #0a0c10;
+}
+
+.vault-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* 金庫室背景 */
+.vault-room-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 45%, rgba(59, 130, 246, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 100% 100% at 50% 100%, rgba(0, 0, 0, 0.9) 0%, transparent 50%),
+    linear-gradient(180deg, #0f1419 0%, #080a0e 40%, #050608 100%);
+}
+
+.vault-room-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 48px,
+      rgba(255, 255, 255, 0.015) 48px,
+      rgba(255, 255, 255, 0.015) 49px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 48px,
+      rgba(255, 255, 255, 0.012) 48px,
+      rgba(255, 255, 255, 0.012) 49px
+    );
+  opacity: 0.6;
+}
+
+/* 門框 */
+.vault-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(92vw, 520px);
+  height: min(78vh, 640px);
+  transform: translate(-50%, -50%);
+  border: 14px solid #2a3038;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.8),
+    0 0 0 4px #1a1f26,
+    0 0 80px rgba(0, 0, 0, 0.9),
+    0 0 120px rgba(59, 130, 246, 0.06);
+  background: #0d1117;
+  overflow: hidden;
+}
+
+.vault-frame::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* 左右門扇 */
+.vault-door {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background:
+    linear-gradient(135deg, #4a5568 0%, #2d3748 25%, #3d4858 50%, #252d38 75%, #1a2028 100%);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.5);
+  transition: transform 1.1s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 2;
+}
+
+.vault-door--left {
+  left: 0;
+  border-right: 3px solid #1a1f26;
+  transform-origin: left center;
+}
+
+.vault-door--right {
+  right: 0;
+  border-left: 3px solid #1a1f26;
+  transform-origin: right center;
+}
+
+/* 門上鉚釘 */
+.vault-door::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.45) 35%, transparent 36%);
+  background-size: 28px 28px;
+  opacity: 0.5;
+}
+
+/* 中央轉輪 */
+.vault-wheel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  margin: -50px 0 0 -50px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, #6b7280, #374151 40%, #1f2937 70%, #111827 100%);
+  border: 6px solid #4b5563;
+  box-shadow:
+    0 0 0 3px #1f2937,
+    0 4px 20px rgba(0, 0, 0, 0.6),
+    inset 0 2px 8px rgba(255, 255, 255, 0.15);
+  z-index: 3;
+  transition: transform 0.6s ease, opacity 0.4s ease;
+}
+
+.vault-wheel::before {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  border: 4px solid #9ca3af;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.5);
+}
+
+.vault-wheel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #d1d5db;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.vault-wheel-spoke {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 36px;
+  margin: -18px 0 0 -2px;
+  background: linear-gradient(180deg, #9ca3af, #4b5563);
+  border-radius: 2px;
+  transform-origin: center center;
+}
+
+.vault-wheel-spoke:nth-child(1) { transform: rotate(0deg); }
+.vault-wheel-spoke:nth-child(2) { transform: rotate(60deg); }
+.vault-wheel-spoke:nth-child(3) { transform: rotate(120deg); }
+
+/* 門後光（進入系統） */
+.vault-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.35) 0%, rgba(13, 17, 23, 0.95) 70%);
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 0.8s ease 0.3s;
+}
+
+/* 登入卡片浮於門前 */
+.login-page .login-card {
+  position: relative;
+  z-index: 10;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.login-page .login-logo .logo-icon {
+  font-size: 36px;
+}
+
+/* ─── 開門動畫 ─── */
+.login-page.vault-opening .vault-wheel {
+  animation: vault-wheel-spin 0.7s ease-in-out forwards;
+}
+
+.login-page.vault-opening .vault-door--left {
+  transform: translateX(-102%);
+}
+
+.login-page.vault-opening .vault-door--right {
+  transform: translateX(102%);
+}
+
+.login-page.vault-opening .vault-glow {
+  opacity: 1;
+}
+
+.login-page.vault-opening .vault-wheel {
+  opacity: 0;
+}
+
+.login-page.vault-opening .login-card {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+}
+
+.login-page.vault-opening .vault-frame {
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.4),
+    0 0 0 4px #1a1f26,
+    0 0 120px rgba(59, 130, 246, 0.25);
+}
+
+@keyframes vault-wheel-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(540deg); }
+}
+
+/* 主頁進場覆蓋（登入後延續開門） */
+.vault-entry-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.45s ease 0.85s;
+}
+
+.vault-entry-overlay.vault-entry-done {
+  opacity: 0;
+}
+
+.vault-entry-overlay .vault-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.vault-entry-overlay .vault-door--left,
+.vault-entry-overlay .vault-door--right {
+  transform: translateX(0);
+  transition: none;
+}
+
+.vault-entry-overlay .vault-glow {
+  opacity: 0;
+  transition: none;
+}
+
+.vault-entry-overlay .vault-wheel {
+  opacity: 1;
+}
+
+.vault-entry-overlay.vault-entry-animate .vault-door--left {
+  transform: translateX(-102%);
+  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vault-entry-overlay.vault-entry-animate .vault-door--right {
+  transform: translateX(102%);
+  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vault-entry-overlay.vault-entry-animate .vault-glow {
+  opacity: 1;
+  transition: opacity 0.7s ease 0.2s;
+}
+
+.vault-entry-overlay.vault-entry-animate .vault-wheel {
+  animation: vault-wheel-spin 0.65s ease-in-out forwards;
+  opacity: 0;
+  transition: opacity 0.3s ease 0.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-door,
+  .vault-glow,
+  .vault-wheel,
+  .login-page .login-card,
+  .vault-entry-overlay {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .login-page.vault-opening .vault-door--left,
+  .vault-entry-overlay.vault-entry-animate .vault-door--left {
+    transform: translateX(-102%);
+  }
+
+  .login-page.vault-opening .vault-door--right,
+  .vault-entry-overlay.vault-entry-animate .vault-door--right {
+    transform: translateX(102%);
+  }
+}
+
+[data-theme="light"] .vault-room-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 45%, rgba(37, 99, 235, 0.1) 0%, transparent 55%),
+    linear-gradient(180deg, #1e293b 0%, #0f172a 50%, #020617 100%);
+}
+
+[data-theme="light"] .login-page {
+  background: #0f172a;
+}

@@ -959,6 +959,26 @@ const Auth = {
   },
 };
 
+// ─── 金庫開門進場（登入後）────────────────────────────────
+const VaultEntry = {
+  playIfNeeded() {
+    if (!sessionStorage.getItem('qs_vault_enter')) return;
+    sessionStorage.removeItem('qs_vault_enter');
+    const el = document.getElementById('vaultEntryOverlay');
+    if (!el) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.hidden = false;
+    requestAnimationFrame(() => {
+      el.classList.add('vault-entry-animate');
+      setTimeout(() => el.classList.add('vault-entry-done'), reduced ? 50 : 950);
+      setTimeout(() => {
+        el.hidden = true;
+        el.classList.remove('vault-entry-animate', 'vault-entry-done');
+      }, reduced ? 120 : 1500);
+    });
+  },
+};
+
 // ─── App 主控制器 ───────────────────────────────────────────
 const App = {
   currentProject: null,
@@ -968,6 +988,7 @@ const App = {
   _projectSwitchSeq: 0,
 
   async init() {
+    VaultEntry.playIfNeeded();
     Theme.init();
     Sidebar.init();
     const ok = await Auth.ensure();

@@ -13,31 +13,32 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=20260815g">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827a">
   <style>
     body.login-page {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bg-primary);
       padding: 24px;
     }
     .login-card {
       width: 100%;
-      max-width: 400px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
+      max-width: 380px;
+      background: rgba(22, 27, 34, 0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
-      padding: 32px 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      padding: 28px 24px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    [data-theme="light"] .login-card {
+      background: rgba(255, 255, 255, 0.94);
+      border-color: rgba(0, 0, 0, 0.08);
     }
     .login-logo {
       text-align: center;
-      margin-bottom: 24px;
-    }
-    .login-logo .logo-icon {
-      font-size: 40px;
-      margin-bottom: 8px;
+      margin-bottom: 20px;
     }
     .login-logo h1 {
       font-size: 20px;
@@ -61,7 +62,7 @@
     .login-error.show { display: block; }
     .login-submit { width: 100%; margin-top: 8px; }
     .login-foot {
-      margin-top: 20px;
+      margin-top: 16px;
       text-align: center;
       font-size: 12px;
       color: var(--text-muted);
@@ -69,9 +70,23 @@
   </style>
 </head>
 <body class="login-page">
+  <div class="vault-scene" aria-hidden="true">
+    <div class="vault-room-bg"></div>
+    <div class="vault-frame">
+      <div class="vault-glow"></div>
+      <div class="vault-door vault-door--left"></div>
+      <div class="vault-door vault-door--right"></div>
+      <div class="vault-wheel">
+        <span class="vault-wheel-spoke"></span>
+        <span class="vault-wheel-spoke"></span>
+        <span class="vault-wheel-spoke"></span>
+      </div>
+    </div>
+  </div>
+
   <div class="login-card">
     <div class="login-logo">
-      <div class="logo-icon">🏗️</div>
+      <div class="logo-icon">🔐</div>
       <h1>QS付款管理</h1>
       <p>Mepork Engineering</p>
     </div>
@@ -95,6 +110,14 @@
     const API = `${window.location.origin}/api`;
     const params = new URLSearchParams(window.location.search);
     const nextUrl = params.get('next') || '/';
+    const VAULT_MS = 900;
+
+    function playVaultOpen(onDone) {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      document.body.classList.add('vault-opening');
+      sessionStorage.setItem('qs_vault_enter', '1');
+      setTimeout(onDone, reduced ? 200 : VAULT_MS);
+    }
 
     async function checkAlreadyIn() {
       try {
@@ -115,7 +138,7 @@
       const btn = document.getElementById('loginBtn');
       errEl.classList.remove('show');
       btn.disabled = true;
-      btn.textContent = '登入中…';
+      btn.textContent = '驗證中…';
       try {
         const r = await fetch(API + '/auth/login', {
           method: 'POST',
@@ -130,11 +153,13 @@
         if (!json.success) {
           throw new Error(json.error || '登入失敗');
         }
-        window.location.replace(nextUrl.startsWith('/') ? nextUrl : '/');
+        btn.textContent = '開啟金庫…';
+        playVaultOpen(() => {
+          window.location.replace(nextUrl.startsWith('/') ? nextUrl : '/');
+        });
       } catch (err) {
         errEl.textContent = err.message || '登入失敗';
         errEl.classList.add('show');
-      } finally {
         btn.disabled = false;
         btn.textContent = '登入';
       }
