@@ -317,6 +317,39 @@ def upload_main_con_fac_attachment(project_id):
     })
 
 
+@app.route('/api/projects/<int:project_id>/main-con-fac/pdf', methods=['GET'])
+def main_con_fac_pdf_api(project_id):
+    fac = db.get_main_con_fac(project_id)
+    if not fac:
+        return resp(error='項目不存在', status=404)
+    try:
+        from main_con_fac_pdf import generate_main_con_fac_pdf
+        from sc_fac_pdf import normalize_sc_fac_theme
+        from flask import Response, request
+        import startup
+        theme = normalize_sc_fac_theme(request.args.get('theme'))
+        pdf_bytes = generate_main_con_fac_pdf(fac, theme=theme)
+    except Exception as e:
+        return resp(error=f'PDF 生成失敗: {e}', status=500)
+    h = fac.get('header') or {}
+    code = h.get('contract_no') or h.get('project_code') or str(project_id)
+    import re
+    safe = re.sub(r'[^\w\-]+', '_', code)
+    inline = request.args.get('inline') == '1' or request.args.get('preview') == '1'
+    disp = 'inline' if inline else 'attachment'
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={
+            'Content-Disposition': f'{disp}; filename="MainCon_FAC_{safe}.pdf"',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'Pragma': 'no-cache',
+            'X-App-Version': startup.APP_VERSION,
+            'X-Main-Con-FAC-Theme': theme,
+        },
+    )
+
+
 @app.route('/api/sc-contract-registry/status', methods=['GET'])
 def sc_contract_registry_status_api():
     from sc_contract_ref import ref_status

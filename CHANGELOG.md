@@ -4,6 +4,16 @@
 
 ## [未發布]
 
+`APP_VERSION`: `20260827-main-con-fac-pdf2`
+
+### 修復
+- **主合約 FAC PDF**：補回 `TOP_LOGO_ZONE` 匯入，修正生成失敗
+
+`APP_VERSION`: `20260827-main-con-fac-pdf`
+
+### 新增
+- **主合約最終結算 PDF**：P1 工程帳目總結算 (A–K) + P2 關鍵日期 · 含內部簽名欄 · 預覽／下載
+
 `APP_VERSION`: `20260827-vault-hold`
 
 ### 修復

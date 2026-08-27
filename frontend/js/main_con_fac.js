@@ -1,6 +1,161 @@
 /* ─── main_con_fac.js — 主合約最終結算（PPT p19） ─────────── */
 const MainConFac = {
   _data: null,
+  _appVersion: '',
+
+  THEMES: [
+    { id: 'classic', label: '傳統會計（PPT 第19頁）' },
+    { id: 'mepork_grid', label: '清新格線' },
+  ],
+  THEME_STORAGE_KEY: 'qs_main_con_fac_theme',
+
+  getTheme() {
+    const saved = localStorage.getItem(this.THEME_STORAGE_KEY);
+    return this.THEMES.some(t => t.id === saved) ? saved : 'classic';
+  },
+
+  setTheme(theme) {
+    if (this.THEMES.some(t => t.id === theme)) {
+      localStorage.setItem(this.THEME_STORAGE_KEY, theme);
+    }
+  },
+
+  themeLabel(theme) {
+    return this.THEMES.find(t => t.id === theme)?.label || theme;
+  },
+
+  async _loadAppVersion() {
+    try {
+      const r = await api('GET', '/system/status');
+      this._appVersion = r?.app_version || '';
+    } catch (e) {
+      this._appVersion = '';
+    }
+  },
+
+  _pdfMeta() {
+    const p = App.currentProject;
+    const h = this._data?.header || {};
+    const code = h.contract_no || h.project_code || p?.project_code || p?.id || 'project';
+    const safe = String(code).replace(/[^\w\-]+/g, '_');
+    const base = `${API}/projects/${p.id}/main-con-fac/pdf`;
+    return { p, code, safe, base, filename: `MainCon_FAC_${safe}.pdf` };
+  },
+
+  _pdfUrl(inline, theme) {
+    const th = theme || this.getTheme();
+    const mode = inline ? 'inline=1' : 'download=1';
+    return `${this._pdfMeta().base}?${mode}&theme=${encodeURIComponent(th)}&_t=${Date.now()}`;
+  },
+
+  async _fetchPdfBlob(theme) {
+    const meta = this._pdfMeta();
+    if (!meta.p?.id) throw new Error('請先選擇項目');
+    const url = this._pdfUrl(true, theme);
+    const r = await fetch(url, { credentials: 'include' });
+    const ct = r.headers.get('Content-Type') || '';
+    if (!r.ok) {
+      let msg = `載入失敗（HTTP ${r.status}）`;
+      if (ct.includes('application/json')) {
+        try {
+          const j = await r.json();
+          if (j.error) msg = j.error;
+        } catch (e) { /* ignore */ }
+      }
+      throw new Error(msg);
+    }
+    if (!ct.includes('application/pdf')) {
+      throw new Error('伺服器回應格式錯誤，請重新整理後再試');
+    }
+    return {
+      meta,
+      blob: await r.blob(),
+      serverVersion: r.headers.get('X-App-Version') || '',
+    };
+  },
+
+  async previewPdf(opts = {}) {
+    const fromThemeChange = opts.fromThemeChange === true;
+    const theme = this.getTheme();
+    if (fromThemeChange) DocViewer.setLoading?.(true);
+    else showLoading('正在生成 PDF…');
+    try {
+      const { meta, blob, serverVersion } = await this._fetchPdfBlob(theme);
+      const verTag = serverVersion ? ` · ${serverVersion}` : '';
+      const title = `主合約最終結算 · ${meta.code} · ${this.themeLabel(theme)}${verTag}`;
+      await DocViewer.openBlob(blob, title, {
+        kind: 'pdf',
+        subtitle: 'P1 工程帳目總結算 (A–K) · P2 關鍵日期 · 含內部簽名欄',
+        downloadUrl: this._pdfUrl(false, theme),
+        downloadName: meta.filename,
+        themes: this.THEMES,
+        theme,
+        onThemeChange: async (next) => {
+          this.setTheme(next);
+          const sel = document.getElementById('mcfThemeSelect');
+          if (sel) sel.value = next;
+          await this.previewPdf({ fromThemeChange: true });
+        },
+      });
+    } catch (e) {
+      toast(e.message || 'PDF 預覽失敗', 'error');
+    } finally {
+      if (fromThemeChange) DocViewer.setLoading?.(false);
+      else hideLoading();
+    }
+  },
+
+  async downloadPdf() {
+    const theme = this.getTheme();
+    showLoading('正在生成 PDF…');
+    try {
+      const { meta, blob } = await this._fetchPdfBlob(theme);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = meta.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      toast(`已下載 ${meta.code} PDF`, 'success');
+    } catch (e) {
+      toast(e.message || 'PDF 下載失敗', 'error');
+    } finally {
+      hideLoading();
+    }
+  },
+
+  _themeSelectHtml() {
+    const cur = this.getTheme();
+    const opts = this.THEMES.map(t =>
+      `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${escHtml(t.label)}</option>`
+    ).join('');
+    return `
+      <label style="font-size:12px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:8px">
+        <span>PDF 版面</span>
+        <select class="form-input" id="mcfThemeSelect" style="width:auto;min-width:180px"
+          onchange="MainConFac.setTheme(this.value)">${opts}</select>
+      </label>`;
+  },
+
+  _actionBar() {
+    const ver = this._appVersion ? ` · 後端 ${escHtml(this._appVersion)}` : '';
+    return `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
+          <div>
+            <div class="card-title">主合約最終結算 · Main Con Final Account</div>
+            <div style="font-size:11px;color:var(--text-muted)">PDF · P1 結算 (A–K) + P2 關鍵日期 · 含內部簽名欄${ver}</div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto">
+            ${this._themeSelectHtml()}
+            <button type="button" class="btn btn-primary btn-sm" onclick="MainConFac.previewPdf()">👁 預覽 PDF</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="MainConFac.downloadPdf()">⬇ 下載 PDF</button>
+          </div>
+        </div>
+      </div>`;
+  },
 
   async load() {
     const p = App.currentProject;
@@ -12,6 +167,7 @@ const MainConFac = {
     }
     root.innerHTML = `<div class="empty-state" style="padding:40px"><div class="spinner"></div><div class="empty-sub">載入中…</div></div>`;
     try {
+      await this._loadAppVersion();
       this._data = await api('GET', `/projects/${p.id}/main-con-fac`);
       this.render();
     } catch (e) {
@@ -58,6 +214,7 @@ const MainConFac = {
     const worksSub = nameZh && nameEn ? nameEn : '';
 
     root.innerHTML = `
+      ${this._actionBar()}
       <div class="mcf-header card" style="margin-bottom:16px">
         <div class="card-header">
           <div class="card-title">主合約 · ${escHtml(h.contract_no || '—')}</div>
