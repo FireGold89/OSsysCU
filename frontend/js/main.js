@@ -895,7 +895,17 @@ const Auth = {
   async ensure() {
     try {
       const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
-      const json = await r.json();
+      const text = await r.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        // 旧版后端尚无 /api/auth/me（需重启 python app.py）
+        this.authRequired = false;
+        this.user = null;
+        this.applyUi();
+        return true;
+      }
       if (!json.success) throw new Error(json.error || '無法驗證登入狀態');
       const data = json.data || {};
       this.authRequired = !!data.auth_required;
@@ -908,8 +918,11 @@ const Auth = {
       this.applyUi();
       return true;
     } catch (e) {
+      this.authRequired = false;
+      this.user = null;
+      this.applyUi();
       toast(e.message || '登入驗證失敗', 'error');
-      return false;
+      return true;
     }
   },
 
@@ -1381,6 +1394,7 @@ const Settings = {
       document.getElementById('settingCompany').value = data.company_name || '';
     }
     await this.loadDocLibrary();
+    await this.loadDbStatus();
     // 顯示OCR引擎狀態
     try {
       const engRes = await api('GET', '/ocr/engines');
@@ -1481,6 +1495,62 @@ const Settings = {
       id: p.id,
       doc_library_url: p.doc_library_url || '',
     }));
+  },
+
+  async loadDbStatus() {
+    const el = document.getElementById('settingDbStatus');
+    if (!el) return;
+    try {
+      const data = await api('GET', '/system/status');
+      if (!data) {
+        el.textContent = '無法讀取線上狀態';
+        return;
+      }
+      const mb = data.db_size_bytes ? (data.db_size_bytes / (1024 * 1024)).toFixed(2) : '—';
+      el.innerHTML = `線上：<strong>${data.project_count ?? '—'}</strong> 個項目 · `
+        + `<strong>${data.payment_count ?? '—'}</strong> 筆付款 · DB ${mb} MB`
+        + (data.restore_token_configured ? '' : ' · <span class="badge badge-warning">未設 RESTORE_TOKEN</span>');
+    } catch (e) {
+      el.textContent = '無法讀取線上狀態';
+    }
+  },
+
+  async restoreDatabase() {
+    const fileInput = document.getElementById('settingRestoreDbFile');
+    const tokenInput = document.getElementById('settingRestoreToken');
+    const file = fileInput?.files?.[0];
+    const token = (tokenInput?.value || '').trim();
+    if (!file) {
+      toast('請選擇 qs_system.db', 'warning');
+      return;
+    }
+    if (!token) {
+      toast('請輸入 RESTORE_TOKEN', 'warning');
+      return;
+    }
+    if (!confirm('將覆蓋線上全部資料庫，確定繼續？')) return;
+    showLoading('上傳還原資料庫…');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('token', token);
+      const r = await fetch(`${API}/system/restore-db`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-Restore-Token': token },
+        body: fd,
+      });
+      const json = await r.json();
+      if (!json.success) throw new Error(json.error || '還原失敗');
+      toast(`資料庫已還原（${json.data?.project_count ?? '?'} 個項目）`, 'success');
+      if (fileInput) fileInput.value = '';
+      await this.loadDbStatus();
+      await App.loadProjects();
+    } catch (e) {
+      toast(e.message || '還原失敗', 'error');
+    } finally {
+      hideLoading();
+    }
   },
 
   async saveDocLibrary() {

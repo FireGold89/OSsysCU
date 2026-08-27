@@ -4,6 +4,13 @@
 
 ## [未發布]
 
+`APP_VERSION`: `20260827-restore-ui`
+
+### 改善
+- **系統設定**：管理員可上傳 `qs_system.db` 還原線上資料庫（需 RESTORE_TOKEN）
+- **腳本**：`scripts/push_db_to_zeabur.py` / `.ps1` 供 CLI 上傳（需 admin 登入 + token）
+- **本機兼容**：`Auth.ensure()` 旧版后端无 `/api/auth/me` 时不阻断加载
+
 `APP_VERSION`: `20260816-auth`
 
 ### 新增
