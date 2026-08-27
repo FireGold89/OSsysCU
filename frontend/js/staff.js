@@ -2,15 +2,80 @@
 const StaffRoster = {
   list: [],
   roles: [],
+  departments: [],
   _quotPerson: null,
   _quotOffset: 0,
   _quotLimit: 50,
 
   async loadRoles() {
-    if (this.roles.length) return this.roles;
+    if (this.roles.length && this.departments.length) {
+      return { roles: this.roles, departments: this.departments };
+    }
     const data = await api('GET', '/staff/roles');
     this.roles = data?.roles || [];
-    return this.roles;
+    this.departments = data?.departments || [];
+    return { roles: this.roles, departments: this.departments };
+  },
+
+  normalizeRoleId(roleId) {
+    const aliases = {
+      admin: 'mgr',
+      finance: 'ga',
+      engineering: 'mepork_eng',
+      eng: 'mepork_eng',
+    };
+    const r = (roleId || '').trim().toLowerCase();
+    return aliases[r] || r;
+  },
+
+  roleLabel(roleId) {
+    const rid = this.normalizeRoleId(roleId);
+    const r = this.roles.find(x => x.id === rid);
+    if (r) return r.label;
+    const legacy = {
+      admin: '管理',
+      finance: '行政',
+      engineering: '美博工程',
+      eng: '美博工程',
+      prop_eng: '物業工程',
+      mepork_eng: '美博工程',
+      ga: '行政',
+      mgr: '管理',
+      viewer: '唯讀',
+      qs: 'QS',
+    };
+    return legacy[rid] || roleId || '—';
+  },
+
+  syncModalSelects(selectedRole = 'qs', selectedDept = '') {
+    const roleEl = document.getElementById('staffRole');
+    const deptEl = document.getElementById('staffDept');
+    const roleId = this.normalizeRoleId(selectedRole) || 'qs';
+    const dept = (selectedDept || '').trim();
+
+    if (roleEl) {
+      let html = '';
+      (this.roles || []).forEach((r) => {
+        html += `<option value="${escHtml(r.id)}">${escHtml(r.label)}</option>`;
+      });
+      if (selectedRole && roleId !== selectedRole && !this.roles.find((r) => r.id === selectedRole)) {
+        html += `<option value="${escHtml(selectedRole)}">${escHtml(this.roleLabel(selectedRole))}（舊）</option>`;
+      }
+      roleEl.innerHTML = html;
+      roleEl.value = this.roles.find((r) => r.id === roleId) ? roleId : (selectedRole || 'qs');
+    }
+
+    if (deptEl) {
+      let html = '<option value="">— 選擇部門 —</option>';
+      (this.departments || []).forEach((d) => {
+        html += `<option value="${escHtml(d.id)}">${escHtml(d.label)}</option>`;
+      });
+      if (dept && !this.departments.find((d) => d.id === dept)) {
+        html += `<option value="${escHtml(dept)}">${escHtml(dept)}（舊）</option>`;
+      }
+      deptEl.innerHTML = html;
+      if (dept) deptEl.value = dept;
+    }
   },
 
   async load(activeOnly = false) {
@@ -38,11 +103,6 @@ const StaffRoster = {
       (s.name_en || '').trim().toLowerCase() === n
       || (s.name_zh || '').trim().toLowerCase() === n
     ) || null;
-  },
-
-  roleLabel(roleId) {
-    const r = this.roles.find(x => x.id === roleId);
-    return r ? r.label : roleId || '—';
   },
 
   fillPersonSelect(selectEl, { selectedStaffId, selectedName } = {}, { allowEmpty = true } = {}) {
@@ -138,7 +198,7 @@ const StaffRoster = {
         status = '<span class="badge badge-muted">停用</span>';
       }
       const role = s.in_staff_table
-        ? `<span class="badge badge-info" title="預留權限">${escHtml(this.roleLabel(s.access_role))}</span>`
+        ? `<span class="badge badge-info" title="權限角色">${escHtml(this.roleLabel(s.access_role))}</span>`
         : '<span class="td-muted">—</span>';
       const usage = `${s.quotation_count || 0} 報價 · ${s.project_count || 0} 項目`;
       const usageCell = (s.quotation_count || 0) > 0
@@ -173,10 +233,10 @@ const StaffRoster = {
   openAdd() {
     document.getElementById('staffModalTitle').textContent = '新增項目負責人';
     document.getElementById('staffModalId').value = '';
-    ['staffNameEn', 'staffNameZh', 'staffEmail', 'staffPhone', 'staffDept', 'staffNotes'].forEach(id => {
+    ['staffNameEn', 'staffNameZh', 'staffEmail', 'staffPhone', 'staffNotes'].forEach(id => {
       document.getElementById(id).value = '';
     });
-    document.getElementById('staffRole').value = 'qs';
+    this.syncModalSelects('qs', '');
     document.getElementById('staffActive').checked = true;
     document.getElementById('staffModal').classList.add('open');
   },
@@ -190,8 +250,7 @@ const StaffRoster = {
     document.getElementById('staffNameZh').value = s.name_zh || '';
     document.getElementById('staffEmail').value = s.email || '';
     document.getElementById('staffPhone').value = s.phone || '';
-    document.getElementById('staffDept').value = s.department || '';
-    document.getElementById('staffRole').value = s.access_role || 'qs';
+    this.syncModalSelects(s.access_role || 'qs', s.department || '');
     document.getElementById('staffNotes').value = s.notes || '';
     document.getElementById('staffActive').checked = !!s.is_active;
     document.getElementById('staffModal').classList.add('open');
@@ -218,7 +277,7 @@ const StaffRoster = {
       return;
     }
     if ((body.name_en && body.name_en.length <= 4 && !body.name_en.includes(' '))
-      || (body.name_zh && body.name_zh.length <= 2)) {
+      || (body.name_zh && body.name_zh.length > 0 && body.name_zh.length <= 2)) {
       toast('請填寫全名，不要使用縮寫（如 EC、KM）', 'warning');
       return;
     }

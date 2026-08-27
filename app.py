@@ -1586,12 +1586,8 @@ def staff_person_quotations():
 @app.route('/api/staff/roles', methods=['GET'])
 def staff_roles():
     return resp({
-        'roles': [
-            {'id': 'qs', 'label': 'QS', 'hint': '報價／判項／付款（預設）'},
-            {'id': 'finance', 'label': '財務', 'hint': '發票／支票欄位（預留）'},
-            {'id': 'admin', 'label': '管理員', 'hint': '全系統設定（預留）'},
-            {'id': 'viewer', 'label': '唯讀', 'hint': '僅查閱（預留）'},
-        ],
+        'roles': db.staff_roles_for_api(),
+        'departments': db.staff_departments_for_api(),
     })
 
 

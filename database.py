@@ -5901,7 +5901,67 @@ def list_master_import_history(limit=20):
 
 # ─── Staff roster (負責人名單 → 未來權限) ───────────────────────────────
 
-STAFF_ACCESS_ROLES = ('admin', 'qs', 'finance', 'viewer')
+STAFF_DEPARTMENTS = ('物業工程部', '美博工程部', 'QS部', '行政部', '會計部')
+
+STAFF_ACCESS_ROLE_LABELS = {
+    'prop_eng': '物業工程',
+    'mepork_eng': '美博工程',
+    'qs': 'QS',
+    'ga': '行政',
+    'mgr': '管理',
+    'viewer': '唯讀',
+}
+
+STAFF_ACCESS_ROLE_ALIASES = {
+    'admin': 'mgr',
+    'finance': 'ga',
+    'engineering': 'mepork_eng',
+    'eng': 'mepork_eng',
+}
+
+STAFF_ACCESS_ROLES = tuple(STAFF_ACCESS_ROLE_LABELS.keys())
+
+
+def normalize_staff_access_role(role):
+    r = (role or 'qs').strip().lower()
+    r = STAFF_ACCESS_ROLE_ALIASES.get(r, r)
+    return r if r in STAFF_ACCESS_ROLES else 'qs'
+
+
+def staff_access_role_label(role):
+    rid = normalize_staff_access_role(role)
+    return STAFF_ACCESS_ROLE_LABELS.get(rid, rid or '—')
+
+
+def normalize_staff_department(dept):
+    d = (dept or '').strip()
+    if not d:
+        return None
+    if d in STAFF_DEPARTMENTS:
+        return d
+    legacy_depts = {
+        '工程部': '美博工程部',
+    }
+    return legacy_depts.get(d, d)
+
+
+def staff_roles_for_api():
+    hints = {
+        'prop_eng': '物業工程部',
+        'mepork_eng': '美博工程部',
+        'qs': '報價／判項／付款',
+        'ga': '行政部',
+        'mgr': '管理層',
+        'viewer': '僅查閱',
+    }
+    return [
+        {'id': rid, 'label': label, 'hint': hints.get(rid, '')}
+        for rid, label in STAFF_ACCESS_ROLE_LABELS.items()
+    ]
+
+
+def staff_departments_for_api():
+    return [{'id': d, 'label': d} for d in STAFF_DEPARTMENTS]
 
 
 def _normalize_staff_code(code):
@@ -6047,12 +6107,13 @@ def list_quotations_for_roster_person(person_label, limit=100, offset=0, sort_di
 
 def list_staff_by_access_role(active_only=False, access_role='qs'):
     """staff_members 表依權限角色（如 QS 群組）"""
-    role = (access_role or 'qs').strip().lower()
-    if role not in STAFF_ACCESS_ROLES:
-        raise ValueError(f'無效角色: {access_role}')
+    role = normalize_staff_access_role(access_role)
+    legacy = [k for k, v in STAFF_ACCESS_ROLE_ALIASES.items() if v == role]
+    match_roles = [role] + legacy
     conn = get_conn()
-    sql = "SELECT * FROM staff_members WHERE access_role=?"
-    params = [role]
+    placeholders = ','.join('?' * len(match_roles))
+    sql = f"SELECT * FROM staff_members WHERE access_role IN ({placeholders})"
+    params = list(match_roles)
     if active_only:
         sql += " AND is_active=1"
     sql += " ORDER BY name_en COLLATE NOCASE, name_zh COLLATE NOCASE"
@@ -6109,13 +6170,14 @@ def create_staff_member(data):
     data['name_zh'] = (data.get('name_zh') or '').strip() or None
     if not data['name_en'] and not data['name_zh']:
         raise ValueError('請填寫項目負責人姓名')
-    if _is_pic_abbreviation_label(data['name_en'] or '') or _is_pic_abbreviation_label(data['name_zh'] or ''):
+    if (data['name_en'] and _is_pic_abbreviation_label(data['name_en'])) or (
+        data['name_zh'] and _is_pic_abbreviation_label(data['name_zh'])
+    ):
         raise ValueError('請填寫項目負責人全名，不要使用縮寫')
     data['email'] = (data.get('email') or '').strip() or None
     data['phone'] = (data.get('phone') or '').strip() or None
-    data['department'] = (data.get('department') or '').strip() or None
-    role = (data.get('access_role') or 'qs').strip().lower()
-    data['access_role'] = role if role in STAFF_ACCESS_ROLES else 'qs'
+    data['department'] = normalize_staff_department(data.get('department'))
+    data['access_role'] = normalize_staff_access_role(data.get('access_role'))
     data['is_active'] = 1 if data.get('is_active', 1) else 0
     data['notes'] = (data.get('notes') or '').strip() or None
     conn = get_conn()
@@ -6157,13 +6219,16 @@ def update_staff_member(staff_id, data):
     data['name_zh'] = (data.get('name_zh') or '').strip() or None
     if not data['name_en'] and not data['name_zh']:
         raise ValueError('請填寫項目負責人姓名')
-    if _is_pic_abbreviation_label(data['name_en'] or '') or _is_pic_abbreviation_label(data['name_zh'] or ''):
+    if (data['name_en'] and _is_pic_abbreviation_label(data['name_en'])) or (
+        data['name_zh'] and _is_pic_abbreviation_label(data['name_zh'])
+    ):
         raise ValueError('請填寫項目負責人全名，不要使用縮寫')
     data['email'] = (data.get('email') or '').strip() or None
     data['phone'] = (data.get('phone') or '').strip() or None
-    data['department'] = (data.get('department') or '').strip() or None
-    role = (data.get('access_role') or existing['access_role'] or 'qs').strip().lower()
-    data['access_role'] = role if role in STAFF_ACCESS_ROLES else 'qs'
+    data['department'] = normalize_staff_department(data.get('department'))
+    data['access_role'] = normalize_staff_access_role(
+        data.get('access_role') or existing.get('access_role')
+    )
     data['is_active'] = 1 if data.get('is_active', existing.get('is_active', 1)) else 0
     data['notes'] = (data.get('notes') or '').strip() or None
     data['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
