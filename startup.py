@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '20260816-auth'
+APP_VERSION = '20260816-auth2'
 
 
 def _preload_pdf_font():

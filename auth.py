@@ -49,6 +49,14 @@ def session_lifetime_days():
         return 7
 
 
+def _clean_env_secret(val):
+    """去除 Zeabur 粘贴时常见的前后空白或引号"""
+    s = (val or '').strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
+        s = s[1:-1]
+    return s
+
+
 def _parse_auth_users():
     """從 AUTH_USERS JSON 或 APP_* 環境變數載入用戶"""
     raw = os.environ.get('AUTH_USERS', '').strip()
@@ -64,7 +72,7 @@ def _parse_auth_users():
             if not isinstance(item, dict):
                 continue
             username = (item.get('username') or item.get('user') or '').strip()
-            password = (item.get('password') or '').strip()
+            password = _clean_env_secret(item.get('password'))
             role = (item.get('role') or 'user').strip().lower()
             if not username or not password:
                 continue
@@ -76,16 +84,21 @@ def _parse_auth_users():
         return users
 
     users = []
-    admin_user = os.environ.get('APP_ADMIN_USER', 'admin').strip() or 'admin'
-    admin_pass = os.environ.get('APP_ADMIN_PASSWORD', '').strip()
+    admin_user = _clean_env_secret(os.environ.get('APP_ADMIN_USER', 'admin')) or 'admin'
+    admin_pass = _clean_env_secret(os.environ.get('APP_ADMIN_PASSWORD', ''))
+    qs_user = _clean_env_secret(os.environ.get('APP_LOGIN_USER', 'qs')) or 'qs'
+    qs_pass = _clean_env_secret(os.environ.get('APP_LOGIN_PASSWORD', ''))
+
+    # 只设 APP_LOGIN_PASSWORD 时，admin 共用同一密码（Zeabur 常见遗漏）
+    if not admin_pass and qs_pass:
+        admin_pass = qs_pass
+
     if admin_pass:
         users.append({'username': admin_user, 'password': admin_pass, 'role': 'admin'})
 
-    qs_user = os.environ.get('APP_LOGIN_USER', 'qs').strip() or 'qs'
-    qs_pass = os.environ.get('APP_LOGIN_PASSWORD', '').strip()
     if qs_pass:
         role = 'user'
-        if qs_user == admin_user and admin_pass and hmac.compare_digest(qs_pass, admin_pass):
+        if qs_user.lower() == admin_user.lower() and admin_pass and _safe_eq(qs_pass, admin_pass):
             role = 'admin'
         users.append({'username': qs_user, 'password': qs_pass, 'role': role})
 
@@ -96,6 +109,16 @@ def load_users():
     if not hasattr(load_users, '_cache'):
         load_users._cache = _parse_auth_users()
     return load_users._cache
+
+
+def configured_usernames():
+    """供 status 诊断：已配置账号名（不含密码）"""
+    if not is_enabled():
+        return []
+    try:
+        return [u['username'] for u in load_users()]
+    except ValueError:
+        return []
 
 
 def reload_users():
@@ -113,8 +136,9 @@ def authenticate(username, password):
     pwd = password or ''
     if not name or not pwd:
         return None
+    name_lower = name.lower()
     for u in load_users():
-        if u['username'] == name and _safe_eq(u['password'], pwd):
+        if u['username'].lower() == name_lower and _safe_eq(u['password'], pwd):
             return {'username': u['username'], 'role': u['role']}
     return None
 
