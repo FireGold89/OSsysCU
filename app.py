@@ -2038,6 +2038,7 @@ def system_status():
         'volume_mounted': DATA_DIR == '/data',
         'restore_token_configured': bool(os.environ.get('RESTORE_TOKEN', '').strip()),
         'auth_enabled': auth.is_enabled(),
+        'auth_usernames': auth.configured_usernames(),
         'app_version': _app_version(),
     })
 
