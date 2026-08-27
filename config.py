@@ -5,6 +5,26 @@ import shutil
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _load_dotenv():
+    """本機開發：讀取專案根目錄 .env（不覆蓋已設環境變數）"""
+    path = os.path.join(BASE_DIR, '.env')
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
+_load_dotenv()
+
+
 def _resolve_data_dir():
     env = (os.environ.get('DATA_DIR') or '').strip()
     if env:

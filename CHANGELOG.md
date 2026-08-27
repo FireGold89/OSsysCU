@@ -4,6 +4,17 @@
 
 ## [未發布]
 
+`APP_VERSION`: `20260827-session-idle`
+
+### 改善
+- **Session 保安**：最长 1 天（`AUTH_SESSION_DAYS`）；闲置自动登出 qs 60 分钟 / admin 30 分钟（`AUTH_IDLE_MINUTES*`）
+- **本机 `.env`**：启动时自动读取
+
+`APP_VERSION`: `20260827-vault-full`
+
+### 改善
+- **夾萬登入**：全屏金庫門背景；登入成功後轉輪 + 左右開門約 6.5 秒再進入系統
+
 `APP_VERSION`: `20260827-vault-login`
 
 ### 新增

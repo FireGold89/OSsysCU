@@ -13,9 +13,9 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, sessi
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
 import auth
 import database as db
-from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
 from ocr_processor import process_pdf
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='')
@@ -82,10 +82,18 @@ def auth_logout():
 def auth_me():
     if not auth.is_enabled():
         return resp({'auth_required': False, 'user': None})
-    user = auth.current_user()
-    if not user:
-        return resp({'auth_required': True, 'user': None})
-    return resp({'auth_required': True, 'user': user})
+    if auth.session_idle_expired():
+        auth.logout_user()
+        payload = auth.auth_status_payload()
+        payload['idle_expired'] = True
+        return resp(payload)
+    return resp(auth.auth_status_payload())
+
+
+@app.route('/api/auth/touch', methods=['POST'])
+def auth_touch():
+    """前端有操作時延長 Session（由 check_request 驗證 idle + touch）"""
+    return resp({'message': 'ok'})
 
 
 # ─── 前端路由 ───────────────────────────────────────────────────────────

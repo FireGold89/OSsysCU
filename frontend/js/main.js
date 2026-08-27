@@ -826,12 +826,19 @@ async function api(method, path, body, opts = {}) {
     };
     if (body) fetchOpts.body = JSON.stringify(body);
     const r = await fetch(API + path, fetchOpts);
-    if (r.status === 401 && !path.startsWith('/auth/')) {
-      const next = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/login.html?next=${next}`;
-      throw new Error('請先登入');
-    }
     const text = await r.text();
+    if (r.status === 401 && !path.startsWith('/auth/')) {
+      let idle = false;
+      try {
+        const peek = JSON.parse(text);
+        idle = (peek.error || '').includes('閒置逾時');
+      } catch (e) { /* ignore */ }
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = idle
+        ? `/login.html?reason=idle&next=${next}`
+        : `/login.html?next=${next}`;
+      throw new Error(idle ? '閒置逾時，請重新登入' : '請先登入');
+    }
     let json;
     try {
       json = JSON.parse(text);
@@ -891,6 +898,10 @@ const Sidebar = {
 const Auth = {
   user: null,
   authRequired: false,
+  idleTimeoutSec: null,
+  _lastActivity: 0,
+  _idleTimer: null,
+  _touchTimer: null,
 
   async ensure() {
     try {
@@ -900,7 +911,6 @@ const Auth = {
       try {
         json = JSON.parse(text);
       } catch (e) {
-        // 旧版后端尚无 /api/auth/me（需重启 python app.py）
         this.authRequired = false;
         this.user = null;
         this.applyUi();
@@ -910,12 +920,20 @@ const Auth = {
       const data = json.data || {};
       this.authRequired = !!data.auth_required;
       this.user = data.user || null;
+      if (data.idle_expired) {
+        toast('閒置逾時，請重新登入', 'warning');
+        window.location.href = '/login.html?reason=idle';
+        return false;
+      }
       if (this.authRequired && !this.user) {
         const next = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `/login.html?next=${next}`;
         return false;
       }
       this.applyUi();
+      if (this.authRequired && this.user) {
+        this.startIdleWatch(data.idle_timeout_seconds);
+      }
       return true;
     } catch (e) {
       this.authRequired = false;
@@ -923,6 +941,57 @@ const Auth = {
       this.applyUi();
       toast(e.message || '登入驗證失敗', 'error');
       return true;
+    }
+  },
+
+  startIdleWatch(idleSec) {
+    this.stopIdleWatch();
+    const sec = parseInt(idleSec, 10);
+    if (!sec || sec < 60) return;
+    this.idleTimeoutSec = sec;
+    this._lastActivity = Date.now();
+    const mark = () => { this._lastActivity = Date.now(); };
+    this._activityMark = mark;
+    ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach((ev) => {
+      document.addEventListener(ev, mark, { passive: true });
+    });
+    this._idleTimer = setInterval(() => this._checkIdle(), 30000);
+    this._touchTimer = setInterval(() => this._maybeTouch(), 180000);
+  },
+
+  stopIdleWatch() {
+    if (this._activityMark) {
+      ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach((ev) => {
+        document.removeEventListener(ev, this._activityMark);
+      });
+      this._activityMark = null;
+    }
+    if (this._idleTimer) {
+      clearInterval(this._idleTimer);
+      this._idleTimer = null;
+    }
+    if (this._touchTimer) {
+      clearInterval(this._touchTimer);
+      this._touchTimer = null;
+    }
+  },
+
+  _checkIdle() {
+    if (!this.authRequired || !this.user || !this.idleTimeoutSec) return;
+    const elapsed = (Date.now() - this._lastActivity) / 1000;
+    if (elapsed >= this.idleTimeoutSec) {
+      toast('閒置逾時，請重新登入', 'warning');
+      this.logout();
+    }
+  },
+
+  async _maybeTouch() {
+    if (!this.authRequired || !this.user) return;
+    const elapsed = (Date.now() - this._lastActivity) / 1000;
+    if (elapsed < 120) {
+      try {
+        await fetch(`${API}/auth/touch`, { method: 'POST', credentials: 'include' });
+      } catch (e) { /* ignore */ }
     }
   },
 
@@ -952,6 +1021,7 @@ const Auth = {
   },
 
   async logout() {
+    this.stopIdleWatch();
     try {
       await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (e) {}
@@ -961,20 +1031,28 @@ const Auth = {
 
 // ─── 金庫開門進場（登入後）────────────────────────────────
 const VaultEntry = {
+  totalMs() {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) return 400;
+    const root = getComputedStyle(document.documentElement);
+    const ms = parseInt(root.getPropertyValue('--vault-total-ms'), 10);
+    return Number.isFinite(ms) ? ms : 9200;
+  },
+
   playIfNeeded() {
     if (!sessionStorage.getItem('qs_vault_enter')) return;
     sessionStorage.removeItem('qs_vault_enter');
     const el = document.getElementById('vaultEntryOverlay');
     if (!el) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     el.hidden = false;
+    const total = this.totalMs();
     requestAnimationFrame(() => {
       el.classList.add('vault-entry-animate');
-      setTimeout(() => el.classList.add('vault-entry-done'), reduced ? 50 : 950);
+      setTimeout(() => el.classList.add('vault-entry-done'), total - 200);
       setTimeout(() => {
         el.hidden = true;
         el.classList.remove('vault-entry-animate', 'vault-entry-done');
-      }, reduced ? 120 : 1500);
+      }, total + 300);
     });
   },
 };

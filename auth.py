@@ -2,12 +2,14 @@
 import hmac
 import json
 import os
+import time
 from functools import wraps
 
 from flask import jsonify, request, session
 
 SESSION_USER_KEY = 'auth_user'
 SESSION_ROLE_KEY = 'auth_role'
+SESSION_ACTIVITY_KEY = 'auth_last_activity'
 
 _PUBLIC_API = frozenset({
     '/api/auth/login',
@@ -44,9 +46,47 @@ def secret_key():
 
 def session_lifetime_days():
     try:
-        return max(1, int(os.environ.get('AUTH_SESSION_DAYS', '7')))
+        return max(1, int(os.environ.get('AUTH_SESSION_DAYS', '1')))
     except ValueError:
-        return 7
+        return 1
+
+
+def idle_timeout_minutes(role):
+    """閒置逾時（分鐘）：admin 預設 30，其餘 60"""
+    key = 'AUTH_IDLE_MINUTES_ADMIN' if role == 'admin' else 'AUTH_IDLE_MINUTES'
+    default = '30' if role == 'admin' else '60'
+    try:
+        return max(1, int(os.environ.get(key, default)))
+    except ValueError:
+        return int(default)
+
+
+def idle_timeout_seconds(role):
+    return idle_timeout_minutes(role) * 60
+
+
+def touch_session():
+    session[SESSION_ACTIVITY_KEY] = time.time()
+
+
+def session_idle_expired(user=None):
+    if not is_enabled():
+        return False
+    u = user or current_user()
+    if not u:
+        return False
+    last = session.get(SESSION_ACTIVITY_KEY)
+    if last is None:
+        return False
+    return time.time() - float(last) > idle_timeout_seconds(u.get('role'))
+
+
+def _enforce_idle_and_touch(user):
+    if session_idle_expired(user):
+        logout_user()
+        return jsonify({'success': False, 'error': '閒置逾時，請重新登入'}), 401
+    touch_session()
+    return None
 
 
 def _clean_env_secret(val):
@@ -147,11 +187,29 @@ def login_user(user):
     session.permanent = True
     session[SESSION_USER_KEY] = user['username']
     session[SESSION_ROLE_KEY] = user['role']
+    touch_session()
 
 
 def logout_user():
     session.pop(SESSION_USER_KEY, None)
     session.pop(SESSION_ROLE_KEY, None)
+    session.pop(SESSION_ACTIVITY_KEY, None)
+
+
+def auth_status_payload(user=None):
+    """供 /api/auth/me 回傳 Session 設定（不含密碼）"""
+    u = user or current_user()
+    if not u:
+        return {
+            'auth_required': is_enabled(),
+            'user': None,
+        }
+    return {
+        'auth_required': True,
+        'user': u,
+        'idle_timeout_seconds': idle_timeout_seconds(u.get('role')),
+        'session_lifetime_days': session_lifetime_days(),
+    }
 
 
 def current_user():
@@ -197,6 +255,16 @@ def check_request():
     user = current_user()
     if not user:
         return jsonify({'success': False, 'error': '請先登入'}), 401
+    if path == '/api/auth/touch' and request.method == 'POST':
+        expired = session_idle_expired(user)
+        if expired:
+            logout_user()
+            return jsonify({'success': False, 'error': '閒置逾時，請重新登入'}), 401
+        touch_session()
+        return None
+    blocked = _enforce_idle_and_touch(user)
+    if blocked:
+        return blocked
     if requires_admin(path, request.method) and user.get('role') != 'admin':
         return jsonify({'success': False, 'error': '需要管理員權限'}), 403
     return None

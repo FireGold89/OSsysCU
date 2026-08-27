@@ -13,24 +13,25 @@
     })();
   </script>
   <link rel="stylesheet" href="css/style.css?v=20260815g">
-  <link rel="stylesheet" href="css/vault-login.css?v=20260827a">
+  <link rel="stylesheet" href="css/vault-login.css?v=20260827d">
   <style>
     body.login-page {
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px;
+      margin: 0;
+      padding: 0;
     }
     .login-card {
       width: 100%;
-      max-width: 380px;
       background: rgba(22, 27, 34, 0.92);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 12px;
       padding: 28px 24px;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
     }
     [data-theme="light"] .login-card {
       background: rgba(255, 255, 255, 0.94);
@@ -72,51 +73,69 @@
 <body class="login-page">
   <div class="vault-scene" aria-hidden="true">
     <div class="vault-room-bg"></div>
-    <div class="vault-frame">
-      <div class="vault-glow"></div>
-      <div class="vault-door vault-door--left"></div>
-      <div class="vault-door vault-door--right"></div>
-      <div class="vault-wheel">
-        <span class="vault-wheel-spoke"></span>
-        <span class="vault-wheel-spoke"></span>
-        <span class="vault-wheel-spoke"></span>
-      </div>
+    <div class="vault-glow"></div>
+    <div class="vault-door vault-door--left"></div>
+    <div class="vault-door vault-door--right"></div>
+    <div class="vault-wheel">
+      <span class="vault-wheel-spoke"></span>
+      <span class="vault-wheel-spoke"></span>
+      <span class="vault-wheel-spoke"></span>
+      <span class="vault-wheel-spoke"></span>
+      <span class="vault-wheel-spoke"></span>
     </div>
   </div>
 
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="logo-icon">🔐</div>
-      <h1>QS付款管理</h1>
-      <p>Mepork Engineering</p>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon">🔐</div>
+        <h1>QS付款管理</h1>
+        <p>Mepork Engineering</p>
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+          <label class="form-label" for="loginUser">帳號</label>
+          <input type="text" class="form-input" id="loginUser" name="username"
+            autocomplete="username" required autofocus placeholder="admin 或 qs">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="loginPass">密碼</label>
+          <input type="password" class="form-input" id="loginPass" name="password"
+            autocomplete="current-password" required placeholder="請輸入密碼">
+        </div>
+        <button type="submit" class="btn btn-primary login-submit" id="loginBtn">登入</button>
+      </form>
+      <div class="login-foot">內部系統 · 請使用公司配發帳號</div>
     </div>
-    <div class="login-error" id="loginError"></div>
-    <form id="loginForm" autocomplete="on">
-      <div class="form-group">
-        <label class="form-label" for="loginUser">帳號</label>
-        <input type="text" class="form-input" id="loginUser" name="username"
-          autocomplete="username" required autofocus placeholder="admin 或 qs">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="loginPass">密碼</label>
-        <input type="password" class="form-input" id="loginPass" name="password"
-          autocomplete="current-password" required placeholder="請輸入密碼">
-      </div>
-      <button type="submit" class="btn btn-primary login-submit" id="loginBtn">登入</button>
-    </form>
-    <div class="login-foot">內部系統 · 請使用公司配發帳號</div>
   </div>
+
+  <div class="vault-status" id="vaultStatus" aria-live="polite">開啟中…</div>
+
   <script>
     const API = `${window.location.origin}/api`;
     const params = new URLSearchParams(window.location.search);
     const nextUrl = params.get('next') || '/';
-    const VAULT_MS = 900;
+
+    function vaultTotalMs() {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) return 400;
+      const root = getComputedStyle(document.documentElement);
+      const ms = parseInt(root.getPropertyValue('--vault-total-ms'), 10);
+      return Number.isFinite(ms) ? ms : 9200;
+    }
 
     function playVaultOpen(onDone) {
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      document.body.classList.add('vault-opening');
-      sessionStorage.setItem('qs_vault_enter', '1');
-      setTimeout(onDone, reduced ? 200 : VAULT_MS);
+      const status = document.getElementById('vaultStatus');
+      const shell = document.querySelector('.login-shell');
+      if (shell) shell.classList.add('vault-hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.body.classList.add('vault-opening');
+          if (status) status.classList.add('show');
+        });
+      });
+      setTimeout(onDone, vaultTotalMs());
     }
 
     async function checkAlreadyIn() {
@@ -166,6 +185,13 @@
     });
 
     checkAlreadyIn();
+    if (params.get('reason') === 'idle') {
+      const errEl = document.getElementById('loginError');
+      if (errEl) {
+        errEl.textContent = '閒置逾時，請重新登入';
+        errEl.classList.add('show');
+      }
+    }
   </script>
 </body>
 </html>
