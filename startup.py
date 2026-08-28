@@ -97,7 +97,7 @@ def run():
             users = auth.load_users()
             print(f'[STARTUP] auth=enabled users={len(users)}')
         else:
-            print('[STARTUP] auth=disabled（未设 APP_*_PASSWORD；生产请设 Zeabur Variables）')
+            print('[STARTUP] auth=disabled (no APP_*_PASSWORD; set Zeabur Variables in prod)')
     except Exception as e:
         print(f'[STARTUP] auth config warning: {e}')
 
