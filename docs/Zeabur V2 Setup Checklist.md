@@ -113,9 +113,17 @@ GET https://<你的-v2-域名>/api/system/status
 
 | 項目 | 值 |
 |------|-----|
-| V2 URL | |
-| Zeabur Service 名 | |
-| Volume 名 | |
-| 首次部署時間 | |
+| V2 URL | **https://ossys-v2.zeabur.app** |
+| Zeabur Service 名 | ossys-v2（請與 Dashboard 核對） |
+| Volume 名 | 獨立 Volume → `/data` |
+| 首次部署 | 2026-08-28 |
+| 資料初始化 | 2026-08-28 — 自 V1 本機 DB 還原（34 項目、199 付款、32 uploads） |
 
-可填回此檔或 `RELEASE.md` V2 段。
+### 一鍵同步（本機 → V2）
+
+在 **V1 目錄** `OSsysCU`（需 `.env` 含 `APP_ADMIN_PASSWORD`）：
+
+```powershell
+python scripts/push_db_to_v2.py
+python scripts/push_uploads_to_v2.py
+```

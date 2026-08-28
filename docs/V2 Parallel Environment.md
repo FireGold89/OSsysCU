@@ -1,7 +1,7 @@
 # V2 並行環境（Staging / 試用）
 
 > **V1 Production**：`main` → https://ossys.zeabur.app  
-> **V2 Staging**：`v2/portfolio` → 本機 `:5001` 或 Zeabur 第二 Service（待建）
+> **V2 Staging**：`v2/portfolio` → https://ossys-v2.zeabur.app
 
 ---
 
