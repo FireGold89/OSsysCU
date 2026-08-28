@@ -2,8 +2,12 @@ __pycache__/
 *.py[cod]
 *.db
 uploads/
+_data/*
+!_data/.gitkeep
 .env
 .env.*
+!v2.env.example
+v2.env
 _tmp_yescan/
 _backup/
 _releases/

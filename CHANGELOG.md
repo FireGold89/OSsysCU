@@ -4,6 +4,16 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260828-baseline` · 分支 `v2/portfolio`
+
+### 新增
+- **V2 並行環境**：獨立 worktree `OSsysCU-v2`、本機 `:5001` + `_data/`、Topbar 試用 badge、`DEPLOYMENT_TIER`
+- 文件：`docs/V2 Parallel Environment.md`、本機腳本 `scripts/run_local_v2.ps1`
+
+---
+
+## V1 歷史（main）
+
 `APP_VERSION`: `20260827-main-con-fac-pdf2`
 
 ### 修復

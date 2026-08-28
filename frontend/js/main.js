@@ -1258,6 +1258,7 @@ const App = {
       if (path) DocViewer.open(path, title);
     });
 
+    await this.syncDeploymentBadge();
     await this.loadProjects();
     document.getElementById('projectSelect').addEventListener('change', (e) => {
       this.selectProject(e.target.value);
@@ -1270,6 +1271,29 @@ const App = {
     }
     this._updateProjectSettlementNav();
     this.navigate('dashboard');
+  },
+
+  async syncDeploymentBadge() {
+    const wrap = document.getElementById('deploymentTierBadge');
+    const label = document.getElementById('deploymentTierLabel');
+    if (!wrap || !label) return;
+    try {
+      const data = await api('GET', '/system/status');
+      if (!data) {
+        wrap.style.display = 'none';
+        return;
+      }
+      const tier = String(data.deployment_tier || '').toLowerCase();
+      const ver = String(data.app_version || '');
+      if (tier === 'v2' || ver.startsWith('v2-')) {
+        wrap.style.display = '';
+        label.textContent = data.deployment_label || 'V2 試用環境';
+      } else {
+        wrap.style.display = 'none';
+      }
+    } catch (_) {
+      wrap.style.display = 'none';
+    }
   },
 
   async loadProjects() {
@@ -1804,8 +1828,11 @@ const Settings = {
         return;
       }
       const mb = data.db_size_bytes ? (data.db_size_bytes / (1024 * 1024)).toFixed(2) : '—';
+      const tier = data.deployment_tier ? ` · <span class="badge badge-warning">${data.deployment_label || data.deployment_tier}</span>` : '';
+      const ver = data.app_version ? ` · v${data.app_version}` : '';
       el.innerHTML = `線上：<strong>${data.project_count ?? '—'}</strong> 個項目 · `
         + `<strong>${data.payment_count ?? '—'}</strong> 筆付款 · DB ${mb} MB`
+        + tier + ver
         + (data.restore_token_configured ? '' : ' · <span class="badge badge-warning">未設 RESTORE_TOKEN</span>');
     } catch (e) {
       el.textContent = '無法讀取線上狀態';

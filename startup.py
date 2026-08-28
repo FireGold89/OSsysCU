@@ -5,7 +5,11 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = '20260827-main-con-fac-pdf2'
+APP_VERSION = 'v2-20260828-baseline'
+
+# V2 試用環境標識（Zeabur Variables 可覆寫 DEPLOYMENT_TIER=production 還原為無標籤）
+DEPLOYMENT_TIER = (os.environ.get('DEPLOYMENT_TIER') or 'v2').strip().lower()
+DEPLOYMENT_LABEL = 'V2 試用環境' if DEPLOYMENT_TIER == 'v2' else ''
 
 
 def _preload_pdf_font():
@@ -79,7 +83,7 @@ def _sync_master_trade_categories_background():
 
 def run():
     migrate_legacy_data()
-    print(f'[STARTUP] version={APP_VERSION}')
+    print(f'[STARTUP] version={APP_VERSION} tier={DEPLOYMENT_TIER or "production"}')
     print(f'[STARTUP] DATA_DIR={DATA_DIR}')
     print(f'[STARTUP] DB_PATH={DB_PATH} (exists={os.path.exists(DB_PATH)})')
     if os.path.exists(DB_PATH):

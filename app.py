@@ -2089,7 +2089,25 @@ def system_status():
         'auth_enabled': auth.is_enabled(),
         'auth_usernames': auth.configured_usernames(),
         'app_version': _app_version(),
+        'deployment_tier': _deployment_tier(),
+        'deployment_label': _deployment_label(),
     })
+
+
+def _deployment_tier():
+    try:
+        import startup
+        return getattr(startup, 'DEPLOYMENT_TIER', '') or os.environ.get('DEPLOYMENT_TIER', '')
+    except Exception:
+        return os.environ.get('DEPLOYMENT_TIER', '')
+
+
+def _deployment_label():
+    try:
+        import startup
+        return getattr(startup, 'DEPLOYMENT_LABEL', '') or ''
+    except Exception:
+        return ''
 
 
 def _app_version():
@@ -2288,8 +2306,11 @@ if __name__ == '__main__':
     import startup
 
     port = int(os.environ.get('PORT', 5000))
+    tier = _deployment_tier()
+    label = 'V2 試用' if tier == 'v2' else 'V1'
     print('=' * 60)
-    print('  QS管理系統 v1.0')
+    print(f'  QS管理系統 ({label})')
+    print(f'  版本: {_app_version()}')
     print(f'  訪問地址: http://localhost:{port}')
     print('=' * 60)
 
