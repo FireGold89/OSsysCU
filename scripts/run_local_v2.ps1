@@ -3,7 +3,8 @@
 #   .\scripts\run_local_v2.ps1
 #   .\scripts\run_local_v2.ps1 -CopyDbFromV1
 param(
-    [switch]$CopyDbFromV1
+    [switch]$CopyDbFromV1,
+    [switch]$SkipDbCopy
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,15 +35,21 @@ if (-not (Test-Path $V2Env)) {
     }
 }
 
-# 首次：若 V2 空庫且 V1 有 DB，提示或自動複製
-if ($CopyDbFromV1) {
-    if (-not (Test-Path $V1Db)) {
-        Write-Error "找不到 V1 資料庫: $V1Db"
+# 首次：若 V2 空庫且 V1 有 DB，自動複製（可用 -SkipDbCopy 略過）
+if (-not $SkipDbCopy) {
+    if ($CopyDbFromV1 -or (-not (Test-Path $V2Db) -and (Test-Path $V1Db))) {
+        if (-not (Test-Path $V1Db)) {
+            Write-Error "找不到 V1 資料庫: $V1Db"
+        }
+        Copy-Item $V1Db $V2Db -Force
+        Write-Host "[V2] 已從 V1 複製 qs_system.db → _data/"
+        $V1Uploads = Join-Path $V1Root "uploads"
+        if (Test-Path $V1Uploads) {
+            Copy-Item (Join-Path $V1Uploads "*") $Uploads -Force -ErrorAction SilentlyContinue
+            $n = (Get-ChildItem $Uploads -File -ErrorAction SilentlyContinue).Count
+            Write-Host "[V2] 已同步 uploads/ ($n 個檔案)"
+        }
     }
-    Copy-Item $V1Db $V2Db -Force
-    Write-Host "[V2] 已從 V1 複製 qs_system.db → _data/"
-} elseif (-not (Test-Path $V2Db) -and (Test-Path $V1Db)) {
-    Write-Host "[V2] 提示: V2 為空庫。要比對 V1 資料請加 -CopyDbFromV1"
 }
 
 # 埠占用檢查
