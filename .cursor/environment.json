@@ -1,0 +1,11 @@
+{
+  "name": "OSsysCU — QS Payment Management",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "flask-app",
+      "command": "cd /workspace && . .venv/bin/activate && PORT=5000 python app.py"
+    }
+  ],
+  "ports": [{ "name": "web", "port": 5000 }]
+}
