@@ -21,6 +21,13 @@
 | 發票 / 報價上傳 | `ocr` | `page-ocr` | `OCR`（`ocr.js`） | L72 |
 | 財務報表 | `reports` | `page-reports` | `Reports`（`reports.js`） | L75 |
 
+### 側欄 — 全公司總表（不需先選項目）
+
+| 側欄標籤 | `data-page` | JS 模組 | 證據 |
+|----------|-------------|---------|------|
+| N 項目結算總表 | `portfolio-fac` | `PortfolioFac`（`portfolio_fac.js`） | `index.html` |
+| 進行中項目 | `portfolio-progress` | `PortfolioProgress`（`portfolio_progress.js`） | `index.html` |
+
 ### 側欄 — 管理（全域）
 
 | 側欄標籤 | `data-page` | JS 模組 | 證據 |
@@ -105,6 +112,13 @@
 | `/api/settings` | GET, POST | `app.py` |
 | `/api/projects` | GET, POST, PUT, DELETE | `app.py` |
 | `/api/company-summary` | GET | `app.py` |
+| `/api/portfolio/progress` | GET | `app.py` → `portfolio` |
+| `/api/portfolio/fac` | GET | `app.py` → `portfolio` |
+| `/api/portfolio/sync-from-projects` | POST | `app.py` → `portfolio` |
+| `/api/portfolio/export/fa-list` | GET | `app.py` → `portfolio_importer` |
+| `/api/portfolio/export/progress-list` | GET | `app.py` → `portfolio_importer` |
+| `/api/portfolio/import/fa-list` | POST | `app.py` → `portfolio_importer` |
+| `/api/portfolio/import/progress-list` | POST | `app.py` → `portfolio_importer` |
 | `/api/subcontractors` | GET, POST, DELETE | `app.py` |
 | `/api/payments` | GET, POST, PUT, DELETE | `app.py` |
 | `/api/payments/interim-cert/model` | POST | `app.py` → `interim_cert_report` |

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>香港中小型工程公司 QS 工作流程 · OSsysCU 對照</title>
+  <style>
+    :root {
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #cbd5e1;
+      --accent: #2563eb;
+      --ok: #047857;
+      --warn: #b45309;
+      --bg-soft: #f8fafc;
+      --bg-warn: #fffbeb;
+      --bg-ok: #ecfdf5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Microsoft JhengHei", "PingFang TC", "Segoe UI", sans-serif;
+      font-size: 11pt;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 14mm 16mm;
+      background: #fff;
+    }
+    .no-print {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .no-print button {
+      font: inherit;
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .no-print button:hover { filter: brightness(1.05); }
+    header.doc-header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    header.doc-header h1 {
+      font-size: 18pt;
+      font-weight: 800;
+      margin: 0 0 6px;
+      letter-spacing: 0.02em;
+    }
+    header.doc-header .sub {
+      color: var(--muted);
+      font-size: 10pt;
+    }
+    h2 {
+      font-size: 13pt;
+      margin: 22px 0 10px;
+      padding-left: 10px;
+      border-left: 4px solid var(--accent);
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 11pt;
+      margin: 14px 0 8px;
+      color: #1e293b;
+      page-break-after: avoid;
+    }
+    p { margin: 0 0 8px; }
+    ul, ol { margin: 0 0 10px 20px; }
+    li { margin-bottom: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 14px;
+      font-size: 10pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: var(--bg-soft);
+      font-weight: 700;
+    }
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 6px;
+      margin: 10px 0 16px;
+      padding: 12px;
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      page-break-inside: avoid;
+    }
+    .flow .step {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 9.5pt;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .flow .arrow {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 10pt;
+    }
+    .note {
+      background: var(--bg-warn);
+      border: 1px solid #fcd34d;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 10px 0;
+      font-size: 10pt;
+      page-break-inside: avoid;
+    }
+    .note.ok {
+      background: var(--bg-ok);
+      border-color: #6ee7b7;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 9.5pt;
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 8.5pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-right: 4px;
+    }
+    .tag-sys { background: #dbeafe; color: #1d4ed8; }
+    .tag-excel { background: #fef3c7; color: #92400e; }
+    .tag-manual { background: #e2e8f0; color: #334155; }
+    footer {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 9pt;
+      color: var(--muted);
+    }
+    .page-break { page-break-before: always; }
+    @media print {
+      body { padding: 0; max-width: none; }
+      .no-print { display: none !important; }
+      a { color: inherit; text-decoration: none; }
+      h2 { margin-top: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="no-print">
+    <span>此頁為 QS 工作流程參考，可直接列印或另存 PDF（建議 A4、直向、邊界預設）。</span>
+    <button type="button" onclick="window.print()">🖨️ 列印 / 另存 PDF</button>
+  </div>
+
+  <header class="doc-header">
+    <h1>香港中小型工程公司 · QS 工作流程</h1>
+    <p class="sub">Mepork Engineering · OSsysCU 模組對照 · 編製日期：2026-08-31</p>
+    <p class="sub">適用：主判（M）、分判（SC）、物料／其他（M/O）之中小型承建商 QS 部門</p>
+  </header>
+
+  <h2>1. 項目生命週期（總覽）</h2>
+  <div class="flow">
+    <span class="step">投標／判給</span><span class="arrow">→</span>
+    <span class="step">開工與判項建立</span><span class="arrow">→</span>
+    <span class="step">期中糧款 IP</span><span class="arrow">→</span>
+    <span class="step">實質完工 PC</span><span class="arrow">→</span>
+    <span class="step">主合約 FAC</span><span class="arrow">→</span>
+    <span class="step">分判 FAC</span><span class="arrow">→</span>
+    <span class="step">DLP 保修期</span><span class="arrow">→</span>
+    <span class="step">Retention 釋放</span>
+  </div>
+  <p>中小型公司 QS 通常<strong>一人多職</strong>：主合約糧款、分判付款、FAC 總表匯報並行。Excel（Final Account Status List）常作<strong>對外／對管理層匯報</strong>；系統作<strong>付款與結算工作底稿</strong>。</p>
+
+  <h2>2. 開工前：判項與合約基線</h2>
+  <table>
+    <thead>
+      <tr><th>步驟</th><th>QS 工作</th><th>產出／記錄</th><th>OSsysCU</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>中標／判給</td>
+        <td>建立項目、主合約金額、工期</td>
+        <td>Project Code、Contract Sum</td>
+        <td><span class="tag tag-sys">工程項目</span></td>
+      </tr>
+      <tr>
+        <td>分判發包</td>
+        <td>報價、判給、登記 SC-001…</td>
+        <td>分判商、判項編號、合約金</td>
+        <td><span class="tag tag-sys">分判付款登記</span></td>
+      </tr>
+      <tr>
+        <td>Cover／Master</td>
+        <td>PM、開工日、完工日、DLP 月數</td>
+        <td>Cover Page</td>
+        <td><span class="tag tag-sys">項目 Cover</span> <span class="tag tag-sys">Master List</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>編號慣例：</strong>主判 <code>MS/Q…</code>；分判 <code>SC-xxx</code>；物料 <code>M-xxx</code>；其他 <code>O-xxx</code>。</p>
+
+  <h2>3. 施工期：期中糧款（Interim Payment）</h2>
+  <ol>
+    <li>收取分判 Invoice → 核對判項、金額、期數</li>
+    <li>登記付款（OA、糧期、MC IP）</li>
+    <li>向 Architect／Client 報主合約 IP</li>
+    <li>更新<strong>已付 vs 修訂合約</strong>（原合約 + VO − 扣款）</li>
+  </ol>
+  <table>
+    <thead>
+      <tr><th>工作</th><th>OSsysCU 模組</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>發票／付款登記</td><td>付款登記、OCR 上傳</td></tr>
+      <tr><td>VO、代支 Contra</td><td>判項 VO 登記</td></tr>
+      <tr><td>糧期對帳</td><td>糧期狀況、IP 對數</td></tr>
+      <tr><td>分判帳目試算</td><td>分判最終結算（即時計 outstanding）</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. 實質完工（Practical Completion, PC）</h2>
+  <table>
+    <thead>
+      <tr><th>事件</th><th>QS 關注</th><th>總表／系統欄位</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>PC 證書</td>
+        <td>PC Date；DLP 通常由 PC+1 日起算</td>
+        <td>PC Date、DLP 開始、DLP (日)、DLP 到期</td>
+      </tr>
+      <tr>
+        <td>主合約</td>
+        <td>最後 IP、Retention 留起</td>
+        <td>PC Cert ✔、Retention</td>
+      </tr>
+      <tr>
+        <td>分判</td>
+        <td>各判尾款準備；清 VO／扣款</td>
+        <td>判1…判15、狀1…狀15</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="page-break">5. 最終結算（Final Account, FAC）</h2>
+  <p>FAC 分<strong>兩條線</strong>，時間上常交錯，非一次完成。</p>
+
+  <h3>5A. 主合約 FAC（對 Client）</h3>
+  <ol>
+    <li>QS 編製 Statement of Final Account（A–K）</li>
+    <li>與 Architect／Client 修訂 VO、Retention、LAD</li>
+    <li>雙方簽署 → 記 <strong>MP FAC Signed Date</strong></li>
+    <li>總表 <strong>Client FA</strong>：進行中 → 待簽 → 已完成</li>
+  </ol>
+  <table>
+    <thead>
+      <tr><th>項目</th><th>記錄位置</th><th>OSsysCU</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>主合約 FAC 結算書</td><td>PDF／簽署版</td><td>主合約最終結算</td></tr>
+      <tr><td>Client 簽署日</td><td><code>mp_fac_signed_date</code></td><td>Cover／主合約 FAC</td></tr>
+      <tr><td>PC／MG 證書</td><td><code>fac_pc_cert_path</code>、<code>fac_mg_cert_path</code></td><td>主合約 FAC 附件</td></tr>
+      <tr><td>匯報狀態</td><td><code>client_fac_status</code></td><td><span class="tag tag-excel">N 項目結算總表</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>5B. 分判 FAC（對每個 SC，逐判獨立）</h3>
+  <ol>
+    <li>按判項出 SC Statement（原合約 + VO − 代支 − 已付 = 尾款）</li>
+    <li>分判商確認、簽回</li>
+    <li>付尾款（Final Payment IP）</li>
+    <li>總表該判 → <strong>已完成</strong></li>
+  </ol>
+  <div class="note">
+    <strong>「待簽」實務定義（QS Excel）：</strong>帳目上糧款已結清或尾數極小，但<strong>簽署版 FAC 尚未收回</strong>（或尚未完成 OA）。屬 QS 業務判斷，非系統自動從單一付款欄位推定。
+  </div>
+  <table>
+    <thead>
+      <tr><th>狀態</th><th>意思</th><th>資料來源（現況）</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>已完成</strong></td>
+        <td>FAC 已簽、該判結案</td>
+        <td><span class="tag tag-excel">Excel 匯入</span> <span class="tag tag-manual">總表手選</span>；規劃：每判簽署日</td>
+      </tr>
+      <tr>
+        <td><strong>進行中</strong></td>
+        <td>尚有尾數或 FAC 進行中</td>
+        <td>Excel／手填；可對照分判 FAC outstanding</td>
+      </tr>
+      <tr>
+        <td><strong>待簽</strong></td>
+        <td>餘款≈0 但未簽</td>
+        <td>Excel／手填（例：N27 SC-004 判2）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. DLP 與 Retention</h2>
+  <table>
+    <thead>
+      <tr><th>階段</th><th>QS 工作</th><th>系統</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>DLP 內</td><td>跟進缺陷、修補；必要時扣分判 Contra</td><td>判項 VO、分判 FAC</td></tr>
+      <tr><td>DLP 屆滿</td><td>Defect／Make Good Certificate</td><td>Defect Cert ✔、Cover <code>dlp_cert_date</code></td></tr>
+      <tr><td>Retention</td><td>按合約釋放（一次或分期）</td><td>Retention to be released（Main FAC 衍生）</td></tr>
+    </tbody>
+  </table>
+  <p>總表以整列淡色底 + DLP chip 提醒<strong>已過期／90 天內到期</strong>，供全公司匯報。</p>
+
+  <h2>7. 全公司匯報（N 項目結算總表）</h2>
+  <table>
+    <thead>
+      <tr><th>KPI／欄位</th><th>用途</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>進行中／已完成</td><td>項目整體狀態（<code>project_progress_status</code>）</td></tr>
+      <tr><td>Client FA 待辦</td><td>Client FA ≠ 已完成 的項目數</td></tr>
+      <tr><td>分判待簽</td><td>尚有分判狀態為進行中或待簽的項目數</td></tr>
+      <tr><td>判1…判15</td><td>分判名稱 + FAC 狀態（最多 15 判）</td></tr>
+    </tbody>
+  </table>
+  <div class="note ok">
+    <strong>資料權威順序（建議）：</strong><br>
+    ① QS 維護的 <strong>Final Account Status Excel</strong>（匯報格式）<br>
+    ② 系統 projects + 付款 + FAC 頁（底稿與交叉核對）<br>
+    ③ 「從系統同步」補 DLP、Retention、空槽分判名；<strong>不覆寫</strong> Client FA／分判 FAC 狀態
+  </div>
+
+  <h2>8. 中小型 vs 大型承判</h2>
+  <table>
+    <thead>
+      <tr><th>項目</th><th>中小型（本類）</th><th>大型承判</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>工具</td><td>Excel 總表 + 內部系統</td><td>ERP + 文件管理</td></tr>
+      <tr><td>分判 FAC</td><td>QS 逐判追蹤；總表 15 槽</td><td>按 trade／批次、workflow</td></tr>
+      <tr><td>「待簽」</td><td>QS 看帳 + 有無簽回 PDF</td><td>系統狀態機</td></tr>
+      <tr><td>簽署記錄</td><td>檔案／Email PDF；日期手記</td><td>電子簽、存證</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="page-break">9. 簽署記錄 — 建議處理方式（規劃）</h2>
+  <table>
+    <thead>
+      <tr><th>層級</th><th>應記錄</th><th>現況</th><th>建議</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Client（主合約）</td>
+        <td><code>mp_fac_signed_date</code> + FAC／PC／MG 附件</td>
+        <td>✅ 已有</td>
+        <td>推 Client FA「已完成」</td>
+      </tr>
+      <tr>
+        <td>每個 SC（如 SC-004）</td>
+        <td>該判簽署日 + 已簽 PDF</td>
+        <td>❌ 僅項目級 <code>sc_fac_signed_date</code>，粒度不足</td>
+        <td>加於 <code>subcontractors</code> 或分判 FAC 頁</td>
+      </tr>
+      <tr>
+        <td>N 項目結算總表</td>
+        <td>匯報狀態</td>
+        <td>Excel／手填</td>
+        <td>有簽署日時「建議已完成」，不強制覆寫</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>分判 FAC 狀態推導規則（規劃，空槽或未手填時）</h3>
+  <table>
+    <thead>
+      <tr><th>狀態</th><th>推導條件</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>已完成</strong></td><td>該判 <code>fac_signed_date</code> 有值，或已簽 PDF 已存</td></tr>
+      <tr><td><strong>待簽</strong></td><td>outstanding ≈ 0（修訂合約 − 已付 − 扣款），但未簽</td></tr>
+      <tr><td><strong>進行中</strong></td><td>有分判，且 0 &lt; 已付 &lt; 修訂合約</td></tr>
+      <tr><td><strong>—</strong></td><td>無此分判</td></tr>
+    </tbody>
+  </table>
+  <p><code>outstanding</code> 計算與「分判最終結算」頁相同（<code>sc_fac.py</code>：原合約 + VO − 已付 − 代支）。</p>
+
+  <h2>10. 範例：N27 · SC-004「待簽」</h2>
+  <table>
+    <thead>
+      <tr><th>項目</th><th>內容</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>項目</td><td>N27 · MS/Q1241/24/kp（九龍灣站健身室裝修工程）</td></tr>
+      <tr><td>判2</td><td>SC-004 盈泊 · 狀態 <strong>待簽</strong></td></tr>
+      <tr><td>來源</td><td>FA Excel 匯入（<code>Final Account Status List - r2.xlsx</code>）狀2 欄</td></tr>
+      <tr><td>核對步驟</td><td>① 分判最終結算 🔗 看 outstanding ② 查是否有簽回 PDF ③ 與 QS Excel 對照</td></tr>
+      <tr><td>簽回後</td><td>填該判簽署日 → 總表改「已完成」或重新匯入 Excel</td></tr>
+    </tbody>
+  </table>
+
+  <h2>11. OSsysCU 模組速查</h2>
+  <table>
+    <thead>
+      <tr><th>QS 工作</th><th>系統頁面／檔案</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>全公司 FAC 總表</td><td>N 項目結算總表 · <code>portfolio_fac.js</code></td></tr>
+      <tr><td>進行中項目 11 欄</td><td>進行中項目 · <code>portfolio_progress.js</code></td></tr>
+      <tr><td>FA Excel 匯入匯出</td><td><code>portfolio_importer.py</code></td></tr>
+      <tr><td>從系統同步</td><td><code>portfolio.py</code> · sync_from_system</td></tr>
+      <tr><td>主合約 FAC</td><td>主合約最終結算 · <code>main_con_fac.js</code></td></tr>
+      <tr><td>分判 FAC（每判）</td><td>分判最終結算 · <code>sc_fac.py</code></td></tr>
+      <tr><td>付款登記</td><td>付款登記 · <code>payments.js</code></td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    <p>OSsysCU · 香港中小型工程公司 QS 工作流程參考 · 2026-08-31</p>
+    <p>檔案：<code>docs/HK-SME-QS-Workflow-Print.html</code> · 以瀏覽器開啟後列印或「另存為 PDF」</p>
+  </footer>
+
+</body>
+</html>

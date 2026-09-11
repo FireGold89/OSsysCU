@@ -1258,11 +1258,11 @@ const Projects = {
       </div>
       <div class="card settle-fac-hub" style="margin-top:20px">
         <div class="card-header">
-          <div class="card-title">Final Account · 最終結算</div>
+          <div class="card-title">Final Account · 主合約最終結算</div>
           <div class="card-sub">本頁 = PPT 第5頁項目金額結算（進行中監控）；對外結算書請用下方專頁</div>
         </div>
         <div class="card-body settle-fac-hub-body">
-          <p class="settle-fac-hub-desc">主合約工程帳目總結算 (A–K)、分判每判項 PDF（3 頁含簽名欄）已獨立於左欄「最終結算」模組。</p>
+          <p class="settle-fac-hub-desc">主合約工程帳目總結算 (A–K)、分判每判項 PDF（P1 結算 + P2 聲明雙簽 + 附錄 I/II · 2–4 頁）已獨立於左欄「主合約最終結算」模組。</p>
           <div class="settle-fac-hub-actions">
             <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToMainConFac()">📑 主合約最終結算</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToScFac()">📋 分判最終結算</button>

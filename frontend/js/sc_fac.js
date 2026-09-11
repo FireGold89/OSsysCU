@@ -1,4 +1,4 @@
-/* ─── sc_fac.js — 分判最終結算（PPT p20–21 · 每判項 PDF） ─── */
+/* ─── sc_fac.js — 分判最終結算（P1 結算 + P2 聲明雙簽 + 附錄 I/II） ─── */
 const ScFac = {
   _items: [],
   _header: null,
@@ -104,7 +104,7 @@ const ScFac = {
 
   _appendixPagesSubtitle(includeVo, includeContra, scId) {
     const item = (this._items || []).find(x => x.sc_id == scId);
-    const pages = ['P1 結算'];
+    const pages = ['P1 結算', 'P2 聲明雙簽'];
     const skipped = [];
     if (includeVo) {
       const blank = item && !item.has_appendix_vo && this.getPrintEmptyVo();
@@ -326,7 +326,7 @@ const ScFac = {
         ? escHtml(r.sub_contract_no)
         : '<span class="text-muted">—</span>';
       const alignBadge = this._alignBadge(r.contract_align);
-      return `<tr>
+      return `<tr id="sc-fac-row-${r.sc_id}" data-sc-id="${r.sc_id}">
         <td>${fmtRefNo(r.sc_no)}</td>
         <td>${co}</td>
         <td class="sc-contract-no-cell">${subNo} ${alignBadge}</td>
@@ -350,7 +350,7 @@ const ScFac = {
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
           <div class="card-title">分判最終結算 · SC Final Account</div>
-          <div style="font-size:11px;color:var(--text-muted)">每判項 PDF · P1 結算＋附錄（有資料自動加入 · 1–3 頁）${ver}</div>
+          <div style="font-size:11px;color:var(--text-muted)">每判項 PDF · P1 結算 + P2 聲明雙簽 + 附錄（2–4 頁）${ver}</div>
         </div>
         <div class="card-body" style="font-size:12px;color:var(--text-muted);line-height:1.6">
           ${themeBar}
@@ -382,6 +382,18 @@ const ScFac = {
           </table>
         </div>
       </div>`;
+    this._focusPendingRow();
+  },
+
+  _focusPendingRow() {
+    const pending = this._pendingScId;
+    if (!pending) return;
+    this._pendingScId = null;
+    const row = document.getElementById(`sc-fac-row-${pending}`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.add('sc-fac-row-highlight');
+    setTimeout(() => row.classList.remove('sc-fac-row-highlight'), 2600);
   },
 
   _pdfMeta(scId) {

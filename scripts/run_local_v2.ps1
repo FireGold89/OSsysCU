@@ -26,10 +26,10 @@ $V2EnvExample = Join-Path $Root "v2.env.example"
 if (-not (Test-Path $V2Env)) {
     if (Test-Path $V1Env) {
         Copy-Item $V1Env $V2Env -Force
-        Write-Host "[V2] 已從 V1 複製 .env → v2.env（登入帳密與 V1 相同）"
+        Write-Host "[V2] Copied V1 .env to v2.env (same login as V1)"
     } elseif (Test-Path $V2EnvExample) {
         Copy-Item $V2EnvExample $V2Env -Force
-        Write-Host "[V2] 已建立 v2.env — 請編輯 SECRET_KEY 與登入密碼後再跑"
+        Write-Host "[V2] Created v2.env - edit SECRET_KEY and login password"
     } else {
         Write-Host "[V2] 警告: 找不到 v2.env，將以無登入模式啟動（僅本機）"
     }

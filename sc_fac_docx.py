@@ -19,6 +19,7 @@ from sc_fac_pdf import (
     HDR_COL_WIDTHS,
     P1_BODY_EN_FONT_PT,
     P1_BODY_FONT_PT,
+    SC_FAC_DECLARATIONS,
     _money_contra_amt,
     _money_split,
     _variations_settle_labels,
@@ -272,7 +273,7 @@ def _settlement_classic(doc, st):
     doc.add_paragraph()
 
 
-def _page1_statement(doc, data, theme):
+def _add_statement_header_and_table(doc, data, theme):
     h = data['header']
     st = data['settlement']
     sub_lines = [x for x in (h.get('subcontractor_zh'), h.get('subcontractor_en')) if x]
@@ -310,18 +311,27 @@ def _page1_statement(doc, data, theme):
             if theme == 'classic':
                 _cell_border(cell, bottom=True)
     doc.add_paragraph()
+    _settlement_classic(doc, st)
 
-    if theme == 'classic':
-        _settlement_classic(doc, st)
-    else:
-        _settlement_classic(doc, st)
 
+def _page1_statement(doc, data, theme):
+    _add_statement_header_and_table(doc, data, theme)
     doc.add_paragraph()
     _add_para(doc, '— 簽名區（P1 內部簽署 · 編制者／合約部／項目部／總經理）—', size=8, space_after=4)
 
 
+def _page2_statement_and_declarations(doc, data, theme):
+    """P2：同 P1 工程帳目總結算 + 三段聲明 · 頁底雙簽（Mepork · 分判商）"""
+    _add_statement_header_and_table(doc, data, theme)
+    for _ in range(3):
+        doc.add_paragraph()
+    for text in SC_FAC_DECLARATIONS:
+        _add_para(doc, text, size=P1_BODY_FONT_PT, space_after=10)
+    _add_para(doc, '— 頁底簽章區（Mepork · 分判商 · 同附錄 I 雙簽格式）—', size=8, space_after=4)
+
+
 def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
-    """P1 直向 · P2 橫向 VO · P3 直向 Contra（classic 完整版面）"""
+    """P1 結算 · P2 聲明雙簽 · 附錄 I VO · 附錄 II Contra"""
     theme = normalize_sc_fac_theme(theme)
     h = data.get('header') or {}
 
@@ -333,6 +343,9 @@ def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
     sec.right_margin = Mm(15)
 
     _page1_statement(doc, data, theme)
+
+    doc.add_page_break()
+    _page2_statement_and_declarations(doc, data, theme)
 
     doc.add_page_break()
     _landscape_section(doc)

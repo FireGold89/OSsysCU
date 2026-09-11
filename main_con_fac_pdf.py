@@ -321,8 +321,8 @@ def _key_dates_table(fac: dict, styles, theme: str) -> Table:
         ('合約完工日期', 'Date for Completion', kd.get('completion_date'), ''),
         ('工期', 'Contract Period', period_val, ''),
         ('保修期', 'Defect Liability Period', dlp_val, dlp_note),
-        ('延期罰款單價', 'Rate of LAD', ed.get('fac_lad_rate') or kd.get('lad_rate'), '', True),
-        ('延期罰款限額', 'Maximum Sum of LAD', ed.get('fac_lad_max') or kd.get('lad_max'), '', True),
+        ('延期罰款單價', 'Rate of Liquidated damage', ed.get('fac_lad_rate') or kd.get('lad_rate'), '', True),
+        ('延期罰款限額', 'Limited Amount of Liquidated damage', ed.get('fac_lad_max') or kd.get('lad_max'), '', True),
         ('實際完工日期', 'Date of Practical Completion', kd.get('pc_cert_date'), ''),
     ]
     for zh, en, val, note, *rest in static_rows:
@@ -337,10 +337,19 @@ def _key_dates_table(fac: dict, styles, theme: str) -> Table:
     rows.append(_date_row(
         '保修期開始日期', 'Commencement of DLP', kd.get('dlp_commencement_date'), styles,
     ))
+    dlp_days_val = ed.get('fac_dlp_days') or kd.get('fac_dlp_days') or kd.get('dlp_days')
+    if dlp_days_val:
+        dlp_days_val = f'{dlp_days_val} days'
+    rows.append(_date_row('保修期', 'DLP (days)', dlp_days_val, styles))
     rows.append(_date_row(
-        '測試和調試完成日期', 'Testing & Commissioning Completed',
-        ed.get('fac_testing_commission_date') or kd.get('testing_commission_date'), styles,
+        '保修期到期日', 'DLP Expiry Date',
+        ed.get('fac_dlp_expiry_date') or kd.get('fac_dlp_expiry_date'), styles,
     ))
+    if kd.get('show_testing_commission'):
+        rows.append(_date_row(
+            '測試和調試完成日期', 'Testing & Commissioning Completed',
+            ed.get('fac_testing_commission_date') or kd.get('testing_commission_date'), styles,
+        ))
     rows.append(_date_row(
         '修補缺陷完工日期', 'Make Good Defect Completed',
         ed.get('fac_make_good_date') or kd.get('make_good_date'), styles,

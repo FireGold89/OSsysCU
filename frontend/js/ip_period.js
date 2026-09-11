@@ -6,6 +6,7 @@ const IpPeriod = {
   _matrixView: 'by-ip',
   _pendingReceiptFile: null,
   _pendingIpCertFile: null,
+  _pendingIpAppFile: null,
   _searchQuery: '',
   _reconcileData: null,
   _bankSelectReady: false,
@@ -81,6 +82,7 @@ const IpPeriod = {
       row.receipt_display,
       row.receipt_attachment_name,
       row.ip_cert_attachment_name,
+      row.ip_application_attachment_name,
       row.application_amount,
       row.certified_income,
       row.subcon_paid,
@@ -177,18 +179,28 @@ const IpPeriod = {
     }
   },
 
-  _ipCertCellHtml(r) {
-    const attach = r.ip_cert_attachment;
-    const attachName = escHtml(r.ip_cert_attachment_name || 'IP Cert.');
+  _ipAttachmentCellHtml(r, field, nameField, label) {
+    const attach = r[field];
+    const attachName = escHtml(r[nameField] || label);
     const safePath = (attach || '').replace(/'/g, "\\'");
     if (attach) {
       return `<td class="ip-cert-cell" onclick="event.stopPropagation()">
-        <button type="button" class="ip-receipt-clip" title="已上傳 IP Cert.：${attachName}"
+        <button type="button" class="ip-receipt-clip" title="已上傳 ${escHtml(label)}：${attachName}"
           onclick="event.stopPropagation(); DocViewer.open('${safePath}', '${attachName}')"
-          aria-label="預覽 IP Cert.">📄</button>
+          aria-label="預覽 ${escHtml(label)}">📄</button>
       </td>`;
     }
     return '<td class="ip-cert-cell td-muted" onclick="event.stopPropagation()">—</td>';
+  },
+
+  _ipAppCellHtml(r) {
+    return this._ipAttachmentCellHtml(
+      r, 'ip_application_attachment', 'ip_application_attachment_name', 'IP Application',
+    );
+  },
+
+  _ipCertCellHtml(r) {
+    return this._ipAttachmentCellHtml(r, 'ip_cert_attachment', 'ip_cert_attachment_name', 'IP Cert.');
   },
 
   initBankSelect() {
@@ -516,21 +528,22 @@ const IpPeriod = {
       return `
         <tr${rowClick}>
           <td class="td-mono" style="font-weight:600">${r.ip_no}</td>
+          ${this._ipAppCellHtml(r)}
+          <td class="td-amount ${amtClass(r.application_amount)}">${fmt(r.application_amount)}</td>
+          <td class="td-muted">${fmtDate(r.applied_date)}</td>
           ${this._ipCertCellHtml(r)}
-          <td class="td-muted ip-col-frozen-hidden">${fmtDate(r.applied_date)}</td>
-          <td class="td-amount ip-col-frozen-hidden ${amtClass(r.application_amount)}">${fmt(r.application_amount)}</td>
-          <td class="td-muted ip-col-frozen-hidden" style="text-align:right">${fmtPct(r.application_pct)}</td>
           <td class="td-amount ${amtClass(r.certified_income, 'income')}">${fmt(r.certified_income)}</td>
           <td class="td-muted" style="text-align:right">${fmtPct(r.certified_income_pct)}</td>
           <td class="td-muted">${fmtDate(r.certificate_date)}</td>
           ${this._receiptCellHtml(r)}
+          <td class="td-muted ip-col-frozen-hidden" style="text-align:right">${fmtPct(r.application_pct)}</td>
           <td class="td-amount ip-col-frozen-hidden ${amtClass(r.subcon_paid, 'expense')}">${r.subcon_paid ? fmtExpense(r.subcon_paid) : '—'}</td>
           <td class="td-muted ip-col-frozen-hidden" style="text-align:right">${fmtPct(r.subcon_paid_pct)}</td>
           ${actions}
         </tr>`;
     }).join('')
       : (applySearch
-        ? `<tr><td colspan="${editable ? 12 : 11}" class="td-muted" style="padding:24px;text-align:center">無符合「${escHtml(this._searchQuery.trim())}」的糧期</td></tr>`
+        ? `<tr><td colspan="${editable ? 13 : 12}" class="td-muted" style="padding:24px;text-align:center">無符合「${escHtml(this._searchQuery.trim())}」的糧期</td></tr>`
         : '');
 
     const totalsHtml = hideTotals ? '' : `
@@ -555,14 +568,15 @@ const IpPeriod = {
           <thead>
             <tr>
               <th>糧款期數</th>
+              <th style="width:52px">IP Application</th>
+              <th class="th-num">美博申請付款</th>
+              <th>申請日期</th>
               <th style="width:52px">IP Cert.</th>
-              <th class="ip-col-frozen-hidden">申請日期</th>
-              <th class="th-num ip-col-frozen-hidden">申請金額</th>
-              <th class="th-num ip-col-frozen-hidden">申請%</th>
               <th class="th-num">業主批款</th>
               <th class="th-num">批款%</th>
               <th>批款日期</th>
               <th>收款記錄<br><span class="th-sub">支票／過數</span></th>
+              <th class="th-num ip-col-frozen-hidden">申請%</th>
               <th class="th-num ip-col-frozen-hidden">分包總支出</th>
               <th class="th-num ip-col-frozen-hidden">支出%</th>
               ${actionTh}
@@ -874,6 +888,7 @@ const IpPeriod = {
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     this._pendingReceiptFile = null;
     this._pendingIpCertFile = null;
+    this._pendingIpAppFile = null;
     document.getElementById('ipModalTitle').textContent = '新增糧期';
     document.getElementById('ipModalId').value = '';
     document.getElementById('ipNo').value = this._suggestIpNo(this._data?.items);
@@ -885,6 +900,7 @@ const IpPeriod = {
     document.getElementById('ipSubconPaid').value = '';
     document.getElementById('ipSubconCertDate').value = '';
     this._fillReceiptForm({});
+    this._renderIpAppAttach({});
     this._renderIpCertAttach({});
     document.getElementById('ipPctHint').textContent = '儲存後依承建金額自動計算批款 %';
     document.getElementById('ipModal').classList.add('open');
@@ -1016,6 +1032,84 @@ const IpPeriod = {
     } catch (e) {}
   },
 
+  _renderIpAppAttach(row) {
+    const el = document.getElementById('ipAppAttachList');
+    const hint = document.getElementById('ipAppAttachHint');
+    if (!el) return;
+    const pending = this._pendingIpAppFile;
+    if (pending) {
+      el.innerHTML = `<div class="ip-receipt-attach-item"><span>待上傳：${escHtml(pending.name)}</span></div>`;
+      if (hint) hint.textContent = '儲存後會一併上傳';
+      return;
+    }
+    if (row.ip_application_attachment) {
+      const name = escHtml(row.ip_application_attachment_name || 'IP Application');
+      const path = (row.ip_application_attachment || '').replace(/"/g, '&quot;');
+      el.innerHTML = `
+        <div class="ip-receipt-attach-item">
+          <button type="button" class="btn btn-link btn-sm" onclick="DocViewer.open('${path}', '${name}')">${name}</button>
+          <button type="button" class="btn btn-icon btn-danger btn-sm" title="刪除附件" onclick="IpPeriod.deleteIpAppAttachment()">🗑️</button>
+        </div>`;
+      if (hint) hint.textContent = '已上傳 IP Application';
+    } else {
+      el.innerHTML = '';
+      if (hint) hint.textContent = 'PDF / PNG / JPG · 新增記錄需先儲存再上傳';
+    }
+  },
+
+  pickIpAppFile() {
+    document.getElementById('ipAppFileInput')?.click();
+  },
+
+  onIpAppFileSelected(event) {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    const id = document.getElementById('ipModalId').value;
+    if (id) {
+      this._uploadIpAppFile(id, file);
+    } else {
+      this._pendingIpAppFile = file;
+      this._renderIpAppAttach({});
+    }
+    if (event.target) event.target.value = '';
+  },
+
+  async _uploadIpAppFile(ipId, file) {
+    showLoading('上傳 IP Application…');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API}/interim-payments/${ipId}/ip-application-attachment`, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '上傳失敗');
+      toast('IP Application 已上傳', 'success');
+      this._pendingIpAppFile = null;
+      if (json.data?.summary) {
+        this._data = json.data.summary;
+        if (this._containerId) this.render(this._containerId, this._data, { editable: this._editable });
+      }
+      const row = await api('GET', `/interim-payments/${ipId}`);
+      if (row) this._renderIpAppAttach(row);
+    } catch (e) {
+      toast(e.message || '上傳失敗', 'error');
+    } finally {
+      hideLoading();
+    }
+  },
+
+  async deleteIpAppAttachment() {
+    const id = document.getElementById('ipModalId').value;
+    if (!id) return;
+    if (!confirm('刪除此 IP Application 附件？')) return;
+    try {
+      await api('DELETE', `/interim-payments/${id}/ip-application-attachment`);
+      toast('IP Application 已刪除', 'success');
+      const row = await api('GET', `/interim-payments/${id}`);
+      if (row) this._renderIpAppAttach(row);
+      await this.refresh();
+    } catch (e) {}
+  },
+
   _renderIpCertAttach(row) {
     const el = document.getElementById('ipCertAttachList');
     const hint = document.getElementById('ipCertAttachHint');
@@ -1116,6 +1210,7 @@ const IpPeriod = {
     if (!row) return;
     this._pendingReceiptFile = null;
     this._pendingIpCertFile = null;
+    this._pendingIpAppFile = null;
     document.getElementById('ipModalTitle').textContent = `編輯 ${row.ip_no}`;
     document.getElementById('ipModalId').value = row.id;
     document.getElementById('ipNo').value = row.ip_no || '';
@@ -1127,6 +1222,7 @@ const IpPeriod = {
     document.getElementById('ipSubconPaid').value = fmtInputNum(row.subcon_paid);
     document.getElementById('ipSubconCertDate').value = row.subcon_cert_date || '';
     this._fillReceiptForm(row);
+    this._renderIpAppAttach(row);
     this._renderIpCertAttach(row);
     const pctParts = [];
     if (row.certified_income_pct != null) pctParts.push(`批款 ${fmtPct(row.certified_income_pct)}`);
@@ -1191,6 +1287,9 @@ const IpPeriod = {
       }
       if (this._pendingIpCertFile && newId) {
         await this._uploadIpCertFile(newId, this._pendingIpCertFile);
+      }
+      if (this._pendingIpAppFile && newId) {
+        await this._uploadIpAppFile(newId, this._pendingIpAppFile);
       }
       this.closeModal();
       await this.refresh();

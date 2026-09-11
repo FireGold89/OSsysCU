@@ -290,6 +290,13 @@
         <a href="#import">8. 匯入操作速查</a>
         <a href="#source">9. 相關原始碼</a>
         <a href="#todo">10. 待討論</a>
+        <a href="#v2-modules">11. V2 業務模組</a>
+        <a href="#v2-vo" class="sub">11.1 變更以及扣款</a>
+        <a href="#v2-ip" class="sub">11.2 糧期狀況</a>
+        <a href="#v2-mcf" class="sub">11.3 主合約 FAC</a>
+        <a href="#v2-scfac" class="sub">11.4 分判 FAC PDF</a>
+        <a href="#v2-portfolio" class="sub">11.5 N 項目總表</a>
+        <a href="#v2-diagram" class="sub">11.6 模組關聯圖</a>
       </nav>
     </aside>
 
@@ -300,19 +307,26 @@
 
       <header class="doc-header">
         <h1>OSsysCU 資料關聯說明</h1>
-        <p class="subtitle">工程項目 · Master List · 分判合約編號（MS/C）· 地盤 Payment 表</p>
-        <p class="meta">最後更新：2026-08-12</p>
+        <p class="subtitle">Excel 匯入主檔 · 地盤 Payment · V2 業務模組（VO／糧期／主合約 FAC／分判 FAC）</p>
+        <p class="meta">最後更新：2026-09-11 · 系統版本 <code>v2-20260911-sc-fac-p2-gap</code> · 詳細 schema 見 <code>docs/Data Model.md</code></p>
       </header>
 
       <section id="overview">
         <h2>1. 總覽</h2>
         <div class="card highlight">
-          <p>OSsysCU 的核心資料來自 <strong>四類 Excel</strong>，匯入後分別存入不同 SQLite 資料表。以 <strong>項目編號（<code>project_core</code>）</strong> 為主要串連點，但 <strong>沒有強制外鍵</strong>，多數為文字比對或手動配對。</p>
+          <p>OSsysCU 的資料分兩層：<strong>（A）Excel 匯入主檔</strong>建立項目／Master／MS/C／地盤判項；<strong>（B）V2 業務模組</strong>在 UI 寫入 VO、糧期、FAC 欄位與附件。串連點仍以 <strong>項目編號（<code>project_core</code>）</strong> 與 <strong><code>projects.id</code></strong> 為中心，但 <strong>沒有強制外鍵</strong> 的配對仍靠文字比對。</p>
         </div>
-        <pre class="flow">Ref/Summary.xlsx                          → projects（工程項目）
+        <pre class="flow">【A · Excel 匯入】
+Ref/Summary.xlsx                          → projects（工程項目）
 Ref/YYYY Quotation &amp; Contract number.xlsx → quotation_registry（Master List）
 Ref/分判工程合約編號 YYYY.xlsx            → sc_contract_registry（MS/C 主檔）
-Payment/... Payment Status Table.xlsx     → subcontractors + payment_records（每項目）</pre>
+Payment/... Payment Status Table.xlsx     → subcontractors + payment_records（每項目）
+
+【B · V2 業務模組 · 見 §11】
+變更以及扣款登記  → sc_vo_records（scope=main | subcontractor）
+糧期狀況          → interim_payments（含 IP Application 附件）
+主合約最終結算    → projects.fac_* + 衍生 build_main_con_fac()
+分判最終結算 PDF  → build_sc_fac() 即時生成（無獨立 FAC 表）</pre>
       </section>
 
       <section id="diagram">
@@ -416,7 +430,8 @@ flowchart TB
             <tr><td><strong>匯入模組</strong></td><td><code>excel_importer_payment.py</code>（相容入口 <code>excel_importer.py</code>）</td></tr>
             <tr><td><strong>主鍵</strong></td><td><code>subcontractors.id</code>；業務鍵 <code>(project_id, sc_no)</code> 如 <code>SC-001</code></td></tr>
             <tr><td><strong>金額欄位</strong></td><td><code>contract_amount</code>、<code>contract_sum</code>（FAC 結算用）</td></tr>
-            <tr><td><strong>角色</strong></td><td>地盤實際運作資料：判項、VO、付款、SC FAC</td></tr>
+            <tr><td><strong>角色</strong></td><td>地盤實際運作資料：判項、付款、SC FAC 結算金額來源</td></tr>
+            <tr><td><strong>延伸</strong></td><td>VO／扣款明細在 <code>sc_vo_records</code>（§11.1）；FAC PDF 由 <code>build_sc_fac()</code> 衍生（§11.4）</td></tr>
           </tbody>
         </table>
       </section>
@@ -564,6 +579,10 @@ flowchart TB
             <tr><td>地盤 Payment 匯入</td><td><code>excel_importer_payment.py</code></td></tr>
             <tr><td>MS/C 配對 / FAC 編號</td><td><code>sc_contract_ref.resolve_sub_contract_no()</code></td></tr>
             <tr><td>SC FAC 原合約金額</td><td><code>sc_fac.build_sc_fac()</code> → <code>sc.contract_amount</code></td></tr>
+            <tr><td>SC FAC PDF</td><td><code>sc_fac_pdf.py</code> · <code>sc_fac_docx.py</code></td></tr>
+            <tr><td>主合約 FAC</td><td><code>main_fac.py</code> · <code>main_con_fac_pdf.py</code></td></tr>
+            <tr><td>VO 登記 API</td><td><code>app.py</code> · <code>database.get_sc_vo_records(scope=…)</code></td></tr>
+            <tr><td>糧期 API</td><td><code>frontend/js/ip_period.js</code></td></tr>
             <tr><td>MS/C 主檔 UI</td><td><code>frontend/js/sc_contract_registry.js</code></td></tr>
           </tbody>
         </table>
@@ -575,11 +594,146 @@ flowchart TB
           <li>MS/C 主檔金額 vs 地盤判項金額不一致時 UI 提示</li>
           <li>負責同事欄 <code>A / B</code> 格式正規化（目前為 Excel 原文）</li>
           <li>Master List <code>subcon_amount</code> 與 MS/C 逐筆金額加總對帳</li>
+          <li>分判 FAC 簽署日期／已簽 PDF 寫回 DB（每判項 <code>sc_fac_signed_date</code>）</li>
+          <li><code>portfolio_sc_fac_status</code> 與 SC FAC PDF 簽署狀態自動連動</li>
+          <li>主合約 FAC「修補缺陷完工日期」英文是否改 Defect Correction Date（待 QS 確認）</li>
         </ul>
       </section>
 
+      <section id="v2-modules">
+        <h2>11. V2 業務模組資料關聯（2026-09-11）</h2>
+        <div class="card highlight">
+          <p>以下模組資料<strong>主要寫入 SQLite</strong>（非 Excel 再匯入）。附件實體檔在 <code>DATA_DIR/uploads/</code>，DB 存相對路徑。PDF（主合約 FAC、分判 FAC）多為<strong>即時生成、不落庫</strong>。</p>
+        </div>
+
+        <h3 id="v2-vo">11.1 變更以及扣款登記 → <code>sc_vo_records</code></h3>
+        <table>
+          <thead>
+            <tr><th>UI 區塊</th><th>scope</th><th>sc_no</th><th>record_type</th><th>主要附件</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>主合約變更以及扣款登記</td>
+              <td><code>main</code></td>
+              <td><code>__MAIN__</code></td>
+              <td><code>vo</code> / <code>deduction</code></td>
+              <td><code>engineering_order_attachment</code> · <code>deduction_attachment</code></td>
+            </tr>
+            <tr>
+              <td>分判變更以及扣款登記</td>
+              <td><code>subcontractor</code></td>
+              <td>SC-001 …</td>
+              <td><code>vo</code> / <code>deduction</code></td>
+              <td><code>approval_attachment</code> · <code>engineering_order_attachment</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <ul>
+          <li>API：<code>GET/POST /api/projects/{id}/sc-vo-records?scope=main|subcontractor</code></li>
+          <li>主合約 FAC 匯總：<code>_sc_vo_totals_for_project()</code> 只計 <code>scope=main</code> 或 <code>sc_no=__MAIN__</code></li>
+          <li>分判 FAC：依判項 <code>sc_no</code> 配對（含 <code>SC-004.1</code> 子編號，<code>sc_fac._match_sc_no</code>）</li>
+          <li>付款套用後 VO 鎖定：<code>payment_records.vo_ids_json</code> → <code>sc_vo_records.applied_payment_id</code></li>
+        </ul>
+
+        <h3 id="v2-ip">11.2 糧期狀況 → <code>interim_payments</code></h3>
+        <table>
+          <thead>
+            <tr><th>UI 欄位</th><th>DB 欄位</th><th>說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>糧款期數</td><td><code>ip_no</code> · <code>seq_no</code></td><td><code>UNIQUE(project_id, ip_no)</code></td></tr>
+            <tr><td>IP Application</td><td><code>ip_application_attachment</code></td><td>美博申請側 PDF（2026-09-11 新增）</td></tr>
+            <tr><td>美博申請付款</td><td><code>application_amount</code></td><td>列表前置顯示</td></tr>
+            <tr><td>申請日期</td><td><code>applied_date</code></td><td>列表前置顯示</td></tr>
+            <tr><td>IP Cert.</td><td><code>ip_cert_attachment</code></td><td>業主批款側 PDF</td></tr>
+            <tr><td>業主批款／批款日期</td><td><code>certified_income</code> · <code>certificate_date</code></td><td>—</td></tr>
+            <tr><td>收款記錄</td><td><code>receipt_*</code></td><td>支票／過數憑證</td></tr>
+          </tbody>
+        </table>
+        <p>與分判付款<strong>無 FK</strong>；項目概覽「分包總支出」由 <code>payment_records</code> 另線匯總。</p>
+
+        <h3 id="v2-mcf">11.3 主合約最終結算</h3>
+        <pre class="flow">projects.fac_*  ──write──►  main_con_fac.js / PUT project
+        │
+        ├── sc_vo_records (scope=main)     → D 變更、J 扣款匯總
+        ├── interim_payments               → I 已付（可 fac_total_paid_i_override）
+        ├── project_documents / fac_*_path → PC、MG 證書附件
+        └── build_main_con_fac()           → main_con_fac_pdf.py（即時 PDF）</pre>
+        <table>
+          <thead><tr><th>欄位／邏輯</th><th>說明</th></tr></thead>
+          <tbody>
+            <tr><td><code>fac_dlp_days</code> · <code>fac_dlp_expiry_date</code></td><td>保修期天數／到期日（2026-09-11）</td></tr>
+            <tr><td><code>fac_lad_rate</code> · <code>fac_lad_max</code></td><td>延期罰款（PDF 英文 Liquidated damage）</td></tr>
+            <tr><td><code>fac_testing_commission_date</code></td><td>僅 N21／石鼓洲項目 UI 顯示</td></tr>
+            <tr><td><code>fac_pc_cert_path</code> · <code>fac_mg_cert_path</code></td><td>PC／Defect Correction Certificate 附件</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="v2-scfac">11.4 分判最終結算 PDF（衍生 · 無 FAC 表）</h3>
+        <pre class="flow">subcontractors.contract_amount
+  + sc_vo_records (vo / deduction，配 sc_no)
+  + payment_records.paid_amount（未 revoke）
+  + sc_contract_registry（MS/C 編號配對）
+        │
+        ▼
+  build_sc_fac()  →  JSON payload
+        │
+        ▼
+  generate_sc_fac_pdf()
+    P1  工程帳目總結算 + 內部四行簽名
+    P2  同 P1 結算表 + SC_FAC_DECLARATIONS（程式常數）+ 美博／分判商雙簽
+    P3  附錄 I · VO（有資料或勾選空白附錄）
+    P4  附錄 II · Contra（同上）</pre>
+        <table>
+          <thead><tr><th>結算表列</th><th>資料來源</th></tr></thead>
+          <tbody>
+            <tr><td>分判合約總額</td><td><code>subcontractors.contract_amount</code></td></tr>
+            <tr><td>加減工程</td><td><code>sc_vo_records</code> 中 <code>record_type=vo</code> 加總 → 附錄 I</td></tr>
+            <tr><td>扣款行</td><td><code>record_type=deduction</code> → <code>settlement.deduction_lines</code> → 附錄 II</td></tr>
+            <tr><td>已付工程額</td><td><code>payment_records.paid_amount</code> 加總</td></tr>
+            <tr><td>尾期 IP 標籤</td><td><code>count_interim_certs_for_sc()</code></td></tr>
+            <tr><td>P2 三段聲明</td><td><code>sc_fac_pdf.SC_FAC_DECLARATIONS</code>（非 DB）</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="v2-portfolio">11.5 N 項目結算總表 → <code>portfolio_*</code></h3>
+        <table>
+          <thead><tr><th>表</th><th>用途</th><th>與 FAC 關係</th></tr></thead>
+          <tbody>
+            <tr><td><code>portfolio_projects</code></td><td>左欄 19 欄 + 狀態</td><td>JOIN <code>projects</code>；Client FA 手填／Excel</td></tr>
+            <tr><td><code>portfolio_sc_fac_status</code></td><td>分判 1–15 槽 <code>fac_status</code></td><td><span class="badge badge-no">未連動</span> SC FAC PDF 簽署</td></tr>
+            <tr><td><code>portfolio_imports</code></td><td>FA／進度表 Excel 匯入紀錄</td><td>—</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="v2-diagram">11.6 模組關聯圖</h3>
+        <div class="diagram-wrap">
+          <pre class="mermaid">
+flowchart TB
+  P[(projects)]
+  P --> SC[(subcontractors)]
+  P --> SVR[(sc_vo_records)]
+  P --> IP[(interim_payments)]
+  P --> PR[(payment_records)]
+  P --> FACP[projects.fac_*]
+
+  SVR -->|scope=main| MCF[主合約 FAC PDF]
+  FACP --> MCF
+  IP --> MCF
+
+  SC --> SCF[分判 FAC PDF]
+  SVR -->|sc_no 配對| SCF
+  PR -->|sc_no 配對| SCF
+  SCR[(sc_contract_registry)] -.->|MS/C 編號| SCF
+
+  PP[(portfolio_projects)] --> PSS[(portfolio_sc_fac_status)]
+  PSS -.->|名稱/狀態| SC
+          </pre>
+        </div>
+      </section>
+
       <footer>
-        OSsysCU · 資料關聯說明 · 對應 Markdown：<code>docs/資料關聯說明.md</code>
+        OSsysCU · 資料關聯說明 · 最後更新 2026-09-11 · Schema 詳表：<code>docs/Data Model.md</code>
       </footer>
     </main>
   </div>

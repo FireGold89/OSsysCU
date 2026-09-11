@@ -1,4 +1,4 @@
-"""分判工程帳目總結算 PDF（每判項 · 3 頁 · 對照 Final Account Excel）"""
+"""分判工程帳目總結算 PDF（每判項 · P1 結算 + P2 聲明雙簽 + 附錄 I/II）"""
 from __future__ import annotations
 
 import os
@@ -39,6 +39,7 @@ BODY_EN_FONT_PT = 8            # 內文雙語英文副行
 P1_BODY_FONT_PT = 8            # P1 內文
 P1_BODY_LEADING_PT = 11
 P1_BODY_EN_FONT_PT = 7
+P2_DECL_GAP = 10 * mm           # P2 結算表與聲明之間（約 2–3 行）
 TOP_LOGO_ZONE = 14 * mm         # 頁首 LOGO 區
 LOGO_H = 12 * mm                 # LOGO 高度（略小於標題行）
 LOGO_W_MAX = CONTENT_W * 0.42    # 橫向 banner 最闊
@@ -1064,12 +1065,25 @@ def _settlement_table(st, styles, mp_mode=False, theme=DEFAULT_SC_FAC_THEME):
     return tbl
 
 
+SC_FAC_DECLARATIONS = (
+    '分判商同意上述結算所詳列之帳目正確無誤，並不會再就本工程出任何額外要求。',
+    '分判商保証日後若因工程質量問題而需作任何維修時，分判商無條件負責維修該等有問題之工程至總承建商滿意為止及賠償因質量問題引致美博工程服務有限公司蒙受之損失或支出。',
+    '分判商謹此保證已完全付清所有與上述工程有關工人的全部工資；分判商本人/本公司亦承諾不會再向美博工程服務有限公司根據上述工程作任何索償。',
+)
+
+
 def _disclaimers(styles):
-    return [
-        '分判商同意上述工程帳目無誤及無遺漏，並且不會就該工程再提出任何額外要求。',
-        '分判商保證當工程因分判商須作修補時，分判商無條件負責修補該等問題。工程總承判商保留追究及索償之權利。',
-        '*僅供糧款參考，每宗糧款均以糧款計算書及相關文件為準。',
-    ]
+    return list(SC_FAC_DECLARATIONS)
+
+
+def _statement_page2(data, styles, theme=DEFAULT_SC_FAC_THEME):
+    """P2：同 P1 工程帳目總結算 + 三段聲明（頁底雙簽由 portrait_footer 模板繪製）"""
+    story = _statement_page(data, styles, mp_mode=False, theme=theme, show_disclaimers=False)
+    story.append(Spacer(1, P2_DECL_GAP))
+    for t in SC_FAC_DECLARATIONS:
+        story.append(_p(t, styles, 'body'))
+        story.append(Spacer(1, 3 * mm))
+    return story
 
 
 def _appendix_table_vo(items, total, styles, theme, content_w):
@@ -1347,7 +1361,7 @@ def generate_sc_fac_pdf(
     print_appendix_vo_empty: bool = False,
     print_appendix_contra_empty: bool = False,
 ) -> bytes:
-    """P1 直向結算 · 附錄 I/II 依資料或使用者選擇"""
+    """P1 結算 + P2 聲明雙簽 · 附錄 I/II 依資料或使用者選擇"""
     theme = normalize_sc_fac_theme(theme)
     include_vo, include_contra = resolve_appendix_pages(
         data,
@@ -1387,6 +1401,9 @@ def generate_sc_fac_pdf(
     story = []
     story.append(NextPageTemplate('portrait_p1'))
     story.extend(_statement_page(data, p1_styles, mp_mode=False, theme=theme, show_disclaimers=False))
+    story.append(NextPageTemplate('portrait_footer'))
+    story.append(PageBreak())
+    story.extend(_statement_page2(data, p1_styles, theme=theme))
     if include_vo:
         story.append(NextPageTemplate('landscape_footer'))
         story.append(PageBreak())

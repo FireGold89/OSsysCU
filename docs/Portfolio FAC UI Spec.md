@@ -7,7 +7,7 @@
 > 欄位對照見 [QS Reference Excel Field Mapping.md](./QS%20Reference%20Excel%20Field%20Mapping.md)  
 > 總覽見 [QS Reference Excel Overview.md](./QS%20Reference%20Excel%20Overview.md)
 
-**狀態：** 📋 規格草案（尚未實作）
+**狀態：** ✅ P4 已實作（從系統同步 + Dashboard FAC KPI）
 
 ---
 
@@ -45,8 +45,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [篩選] 狀態▾  PM▾  Client▾  負責人▾  🔍搜尋 Project/N Code   │
-│ [匯入 Excel] [匯出 Excel] [從系統同步]  上次更新：YYYY-MM-DD   │
+│ [篩選] 狀態▾  PM▾  🔍搜尋  [Client FA 待辦] [DLP 90天內] [分判待簽] │
+│ [精簡|完整 19 欄] [欄位] [匯入] [匯出] [從系統同步]              │
 ├─────────────────────────────────────────────────────────────┤
 │ KPI：進行中 N │ 已完成 N │ Client FA 待辦 N │ 分判待簽 N     │
 ├─────────────────────────────────────────────────────────────┤
@@ -101,7 +101,8 @@
 ### 3.5 篩選預設
 
 - 預設：`project_progress_status = On Progress`
-- 快捷篩選：`Client FA ≠ Completed`、`DLP 90 天內到期`
+- 快捷篩選：`Client FA ≠ Completed`、`DLP 90 天內到期`（含已過期）、分判 FAC 未完成
+- 預設 **精簡欄**：N / Code / 描述 / PM / PC Date / PC Cert / 預計完工 / Remark / 狀態 / Client / Client FA；「完整 19 欄」或「欄位」可加回 DLP／Retention 等
 
 ---
 
@@ -199,6 +200,8 @@ CREATE TABLE portfolio_imports (
 | GET | `/api/portfolio/export/fa-list` | 下載 FA 格式 xlsx |
 | GET | `/api/portfolio/export/progress-list` | 下載進度表 xlsx |
 | POST | `/api/portfolio/sync-from-projects` | 從 Cover/分判/Main FAC 回填 |
+| GET | `/api/portfolio/stats` | 全公司 FAC KPI |
+| GET | `/api/portfolio/by-project/<project_id>` | 單項目 portfolio 列 |
 
 ### 6.1 GET `/api/portfolio/fac` 回傳範例
 
@@ -286,19 +289,19 @@ CREATE TABLE portfolio_imports (
 
 | Phase | 內容 | 優先 |
 |-------|------|------|
-| **P1** | DB 表 + 進度表 view（11 欄）+ 從 projects 自動生成 | 高 |
-| **P2** | FA 左欄 19 欄 + 匯入／匯出 r2 Excel | 高 |
-| **P3** | 分判 FAC 矩陣 15 槽 + inline 編輯 + SC 連結 | 中 |
-| **P4** | 「從系統同步」+ Dashboard KPI 卡片 | 中 |
+| **P1** | DB 表 + 進度表 view（11 欄）+ 從 projects 自動生成 | ✅ 已做 |
+| **P2** | FA 左欄 19 欄 + 匯入／匯出 r2 Excel | ✅ 已做 |
+| **P3** | 分判 FAC 矩陣 15 槽 + inline 編輯 + SC 連結 | ✅ 已做 |
+| **P4** | 「從系統同步」+ Dashboard KPI 卡片 | ✅ 已做 |
 | **P5** | Payment 東寶 Budget／扣數（延伸） | 低 |
 
 ---
 
 ## 10. 驗收清單（實作後）
 
-- [ ] 匯入 `N Project - Final Account Status List - r2.xlsx` 後 43 項可見
-- [ ] 匯出 Excel 欄位順序與 QS 原版一致
-- [ ] Q1059_25 四表資料在系統內可交叉跳轉
+- [x] 匯入 `N Project - Final Account Status List - r2.xlsx` 後資料列可見（未配對建 placeholder）
+- [x] 匯出 Excel 欄位順序與 QS 原版一致（49 欄）
+- [x] Q1059_25 等項目可從 FA 列 drawer／🔗 跳轉主合約 FAC、分判 FAC
 - [ ] 進度表 11 欄與 FA 左欄編輯同步
 - [ ] dark / light 主題表格可讀
 - [ ] 長表 sticky 表頭 + 左欄固定

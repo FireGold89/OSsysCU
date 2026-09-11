@@ -31,6 +31,21 @@ const ColPicker = {
       } catch (e) {}
     };
 
+    host._defaultColIds = function _defaultColIds() {
+      const columns = getColumns();
+      const all = columns.map(c => c.id);
+      const locked = columns.filter(c => c.locked).map(c => c.id);
+      const preset = Array.isArray(config.defaultVisible)
+        ? config.defaultVisible.filter(id => all.includes(id))
+        : null;
+      if (preset && preset.length) {
+        const next = [...preset];
+        locked.forEach(id => { if (!next.includes(id)) next.unshift(id); });
+        return next;
+      }
+      return [...all];
+    };
+
     host._initColPrefs = function _initColPrefs() {
       const columns = getColumns();
       const saved = host._loadColPrefs();
@@ -39,9 +54,9 @@ const ColPicker = {
       if (saved && saved.length) {
         const valid = saved.filter(id => all.includes(id));
         locked.forEach(id => { if (!valid.includes(id)) valid.push(id); });
-        host._visibleCols = valid.length ? valid : [...all];
+        host._visibleCols = valid.length ? valid : host._defaultColIds();
       } else {
-        host._visibleCols = [...all];
+        host._visibleCols = host._defaultColIds();
       }
     };
 
@@ -90,10 +105,13 @@ const ColPicker = {
         const checked = host.isColVisible(col.id) ? 'checked' : '';
         return `<label><input type="checkbox" ${checked} onchange="${hostName}.setColVisible('${col.id}', this.checked)"> ${col.label}</label>`;
       }).join('');
+      const resetLabel = Array.isArray(config.defaultVisible) && config.defaultVisible.length
+        ? '重設預設'
+        : '重設全部';
       panel.innerHTML = `
         <div class="col-picker-title">顯示欄位</div>
         ${items}
-        <button type="button" class="btn btn-secondary btn-sm col-picker-reset" onclick="${hostName}.resetCols()">重設全部</button>`;
+        <button type="button" class="btn btn-secondary btn-sm col-picker-reset" onclick="${hostName}.resetCols()">${resetLabel}</button>`;
     };
 
     host.setColVisible = function setColVisible(id, visible) {
@@ -118,7 +136,7 @@ const ColPicker = {
     };
 
     host.resetCols = function resetCols() {
-      host._visibleCols = getColumns().map(c => c.id);
+      host._visibleCols = host._defaultColIds();
       host._saveColPrefs();
       host.applyColVisibility();
       host._renderColPicker();

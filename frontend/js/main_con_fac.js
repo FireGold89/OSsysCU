@@ -189,6 +189,14 @@ const MainConFac = {
     return `<a href="${uploadUrl(att.path)}" target="_blank" rel="noopener" class="mcf-pdf-link">📄 ${name}</a>`;
   },
 
+  _showTestingCommission(header, keyDates) {
+    if (keyDates?.show_testing_commission != null) return !!keyDates.show_testing_commission;
+    const p = App.currentProject || {};
+    const code = (header?.project_code || p.project_code || '').toUpperCase();
+    const name = `${header?.project_name_zh || p.project_name_zh || ''}${header?.project_name_en || p.project_name_en || ''}`;
+    return code.includes('N21') || name.includes('石鼓洲') || name.toUpperCase().includes('N21');
+  },
+
   render() {
     const root = document.getElementById('mcfContent');
     const d = this._data;
@@ -212,6 +220,17 @@ const MainConFac = {
     const nameEn = (h.project_name_en || '').trim();
     const worksMain = nameZh || nameEn || h.contract_works || '—';
     const worksSub = nameZh && nameEn ? nameEn : '';
+    const showTesting = this._showTestingCommission(h, kd);
+    const dlpDaysVal = ed.fac_dlp_days ?? kd.fac_dlp_days ?? kd.dlp_days ?? '';
+    const dlpExpiryVal = ed.fac_dlp_expiry_date ?? kd.fac_dlp_expiry_date ?? '';
+    const testingRow = showTesting
+      ? this._rowInputPlain(
+        '測試和調試完成日期 Testing & Commissioning',
+        'fac_testing_commission_date',
+        ed.fac_testing_commission_date ?? kd.testing_commission_date,
+        { date: true },
+      )
+      : '';
 
     root.innerHTML = `
       ${this._actionBar()}
@@ -270,12 +289,14 @@ const MainConFac = {
                 ${this._dateRow('合約完工日期 Date for Completion', kd.completion_date)}
                 ${this._dateRow('工期 Contract Period', kd.contract_period_days ? `${kd.contract_period_days} days` : '—')}
                 ${this._dateRow('保修期 Defect Liability Period', kd.dlp_days ? `${kd.dlp_days} days` : (kd.dlp_months ? `${kd.dlp_months} months` : '—'), dlpNote)}
-                ${this._rowInputPlain('延期罰款單價 Rate of LAD', 'fac_lad_rate', ed.fac_lad_rate ?? kd.lad_rate, { money: true })}
-                ${this._rowInputPlain('延期罰款限額 Maximum Sum of LAD', 'fac_lad_max', ed.fac_lad_max ?? kd.lad_max, { money: true })}
+                ${this._rowInputPlain('延期罰款單價 Rate of Liquidated damage', 'fac_lad_rate', ed.fac_lad_rate ?? kd.lad_rate, { money: true })}
+                ${this._rowInputPlain('延期罰款限額 Limited Amount of Liquidated damage', 'fac_lad_max', ed.fac_lad_max ?? kd.lad_max, { money: true })}
                 ${this._dateRow('實際完工日期 Date of Practical Completion', kd.pc_cert_date)}
                 ${retentionRows}
                 ${this._dateRow('保修期開始日期 Commencement of DLP', kd.dlp_commencement_date)}
-                ${this._rowInputPlain('測試和調試完成日期 Testing & Commissioning', 'fac_testing_commission_date', ed.fac_testing_commission_date ?? kd.testing_commission_date, { date: true })}
+                ${this._rowInputPlain('保修期 DLP (days)', 'fac_dlp_days', dlpDaysVal, { integer: true })}
+                ${this._rowInputPlain('保修期到期日 DLP Expiry Date', 'fac_dlp_expiry_date', dlpExpiryVal, { date: true })}
+                ${testingRow}
                 ${this._rowInputPlain('修補缺陷完工日期 Make Good Defect', 'fac_make_good_date', ed.fac_make_good_date ?? kd.make_good_date, { date: true })}
                 ${this._dateRow('MP 工程帳目總結算日 MP FAC Signed', kd.mp_fac_signed_date)}
               </tbody>
@@ -288,7 +309,7 @@ const MainConFac = {
               <div id="mcfPcExisting">${this._attachLink(d.attachments.pc_cert)}</div>
             </div>
             <div class="form-group">
-              <label class="form-label">修補缺陷完工證書 Make Good Certificate</label>
+              <label class="form-label">修補缺陷完工證書 Defect Correction Certificate</label>
               <input type="file" class="form-input" id="mcfMgCertFile" accept=".pdf,.png,.jpg,.jpeg">
               <div id="mcfMgExisting">${this._attachLink(d.attachments.mg_cert)}</div>
             </div>
@@ -330,8 +351,8 @@ const MainConFac = {
   },
 
   _rowInputPlain(label, name, value, opts = {}) {
-    const type = opts.date ? 'date' : (opts.money ? 'number' : 'text');
-    const step = opts.money ? ' step="0.01"' : '';
+    const type = opts.date ? 'date' : (opts.money || opts.integer ? 'number' : 'text');
+    const step = opts.money ? ' step="0.01"' : (opts.integer ? ' step="1"' : '');
     const val = value != null && value !== '' ? (opts.date ? String(value).slice(0, 10) : (opts.money ? fmtInputNum(value) : escHtml(String(value)))) : '';
     return `<tr>
       <td class="mcf-label" colspan="2">${escHtml(label)}</td>

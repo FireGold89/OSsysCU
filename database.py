@@ -205,6 +205,8 @@ def _migrate_db(conn):
         ('receipt_attachment_name', 'TEXT'),
         ('ip_cert_attachment', 'TEXT'),
         ('ip_cert_attachment_name', 'TEXT'),
+        ('ip_application_attachment', 'TEXT'),
+        ('ip_application_attachment_name', 'TEXT'),
     ]:
         if col not in ip_cols:
             conn.execute(f"ALTER TABLE interim_payments ADD COLUMN {col} {ddl}")
@@ -617,10 +619,21 @@ def _migrate_db(conn):
         'approval_attachment_name': 'TEXT',
         'quotation_attachment': 'TEXT',
         'quotation_attachment_name': 'TEXT',
+        'scope': "TEXT DEFAULT 'subcontractor'",
+        'deduction_attachment': 'TEXT',
+        'deduction_attachment_name': 'TEXT',
+        'engineering_order_attachment': 'TEXT',
+        'engineering_order_attachment_name': 'TEXT',
     }
     for col, typ in _svr_extra_cols.items():
         if col not in svr_cols:
             conn.execute(f"ALTER TABLE sc_vo_records ADD COLUMN {col} {typ}")
+    svr_cols = {r[1] for r in conn.execute("PRAGMA table_info(sc_vo_records)")}
+    if 'scope' in svr_cols:
+        conn.execute("""
+            UPDATE sc_vo_records SET scope='subcontractor'
+            WHERE scope IS NULL OR scope=''
+        """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sc_vo_template_catalog (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -647,6 +660,65 @@ def _migrate_db(conn):
     _migrate_main_fac_fields(conn)
     _migrate_iso_documents(conn)
     _migrate_iso_documents_v2(conn)
+    _migrate_iso_documents_v3(conn)
+    _migrate_portfolio_tables(conn)
+
+
+def _migrate_portfolio_tables(conn):
+    """全公司 N 項目結算總表 / 進度表（V2 P1）"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_projects (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id               INTEGER NOT NULL UNIQUE,
+            n_code                   TEXT,
+            expected_completion_date TEXT,
+            project_progress_status  TEXT,
+            client_fac_status        TEXT,
+            pc_cert_done             INTEGER DEFAULT 0,
+            defect_cert_done         INTEGER DEFAULT 0,
+            dlp_commencement_date    TEXT,
+            dlp_days                 INTEGER,
+            dlp_expiry_date          TEXT,
+            retention_to_release     REAL,
+            portfolio_remark         TEXT,
+            source_file              TEXT,
+            last_import_at           TEXT,
+            created_at               TEXT DEFAULT (datetime('now', 'localtime')),
+            updated_at               TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_sc_fac_status (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            portfolio_project_id INTEGER NOT NULL,
+            slot_no              INTEGER NOT NULL,
+            subcon_name          TEXT,
+            subcontractor_id     INTEGER,
+            fac_status           TEXT,
+            FOREIGN KEY (portfolio_project_id) REFERENCES portfolio_projects(id) ON DELETE CASCADE,
+            UNIQUE(portfolio_project_id, slot_no)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_imports (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_type   TEXT NOT NULL,
+            filename      TEXT,
+            rows_read     INTEGER,
+            rows_upserted INTEGER,
+            imported_at   TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pp_progress_status "
+        "ON portfolio_projects(project_progress_status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pscs_portfolio "
+        "ON portfolio_sc_fac_status(portfolio_project_id)"
+    )
+    conn.commit()
 
 
 def _migrate_main_fac_fields(conn):
@@ -718,6 +790,64 @@ def _migrate_iso_documents_v2(conn):
     conn.commit()
 
 
+def _migrate_iso_documents_v3(conn):
+    """QS 反馈：MOU+NDA 合并 mou_nda；槽位中文全称"""
+    _merge_iso_mou_nda_slot(conn)
+    conn.commit()
+
+
+def _merge_iso_mou_nda_slot(conn):
+    """main 范围：mou / nda → mou_nda（保留 mou；nda 归档后删除）"""
+    groups = conn.execute("""
+        SELECT DISTINCT project_id, scope, subcontractor_id
+        FROM iso_document_files
+        WHERE scope='main' AND doc_slot IN ('mou', 'nda', 'mou_nda')
+    """).fetchall()
+    for g in groups:
+        pid = g['project_id']
+        scope = g['scope']
+        sc_id = g['subcontractor_id']
+
+        def _row(slot):
+            return conn.execute("""
+                SELECT id, doc_slot FROM iso_document_files
+                WHERE project_id=? AND scope=? AND IFNULL(subcontractor_id, 0)=IFNULL(?, 0) AND doc_slot=?
+            """, (pid, scope, sc_id, slot)).fetchone()
+
+        if _row('mou_nda'):
+            for old in ('mou', 'nda'):
+                r = _row(old)
+                if r:
+                    _archive_iso_slot(conn, pid, scope, old, sc_id)
+                    conn.execute("DELETE FROM iso_document_files WHERE id=?", (r['id'],))
+            continue
+
+        mou = _row('mou')
+        nda = _row('nda')
+        if mou:
+            conn.execute(
+                "UPDATE iso_document_files SET doc_slot='mou_nda' WHERE id=?",
+                (mou['id'],),
+            )
+            if nda:
+                _archive_iso_slot(conn, pid, scope, 'nda', sc_id)
+                conn.execute("DELETE FROM iso_document_files WHERE id=?", (nda['id'],))
+        elif nda:
+            conn.execute(
+                "UPDATE iso_document_files SET doc_slot='mou_nda' WHERE id=?",
+                (nda['id'],),
+            )
+
+    conn.execute("""
+        UPDATE iso_document_versions SET doc_slot='mou_nda'
+        WHERE scope='main' AND doc_slot='mou'
+    """)
+    conn.execute("""
+        UPDATE iso_document_versions SET doc_slot='mou_nda'
+        WHERE scope='main' AND doc_slot='nda'
+    """)
+
+
 def iso_safe_project_code(project_code):
     import re
     s = (project_code or 'project').strip()
@@ -754,8 +884,7 @@ ISO_MAIN_SLOTS = (
     'main_contract_loa',
     'supplemental_optional',
     'partner_list',
-    'mou',
-    'nda',
+    'mou_nda',
     'mepo_tmc',
     'hkmo_tmc',
     'tender_signoff',
@@ -763,8 +892,10 @@ ISO_MAIN_SLOTS = (
 )
 
 ISO_SC_SLOTS = (
+    'sc_contract',
     'tender_confirm',
     'tender_collect',
+    'integrity_declaration',
     'tender_opening',
     'mepo_tmc',
     'hkmo_tmc',
@@ -777,14 +908,17 @@ ISO_SLOT_DISK_LABELS = {
     'main_contract_loa': '主合約LOA',
     'supplemental_optional': '補充合約Optional',
     'partner_list': '合作伙伴名單',
-    'mou': 'MOU',
-    'nda': 'NDA',
-    'mepo_tmc': '美博TMC',
-    'hkmo_tmc': '港澳TMC',
+    'mou_nda': '合作備忘錄及保密協議',
+    'mou': '合作備忘錄及保密協議',
+    'nda': '合作備忘錄及保密協議',
+    'mepo_tmc': '美博招投標會議記錄',
+    'hkmo_tmc': '港澳招投標會議記錄',
     'tender_signoff': '投標會簽',
     'other': '其他',
-    'tender_confirm': '承判確認',
-    'tender_collect': '領取標書',
+    'sc_contract': '分判合約',
+    'tender_confirm': '參與投標確認單',
+    'tender_collect': '領取標書記錄',
+    'integrity_declaration': '聲明誠信及範圍表',
     'tender_opening': '開標記錄',
     'contract_signoff': '合約會簽',
 }
@@ -1515,16 +1649,23 @@ def get_cover_page(project_id):
     )
 
 
+SVR_MAIN_SC_NO = '__MAIN__'
+SVR_SCOPE_MAIN = 'main'
+SVR_SCOPE_SUBCONTRACTOR = 'subcontractor'
+
+
 def _sc_vo_totals_for_project(project_id):
     conn = get_conn()
     vo = conn.execute("""
         SELECT COALESCE(SUM(amount), 0) FROM sc_vo_records
         WHERE project_id=? AND record_type='vo'
-    """, (project_id,)).fetchone()[0]
+          AND (scope=? OR sc_no=?)
+    """, (project_id, SVR_SCOPE_MAIN, SVR_MAIN_SC_NO)).fetchone()[0]
     ded = conn.execute("""
         SELECT COALESCE(SUM(amount), 0) FROM sc_vo_records
         WHERE project_id=? AND record_type='deduction'
-    """, (project_id,)).fetchone()[0]
+          AND (scope=? OR sc_no=?)
+    """, (project_id, SVR_SCOPE_MAIN, SVR_MAIN_SC_NO)).fetchone()[0]
     conn.close()
     return {'vo_total': float(vo or 0), 'deduction_total': float(ded or 0)}
 
@@ -2311,6 +2452,8 @@ def update_main_con_fac(project_id, data):
                 'fac_fluctuations_g', 'fac_lad_rate', 'fac_lad_max',
             ):
                 payload[key] = float(val or 0)
+            elif key == 'fac_dlp_days':
+                payload[key] = int(float(val)) if val not in ('', None) else None
             else:
                 payload[key] = val
     if not payload:
@@ -3575,7 +3718,7 @@ def _strip_applied_pay_join(row):
     return d
 
 
-def get_sc_vo_records(project_id, sc_no=None, unapplied_only=False):
+def get_sc_vo_records(project_id, sc_no=None, unapplied_only=False, scope=None):
     conn = get_conn()
     sql = """
         SELECT svr.*,
@@ -3590,6 +3733,12 @@ def get_sc_vo_records(project_id, sc_no=None, unapplied_only=False):
         WHERE svr.project_id=?
     """
     params = [project_id]
+    if scope == SVR_SCOPE_MAIN:
+        sql += " AND (svr.scope=? OR svr.sc_no=?)"
+        params.extend([SVR_SCOPE_MAIN, SVR_MAIN_SC_NO])
+    elif scope == SVR_SCOPE_SUBCONTRACTOR:
+        sql += " AND NOT (svr.scope=? OR svr.sc_no=?)"
+        params.extend([SVR_SCOPE_MAIN, SVR_MAIN_SC_NO])
     if sc_no:
         sql += " AND svr.sc_no=?"
         params.append(sc_no)
@@ -3840,6 +3989,13 @@ def _svr_row_payload(data, existing=None):
         'approval_attachment_name': data.get('approval_attachment_name', ex.get('approval_attachment_name')),
         'quotation_attachment': data.get('quotation_attachment', ex.get('quotation_attachment')),
         'quotation_attachment_name': data.get('quotation_attachment_name', ex.get('quotation_attachment_name')),
+        'scope': data.get('scope', ex.get('scope')) or SVR_SCOPE_SUBCONTRACTOR,
+        'deduction_attachment': data.get('deduction_attachment', ex.get('deduction_attachment')),
+        'deduction_attachment_name': data.get('deduction_attachment_name', ex.get('deduction_attachment_name')),
+        'engineering_order_attachment': data.get('engineering_order_attachment', ex.get('engineering_order_attachment')),
+        'engineering_order_attachment_name': data.get(
+            'engineering_order_attachment_name', ex.get('engineering_order_attachment_name'),
+        ),
     }
     return payload
 
@@ -3989,6 +4145,13 @@ def create_sc_vo_record(data):
     data.setdefault('description', None)
     data.setdefault('amount', 0)
     data.setdefault('line_code', None)
+    scope = (data.get('scope') or SVR_SCOPE_SUBCONTRACTOR).strip().lower()
+    if scope == SVR_SCOPE_MAIN:
+        data['scope'] = SVR_SCOPE_MAIN
+        data['sc_no'] = SVR_MAIN_SC_NO
+        data['sc_id'] = None
+    else:
+        data['scope'] = SVR_SCOPE_SUBCONTRACTOR
     from sc_vo_templates import get_template
     tpl = get_template(data.get('line_code'))
     if tpl and not (data.get('ref_no') or '').strip():
@@ -4010,19 +4173,23 @@ def create_sc_vo_record(data):
             company_name_en, company_name_zh, service_description,
             oa_ref, oa_no, remark, main_contract_vo_no,
             approval_attachment, approval_attachment_name,
-            quotation_attachment, quotation_attachment_name
+            quotation_attachment, quotation_attachment_name,
+            scope, deduction_attachment, deduction_attachment_name,
+            engineering_order_attachment, engineering_order_attachment_name
         ) VALUES (
             :project_id, :sc_id, :sc_no, :record_type, :ref_no, :description, :amount, :line_code,
             :seq_no, :invoice_date, :invoice_no, :quotation_no,
             :company_name_en, :company_name_zh, :service_description,
             :oa_ref, :oa_no, :remark, :main_contract_vo_no,
             :approval_attachment, :approval_attachment_name,
-            :quotation_attachment, :quotation_attachment_name
+            :quotation_attachment, :quotation_attachment_name,
+            :scope, :deduction_attachment, :deduction_attachment_name,
+            :engineering_order_attachment, :engineering_order_attachment_name
         )
     """, row)
     conn.commit()
     new_id = cur.lastrowid
-    if row['record_type'] == 'vo':
+    if row['record_type'] == 'vo' and row['sc_no'] != SVR_MAIN_SC_NO:
         sync_sc_vo_amount(data['project_id'], data['sc_no'])
     conn.close()
     return new_id
@@ -4050,13 +4217,19 @@ def update_sc_vo_record(record_id, data):
             approval_attachment=:approval_attachment,
             approval_attachment_name=:approval_attachment_name,
             quotation_attachment=:quotation_attachment,
-            quotation_attachment_name=:quotation_attachment_name
+            quotation_attachment_name=:quotation_attachment_name,
+            scope=:scope,
+            deduction_attachment=:deduction_attachment,
+            deduction_attachment_name=:deduction_attachment_name,
+            engineering_order_attachment=:engineering_order_attachment,
+            engineering_order_attachment_name=:engineering_order_attachment_name
         WHERE id=:id
     """, row)
     conn.commit()
     conn.close()
-    sync_sc_vo_amount(existing['project_id'], existing['sc_no'])
-    if row.get('sc_no') and row['sc_no'] != existing['sc_no']:
+    if existing['sc_no'] != SVR_MAIN_SC_NO:
+        sync_sc_vo_amount(existing['project_id'], existing['sc_no'])
+    if row.get('sc_no') and row['sc_no'] != existing['sc_no'] and row['sc_no'] != SVR_MAIN_SC_NO:
         sync_sc_vo_amount(existing['project_id'], row['sc_no'])
     return True
 
@@ -4075,6 +4248,16 @@ def update_sc_vo_attachment(record_id, att_type, file_path, original_name):
     elif att_type == 'quotation':
         conn.execute("""
             UPDATE sc_vo_records SET quotation_attachment=?, quotation_attachment_name=?
+            WHERE id=?
+        """, (file_path, original_name, record_id))
+    elif att_type == 'deduction':
+        conn.execute("""
+            UPDATE sc_vo_records SET deduction_attachment=?, deduction_attachment_name=?
+            WHERE id=?
+        """, (file_path, original_name, record_id))
+    elif att_type == 'engineering_order':
+        conn.execute("""
+            UPDATE sc_vo_records SET engineering_order_attachment=?, engineering_order_attachment_name=?
             WHERE id=?
         """, (file_path, original_name, record_id))
     else:
@@ -4097,7 +4280,7 @@ def delete_sc_vo_record(record_id):
     conn.execute("DELETE FROM sc_vo_records WHERE id=?", (record_id,))
     conn.commit()
     conn.close()
-    if row['record_type'] == 'vo':
+    if row['record_type'] == 'vo' and row['sc_no'] != SVR_MAIN_SC_NO:
         sync_sc_vo_amount(row['project_id'], row['sc_no'])
     return True
 
@@ -4751,6 +4934,32 @@ def clear_ip_cert_attachment(ip_id):
     conn.commit()
     conn.close()
     return row['ip_cert_attachment'] if row else None
+
+
+def set_ip_application_attachment(ip_id, file_path, original_filename=None):
+    conn = get_conn()
+    conn.execute("""
+        UPDATE interim_payments
+        SET ip_application_attachment=?, ip_application_attachment_name=?
+        WHERE id=?
+    """, (file_path, original_filename, ip_id))
+    conn.commit()
+    conn.close()
+
+
+def clear_ip_application_attachment(ip_id):
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT ip_application_attachment FROM interim_payments WHERE id=?", (ip_id,)
+    ).fetchone()
+    conn.execute("""
+        UPDATE interim_payments
+        SET ip_application_attachment=NULL, ip_application_attachment_name=NULL
+        WHERE id=?
+    """, (ip_id,))
+    conn.commit()
+    conn.close()
+    return row['ip_application_attachment'] if row else None
 
 
 def _recalc_and_save_ip_pcts(project_id):

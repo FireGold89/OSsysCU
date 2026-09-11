@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSsysCU 修改報告 · 2026-09-11</title>
+  <style>
+    :root {
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #cbd5e1;
+      --accent: #2563eb;
+      --ok: #047857;
+      --warn: #b45309;
+      --bg-soft: #f8fafc;
+      --bg-warn: #fffbeb;
+      --bg-ok: #ecfdf5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Microsoft JhengHei", "PingFang TC", "Segoe UI", sans-serif;
+      font-size: 11pt;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 14mm 16mm;
+      background: #fff;
+    }
+    .no-print {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .no-print button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 12pt;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    h1 { font-size: 20pt; margin: 0 0 4px; line-height: 1.25; }
+    h2 {
+      font-size: 13pt;
+      margin: 22px 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--accent);
+    }
+    h3 { font-size: 11.5pt; margin: 14px 0 8px; color: #1e293b; }
+    .meta { color: var(--muted); font-size: 10pt; margin-bottom: 18px; }
+    .meta strong { color: var(--text); }
+    .badge {
+      display: inline-block;
+      font-size: 9pt;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .badge-ok { background: #d1fae5; color: var(--ok); }
+    .badge-warn { background: #fef3c7; color: var(--warn); }
+    .badge-info { background: #dbeafe; color: var(--accent); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+      margin: 8px 0 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 7px 9px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: var(--bg-soft); font-weight: 600; }
+    ul { margin: 6px 0; padding-left: 20px; }
+    li { margin: 4px 0; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--bg-soft);
+      padding: 10px 12px;
+      margin: 12px 0;
+      font-size: 10.5pt;
+    }
+    .callout-warn {
+      border-left-color: var(--warn);
+      background: var(--bg-warn);
+    }
+    .callout-ok {
+      border-left-color: var(--ok);
+      background: var(--bg-ok);
+    }
+    code, .mono {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 9.5pt;
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .flow {
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 10pt;
+      line-height: 1.7;
+      margin: 10px 0;
+    }
+    .decl-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 10pt;
+      margin: 8px 0;
+    }
+    .decl-box p { margin: 0 0 8px; }
+    .decl-box p:last-child { margin-bottom: 0; }
+    .rel-diagram {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 9pt;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 10px 0;
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 0; max-width: none; }
+      h2 { break-after: avoid; }
+      table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="no-print">
+    <span>OSsysCU · 2026-09-11 修改報告（可列印 / 另存 PDF）</span>
+    <button type="button" onclick="window.print()">列印 / 另存 PDF</button>
+  </div>
+
+  <h1>OSsysCU 修改報告</h1>
+  <p class="meta">
+    <strong>日期：</strong>2026 年 9 月 11 日（五）<br>
+    <strong>目前版本：</strong><code>v2-20260911-sc-fac-p2-gap</code><br>
+    <strong>分支：</strong><code>v2/portfolio</code> · <strong>部署：</strong>推送 <code>main</code> 後 Zeabur 自動 rebuild<br>
+    <strong>依據：</strong>QS 部門反馈 · PPT <code>Ref/260901 Aurora comment.pptx</code>
+  </p>
+
+  <div class="callout callout-ok">
+    <strong>今日摘要：</strong>共完成 <strong>5 個功能區塊</strong>的調整，核心為 QS 附圖／PPT 對照的欄位更名、糧期新欄、主合約 FAC 標籤、以及分判 FAC PDF 改為「P1 內部簽 + P2 完整結算＋聲明雙簽 + 附錄 I/II」結構。§7 已更新<strong>資料關聯說明</strong>。尚未 commit／push（除非另行指示）。
+  </div>
+
+  <h2>1. 版本演進（今日）</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>版本號</th>
+        <th>模組</th>
+        <th>重點</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>v2-20260911-vo-reg-main</code></td>
+        <td>變更以及扣款登記</td>
+        <td>導航改名；新增主合約變更以及扣款登記區塊</td>
+      </tr>
+      <tr>
+        <td><code>v2-20260911-vo-reg-sc-approval</code></td>
+        <td>變更以及扣款登記</td>
+        <td>分判保留審批表 PDF，另加工程指令 PDF</td>
+      </tr>
+      <tr>
+        <td><code>v2-20260911-ip-application</code></td>
+        <td>糧期狀況</td>
+        <td>IP Application、美博申請付款、申請日期</td>
+      </tr>
+      <tr>
+        <td><code>v2-20260911-mcf-labels</code></td>
+        <td>主合約最終結算</td>
+        <td>側欄改名、LAD／證書英文、DLP 欄、N21 T&amp;C</td>
+      </tr>
+      <tr>
+        <td><code>v2-20260911-sc-fac-p2-gap</code></td>
+        <td>分判最終結算 PDF</td>
+        <td>P2 完整結算 + QS 三段聲明 + 雙簽；附錄保留；表與聲明間距</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. 變更以及扣款登記</h2>
+  <p><span class="badge badge-ok">已完成</span> 導航：<strong>「分判變更以及扣款登記」→「變更以及扣款登記」</strong></p>
+  <table>
+    <thead>
+      <tr><th>區塊</th><th>變更內容</th><th>主要檔案</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>主合約</td>
+        <td>
+          新增「主合約變更以及扣款登記」表格<br>
+          附件：<strong>工程指令 PDF</strong>、<strong>扣款 PDF</strong><br>
+          DB：<code>scope=main</code>、<code>deduction_attachment</code>
+        </td>
+        <td><code>database.py</code>、<code>app.py</code>、<code>sc_vo_reg.js</code></td>
+      </tr>
+      <tr>
+        <td>分判</td>
+        <td>
+          保留<strong>審批表 PDF</strong>（<code>approval_attachment</code>）<br>
+          新增<strong>工程指令 PDF</strong>（<code>engineering_order_attachment</code>）<br>
+          彈窗標籤：「工程指令上傳」
+        </td>
+        <td><code>sc_vo_reg.js</code>、<code>index.html</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. 糧期狀況（IP Period）</h2>
+  <p><span class="badge badge-ok">已完成</span> 對齊 QS 附圖欄位順序</p>
+  <table>
+    <thead>
+      <tr><th>列表欄位（新順序）</th><th>說明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>IP Application</td><td>附件上傳／預覽（新 API：<code>/ip-application-attachment</code>）</td></tr>
+      <tr><td>美博申請付款</td><td>原「申請金額」<code>application_amount</code></td></tr>
+      <tr><td>申請日期</td><td>原隱藏欄，改為列表顯示</td></tr>
+      <tr><td>IP Cert. 等</td><td>業主批款、批款日期、收款記錄等維持</td></tr>
+    </tbody>
+  </table>
+  <p>新增／編輯表：申請日期 ↔ 批款日期、美博申請付款 ↔ 業主批款、IP Application 附件 ↔ IP Cert. 附件並排。</p>
+  <p><strong>主要檔案：</strong><code>ip_period.js</code>、<code>index.html</code>、<code>database.py</code>、<code>app.py</code></p>
+
+  <h2>4. 主合約最終結算</h2>
+  <p><span class="badge badge-ok">已完成</span> 對齊 QS 附圖（PPT 主合約頁）</p>
+  <table>
+    <thead>
+      <tr><th>項目</th><th>變更</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>導航</td><td><strong>「最終結算」→「主合約最終結算」</strong>（與分判最終結算區分）</td></tr>
+      <tr><td>英文標籤</td><td>Rate of <strong>Liquidated damage</strong>；Limited Amount of <strong>Liquidated damage</strong></td></tr>
+      <tr><td>證書欄</td><td>Make Good Certificate → <strong>Defect Correction Certificate</strong></td></tr>
+      <tr><td>新增欄位</td><td><strong>保修期 DLP (days)</strong>、<strong>保修期到期日 DLP Expiry Date</strong>（<code>fac_dlp_days</code>、<code>fac_dlp_expiry_date</code>）</td></tr>
+      <tr><td>Testing &amp; Commissioning</td><td>僅 <strong>N21／石鼓洲</strong> 項目顯示（<code>is_n21_stonecutters_project</code>）</td></tr>
+    </tbody>
+  </table>
+  <p><strong>主要檔案：</strong><code>main_con_fac.js</code>、<code>main_fac.py</code>、<code>main_con_fac_pdf.py</code>、<code>index.html</code>、<code>main.js</code>、<code>projects.js</code></p>
+
+  <div class="callout callout-warn">
+    <strong>待 QS 確認（未改碼）：</strong>「修補缺陷完工日期」英文仍為 <strong>Make Good Defect</strong>。證書已改 Defect Correction Certificate，若需統一術語，建議改為 <strong>Defect Correction Date</strong>（或 QS 指定用詞）後再同步 UI 與 PDF。
+  </div>
+
+  <h2>5. 分判最終結算 PDF（重點）</h2>
+  <p><span class="badge badge-ok">已完成</span> 依 QS 澄清：PPT P.16 為準，<strong>保留附錄 I／II</strong>，結算書本身為 <strong>2 頁</strong>。</p>
+
+  <h3>5.1 PDF 頁面結構（每判項）</h3>
+  <div class="flow">
+    <strong>P1</strong> · 工程帳目總結算（表頭 + 結算表）+ 內部四行簽名<br>
+    （編制者／合約部／項目部／總經理 + Date）<br><br>
+    <strong>P2</strong> · 同 P1 工程帳目總結算（表頭 + 結算表）<br>
+    → 約 <strong>2–3 行</strong> 間距（10mm）<br>
+    → QS <strong>三段聲明</strong><br>
+    → 頁底 <strong>美博／分判商雙簽</strong>（同附錄 I 格式）<br><br>
+    <strong>P3</strong> · 附錄 I · VO 明細（有資料或勾選空白附錄時）<br>
+    <strong>P4</strong> · 附錄 II · Contra 明細（同上）<br><br>
+    <em>總頁數：2–4 頁（視 VO／Contra 資料而定）</em>
+  </div>
+
+  <h3>5.2 P2 三段聲明（定稿原文）</h3>
+  <div class="decl-box">
+    <p>分判商同意上述結算所詳列之帳目正確無誤，並不會再就本工程出任何額外要求。</p>
+    <p>分判商保証日後若因工程質量問題而需作任何維修時，分判商無條件負責維修該等有問題之工程至總承建商滿意為止及賠償因質量問題引致美博工程服務有限公司蒙受之損失或支出。</p>
+    <p>分判商謹此保證已完全付清所有與上述工程有關工人的全部工資；分判商本人/本公司亦承諾不會再向美博工程服務有限公司根據上述工程作任何索償。</p>
+  </div>
+
+  <h3>5.3 QS 反馈釐清過程</h3>
+  <table>
+    <thead>
+      <tr><th>階段</th><th>QS 說法</th><th>最終做法</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>初版理解</td>
+        <td>PPT P.15：結算書共兩頁，參考 P.16</td>
+        <td>曾理解為取消附錄</td>
+      </tr>
+      <tr>
+        <td>QS 澄清</td>
+        <td>需<strong>保留兩個附錄</strong>；結算加 P2 聲明 + 雙簽</td>
+        <td>附錄 I/II 保留；P2 = 完整結算 + 聲明 + 雙簽</td>
+      </tr>
+      <tr>
+        <td>版面微調</td>
+        <td>結算表與聲明勿過緊</td>
+        <td>表與聲明間 <code>P2_DECL_GAP = 10mm</code>（約 2–3 行）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>主要檔案：</strong><code>sc_fac_pdf.py</code>（<code>SC_FAC_DECLARATIONS</code>、<code>_statement_page2</code>）、<code>sc_fac_docx.py</code>、<code>sc_fac.js</code>、<code>projects.js</code></p>
+
+  <h2>6. 主要檔案清單</h2>
+  <table>
+    <thead>
+      <tr><th>類別</th><th>檔案</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>後端 API / DB</td><td><code>app.py</code>、<code>database.py</code>、<code>main_fac.py</code></td></tr>
+      <tr><td>PDF 生成</td><td><code>sc_fac_pdf.py</code>、<code>sc_fac_docx.py</code>、<code>main_con_fac_pdf.py</code></td></tr>
+      <tr><td>前端</td><td><code>frontend/index.html</code>、<code>sc_vo_reg.js</code>、<code>ip_period.js</code>、<code>main_con_fac.js</code>、<code>sc_fac.js</code>、<code>main.js</code>、<code>projects.js</code></td></tr>
+      <tr><td>版本／文件</td><td><code>startup.py</code>、<code>VERSION</code>、<code>CHANGELOG.md</code>、<code>docs/Data Model.md</code></td></tr>
+      <tr><td>參考</td><td><code>Ref/260901 Aurora comment.pptx</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. 資料關聯說明（2026-09-11 更新）</h2>
+  <p>以下為今日改動涉及模組的<strong>存儲表、衍生邏輯與附件路徑</strong>。完整 schema 見 <code>docs/Data Model.md</code>。</p>
+
+  <h3>7.1 實體關係概覽</h3>
+  <div class="rel-diagram">projects (工程項目)
+  ├── sc_vo_records          變更／扣款（scope 區分主合約 vs 分判）
+  ├── interim_payments       糧期（含 IP Application / IP Cert 附件）
+  ├── subcontractors         分判判項
+  │     ├── payment_records  分判付款 → 分判 FAC「已付」
+  │     └── sc_vo_records    配 sc_no → 分判 FAC VO／扣款
+  ├── projects.fac_*         主合約 FAC 可編欄 + 證書路徑
+  └── portfolio_projects     N 項目總表（分判 FAC 狀態槽 · 與 PDF 未連動）
+
+附件實體：DATA_DIR/uploads/ · DB 存相對路徑</div>
+
+  <h3>7.2 變更以及扣款登記 → <code>sc_vo_records</code></h3>
+  <table>
+    <thead>
+      <tr><th>UI 區塊</th><th>scope</th><th>sc_no</th><th>附件欄位</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>主合約變更以及扣款登記</td>
+        <td><code>main</code></td>
+        <td><code>__MAIN__</code></td>
+        <td><code>engineering_order_attachment</code> · <code>deduction_attachment</code></td>
+      </tr>
+      <tr>
+        <td>分判變更以及扣款登記</td>
+        <td><code>subcontractor</code></td>
+        <td>SC-001 …</td>
+        <td><code>approval_attachment</code> · <code>engineering_order_attachment</code></td>
+      </tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>API：<code>GET/POST …/sc-vo-records?scope=main|subcontractor</code></li>
+    <li>主合約 FAC 只匯總 <code>scope=main</code> 的 VO／扣款（<code>_sc_vo_totals_for_project</code>）</li>
+    <li>分判 FAC 依判項 <code>sc_no</code> 配對 VO／扣款（含 SC-004.1 子編號）</li>
+  </ul>
+
+  <h3>7.3 糧期狀況 → <code>interim_payments</code></h3>
+  <table>
+    <thead>
+      <tr><th>UI 欄位</th><th>DB 欄位</th><th>備註</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>IP Application</td><td><code>ip_application_attachment</code></td><td>2026-09-11 新增上傳 API</td></tr>
+      <tr><td>美博申請付款</td><td><code>application_amount</code></td><td>原有欄位，改列表顯示</td></tr>
+      <tr><td>申請日期</td><td><code>applied_date</code></td><td>原有欄位，改列表顯示</td></tr>
+      <tr><td>IP Cert.</td><td><code>ip_cert_attachment</code></td><td>業主批款側附件</td></tr>
+      <tr><td>業主批款／批款日期</td><td><code>certified_income</code> · <code>certificate_date</code></td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.4 主合約最終結算</h3>
+  <table>
+    <thead>
+      <tr><th>資料來源</th><th>用途</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>projects.fac_*</code>（含 <code>fac_dlp_days</code>、<code>fac_dlp_expiry_date</code>）</td><td>UI 編輯 → PUT project → PDF</td></tr>
+      <tr><td><code>sc_vo_records</code>（main）</td><td>D 變更、J 扣款匯總</td></tr>
+      <tr><td><code>interim_payments</code></td><td>I 已付（可 <code>fac_total_paid_i_override</code>）</td></tr>
+      <tr><td><code>build_main_con_fac()</code></td><td>組裝 payload → <code>main_con_fac_pdf.py</code> 即時出 PDF</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.5 分判最終結算 PDF（衍生 · 無獨立 FAC 表）</h3>
+  <div class="flow">
+    <strong>輸入</strong><br>
+    <code>subcontractors</code>（合約價）<br>
+    + <code>sc_vo_records</code>（VO / deduction，配 sc_no）<br>
+    + <code>payment_records</code>（已付）<br>
+    + <code>sc_contract_registry</code>（MS/C 編號）<br><br>
+    <strong>→</strong> <code>build_sc_fac()</code> JSON<br><br>
+    <strong>→</strong> <code>generate_sc_fac_pdf()</code><br>
+    P1 結算 + 內部簽 · P2 結算 + <code>SC_FAC_DECLARATIONS</code> + 雙簽 · 附錄 I/II
+  </div>
+  <table>
+    <thead>
+      <tr><th>結算表列</th><th>計算來源</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>分判合約總額</td><td><code>subcontractors.contract_amount</code></td></tr>
+      <tr><td>加減工程</td><td><code>record_type=vo</code> 加總 → 附錄 I</td></tr>
+      <tr><td>扣款行</td><td><code>record_type=deduction</code> → 附錄 II</td></tr>
+      <tr><td>已付工程額</td><td><code>payment_records.paid_amount</code>（未 revoke）</td></tr>
+      <tr><td>尾期 IP 標籤</td><td><code>count_interim_certs_for_sc()</code></td></tr>
+      <tr><td>P2 三段聲明</td><td>程式常數（非 DB）</td></tr>
+      <tr><td>分判商簽署日期</td><td><span class="badge badge-warn">尚未寫回 DB</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.6 與 N 項目結算總表</h3>
+  <p><code>portfolio_sc_fac_status</code>（15 槽／項）存 <code>fac_status</code>、分判名稱等，來自 Excel 匯入或手填；<strong>與分判 FAC PDF 生成及簽署記錄目前未自動連動</strong>（規劃中依 <code>sc_fac_signed_date</code> 推導狀態）。</p>
+
+  <h2>8. 本機驗證與部署</h2>
+  <ul>
+    <li>改動後需<strong>重啟 Flask</strong>，瀏覽器<strong>Ctrl+F5</strong> 強制重新整理（JS/CSS 有 cache bust 參數）。</li>
+    <li>核對版本：<code>GET /api/system/status</code> → <code>app_version</code> 應為 <code>v2-20260911-sc-fac-p2-gap</code>。</li>
+    <li>分判 FAC：預覽 PDF 確認 P1 內部簽、P2 完整結算 + 聲明 + 雙簽、附錄 I/II 仍正常。</li>
+    <li>糧期：確認 IP Application 附件上傳與列表三欄。</li>
+    <li>主合約 FAC：確認 N21 以外項目不顯示 Testing &amp; Commissioning。</li>
+  </ul>
+
+  <div class="callout">
+    <strong>本機啟動（若腳本編碼問題）：</strong><br>
+    <code>$env:DATA_DIR = "$pwd\_data"; $env:PORT = "5001"; $env:DEPLOYMENT_TIER = "v2"; python app.py</code>
+  </div>
+
+  <h2>9. 待辦／後續（非今日完成）</h2>
+  <table>
+    <thead>
+      <tr><th>項目</th><th>狀態</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>「修補缺陷完工日期」英文是否改 Defect Correction Date</td><td><span class="badge badge-warn">待 QS 確認</span></td></tr>
+      <tr><td>分判 FAC 簽署記錄寫回 DB（每判項 signed date）</td><td><span class="badge badge-info">規劃中</span></td></tr>
+      <tr><td>Git commit / push 至 Zeabur</td><td><span class="badge badge-info">未執行</span>（待指示）</td></tr>
+    </tbody>
+  </table>
+
+  <p class="meta" style="margin-top: 28px; border-top: 1px solid var(--border); padding-top: 12px;">
+    產生時間：2026-09-11 · OSsysCU V2 試用環境 · 美博 QS 管理系統
+  </p>
+
+</body>
+</html>

@@ -16,6 +16,8 @@ from werkzeug.utils import secure_filename
 from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
 import auth
 import database as db
+import portfolio
+import portfolio_importer
 from ocr_processor import process_pdf
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='')
@@ -262,6 +264,257 @@ def delete_project(project_id):
 def company_summary():
     """第2頁 Summary — 全公司項目總表"""
     return resp(db.get_company_summary())
+
+
+@app.route('/api/portfolio/progress', methods=['GET'])
+def portfolio_progress_api():
+    """進行中項目 11 欄 view"""
+    data = portfolio.list_portfolio(
+        status=request.args.get('status'),
+        pm=request.args.get('pm'),
+        q=request.args.get('q'),
+        include_subcons=False,
+    )
+    return resp(data)
+
+
+@app.route('/api/portfolio/fac', methods=['GET'])
+def portfolio_fac_api():
+    """N 項目結算總表（含分判矩陣 P3）"""
+    data = portfolio.list_portfolio(
+        status=request.args.get('status'),
+        pm=request.args.get('pm'),
+        q=request.args.get('q'),
+        include_subcons=True,
+    )
+    return resp(data)
+
+
+@app.route('/api/portfolio/stats', methods=['GET'])
+def portfolio_stats_api():
+    """全公司 FAC KPI（Dashboard）"""
+    return resp(portfolio.get_portfolio_stats())
+
+
+@app.route('/api/portfolio/by-project/<int:project_id>', methods=['GET'])
+def portfolio_by_project_api(project_id):
+    """單一項目的 portfolio 列（Dashboard 本項目 FAC）"""
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    item = portfolio.get_portfolio_by_project_id(project_id, include_subcons=True)
+    if not item:
+        return resp(None)
+    return resp(item)
+
+
+@app.route('/api/portfolio/sync-from-projects', methods=['POST'])
+def portfolio_sync_from_projects_api():
+    """P4：從 Cover / Main FAC / 分判回填衍生欄；保留 QS 手填狀態"""
+    try:
+        return resp(portfolio.sync_from_system())
+    except Exception as e:
+        return resp(error=f'同步失敗: {e}', status=500)
+
+
+@app.route('/api/portfolio/projects/<int:portfolio_id>', methods=['PUT'])
+def portfolio_update_project_api(portfolio_id):
+    try:
+        item = portfolio.update_portfolio(portfolio_id, request.json or {})
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if msg == '記錄不存在' else 400
+        return resp(error=msg, status=status)
+    return resp(item)
+
+
+@app.route('/api/portfolio/projects/<int:portfolio_id>/sc-status', methods=['PUT'])
+def portfolio_update_sc_status_api(portfolio_id):
+    try:
+        body = request.json or {}
+        item = portfolio.update_sc_status(portfolio_id, body.get('slots'))
+    except ValueError as e:
+        msg = str(e)
+        status = 404 if msg == '記錄不存在' else 400
+        return resp(error=msg, status=status)
+    return resp(item)
+
+
+def _save_portfolio_excel():
+    if 'file' not in request.files:
+        return None, None, resp(error='請上傳 Excel', status=400)
+    file = request.files['file']
+    if not file.filename or not file.filename.lower().endswith(('.xlsx', '.xls')):
+        return None, None, resp(error='請上傳 .xlsx', status=400)
+    name = secure_filename(file.filename) or 'portfolio.xlsx'
+    path = os.path.join(UPLOAD_DIR, name)
+    file.save(path)
+    return path, file.filename, None
+
+
+@app.route('/api/portfolio/import/fa-list', methods=['POST'])
+def portfolio_import_fa_api():
+    path, _orig, err = _save_portfolio_excel()
+    if err:
+        return err
+    preview = (request.args.get('preview') or request.form.get('preview') or '').strip() in ('1', 'true', 'yes')
+    try:
+        if preview:
+            return resp(portfolio_importer.preview_fa_list(path))
+        return resp(portfolio_importer.sync_fa_list(path, create_placeholders=True))
+    except ValueError as e:
+        return resp(error=str(e), status=400)
+    except Exception as e:
+        return resp(error=f'匯入失敗: {e}', status=500)
+
+
+@app.route('/api/portfolio/import/progress-list', methods=['POST'])
+def portfolio_import_progress_api():
+    path, _orig, err = _save_portfolio_excel()
+    if err:
+        return err
+    preview = (request.args.get('preview') or request.form.get('preview') or '').strip() in ('1', 'true', 'yes')
+    try:
+        if preview:
+            return resp(portfolio_importer.preview_progress_list(path))
+        return resp(portfolio_importer.sync_progress_list(path, create_placeholders=True))
+    except ValueError as e:
+        return resp(error=str(e), status=400)
+    except Exception as e:
+        return resp(error=f'匯入失敗: {e}', status=500)
+
+
+@app.route('/api/portfolio/export/fa-list', methods=['GET'])
+def portfolio_export_fa_api():
+    raw = portfolio_importer.export_fa_list_bytes()
+    return send_file(
+        BytesIO(raw),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='N項目結算總表.xlsx',
+    )
+
+
+@app.route('/api/portfolio/export/progress-list', methods=['GET'])
+def portfolio_export_progress_api():
+    raw = portfolio_importer.export_progress_list_bytes()
+    return send_file(
+        BytesIO(raw),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='進行中項目.xlsx',
+    )
+
+
+# ─── 工程部 · 項目登記 / 會簽出表 ─────────────────────────────────────
+def _save_eng_excel():
+    if 'file' not in request.files:
+        return None, None, resp(error='沒有文件', status=400)
+    file = request.files['file']
+    if not file.filename.lower().endswith(('.xlsx', '.xls')):
+        return None, None, resp(error='請上傳 Excel（.xlsx）', status=400)
+    name = secure_filename(file.filename) or 'nn1.xlsx'
+    path = os.path.join(UPLOAD_DIR, name)
+    file.save(path)
+    return path, file.filename, None
+
+
+@app.route('/api/eng/intake/preview', methods=['POST'])
+def eng_intake_preview_api():
+    path, _orig, err = _save_eng_excel()
+    if err:
+        return err
+    from nn1_importer import preview_nn1_import
+    person_code = (request.form.get('person_code') or request.args.get('person_code') or '').strip()
+    try:
+        return resp(preview_nn1_import(path, person_code=person_code or None))
+    except ValueError as e:
+        return resp(error=str(e), status=400)
+    except Exception as e:
+        return resp(error=f'預覽失敗: {e}', status=500)
+
+
+@app.route('/api/eng/intake/rematch', methods=['POST'])
+def eng_intake_rematch_api():
+    """NN1 編號修改後重新比對 Master"""
+    from nn1_importer import rematch_eng_item
+    body = request.json or {}
+    item = body.get('item') or {}
+    person_code = (body.get('person_code') or item.get('person_code') or '').strip() or None
+    try:
+        updated = rematch_eng_item(item, person_code=person_code)
+        return resp({'item': updated})
+    except Exception as e:
+        return resp(error=f'重新比對失敗: {e}', status=500)
+
+
+@app.route('/api/eng/signoff/preview', methods=['POST'])
+def eng_signoff_preview_api():
+    """產生 PDF 供預覽（inline，非下載）"""
+    from nn1_importer import build_signoff_payload
+    from signoff_generator import generate_signoff_pdf
+    body = request.json or {}
+    item = body.get('item') or body
+    pm = body.get('pm') or {}
+    content = body.get('content') or {}
+    try:
+        payload = build_signoff_payload(item, pm_overrides=pm, content_overrides=content)
+        raw = generate_signoff_pdf(payload)
+    except Exception as e:
+        return resp(error=f'預覽失敗: {e}', status=500)
+    qno = (payload.get('quotation_no') or 'signoff').replace('/', '_')
+    safe = re.sub(r'[^\w\-]+', '_', qno)
+    return send_file(
+        BytesIO(raw),
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f'會簽表_{safe}.pdf',
+    )
+
+
+@app.route('/api/eng/signoff/generate', methods=['POST'])
+def eng_signoff_generate_api():
+    from nn1_importer import build_signoff_payload, resolve_signoff_template
+    from signoff_generator import generate_signoff_docx, generate_signoff_pdf
+    body = request.json or {}
+    item = body.get('item') or body
+    pm = body.get('pm') or {}
+    content = body.get('content') or {}
+    fmt = (body.get('format') or 'docx').strip().lower()
+    try:
+        payload = build_signoff_payload(item, pm_overrides=pm, content_overrides=content)
+    except Exception as e:
+        return resp(error=f'資料組裝失敗: {e}', status=400)
+    qno = (payload.get('quotation_no') or 'signoff').replace('/', '_')
+    safe = re.sub(r'[^\w\-]+', '_', qno)
+    try:
+        if fmt == 'pdf':
+            raw = generate_signoff_pdf(payload)
+            return send_file(
+                BytesIO(raw),
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'會簽表_{safe}.pdf',
+            )
+        raw = generate_signoff_docx(payload, template_path=body.get('template_path'))
+        return send_file(
+            BytesIO(raw),
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            as_attachment=True,
+            download_name=f'會簽表_{safe}.docx',
+        )
+    except Exception as e:
+        return resp(error=f'出表失敗: {e}', status=500)
+
+
+@app.route('/api/eng/signoff/template', methods=['GET'])
+def eng_signoff_template_info_api():
+    from signoff_generator import get_signoff_template_path
+    path = get_signoff_template_path()
+    return resp({
+        'template_path': path,
+        'template_found': bool(path and os.path.isfile(path)),
+        'template_name': os.path.basename(path) if path else None,
+    })
 
 
 @app.route('/api/projects/<int:project_id>/cover-page', methods=['GET'])
@@ -1013,7 +1266,13 @@ def get_sc_vo_records_api(project_id):
     sc_no = request.args.get('sc_no')
     unapplied = request.args.get('unapplied') in ('1', 'true', 'yes')
     record_type = request.args.get('record_type')
-    rows = db.get_sc_vo_records(project_id, sc_no=sc_no, unapplied_only=unapplied)
+    scope = (request.args.get('scope') or '').strip().lower()
+    if scope and scope not in (db.SVR_SCOPE_MAIN, db.SVR_SCOPE_SUBCONTRACTOR):
+        return resp(error='scope 須為 main 或 subcontractor', status=400)
+    rows = db.get_sc_vo_records(
+        project_id, sc_no=sc_no, unapplied_only=unapplied,
+        scope=scope or None,
+    )
     if record_type:
         rows = [r for r in rows if r.get('record_type') == record_type]
     return resp(rows)
@@ -1035,10 +1294,18 @@ def suggest_sc_vo_ref_api(project_id):
 @app.route('/api/projects/<int:project_id>/sc-vo-records', methods=['POST'])
 def create_sc_vo_record_api(project_id):
     data = request.json or {}
-    if not data.get('sc_no'):
+    scope = (data.get('scope') or db.SVR_SCOPE_SUBCONTRACTOR).strip().lower()
+    if scope == db.SVR_SCOPE_MAIN:
+        data['scope'] = db.SVR_SCOPE_MAIN
+        data['sc_no'] = db.SVR_MAIN_SC_NO
+        proj = db.get_project(project_id)
+        if proj and not data.get('company_name_en') and not data.get('company_name_zh'):
+            data['company_name_en'] = proj.get('client') or proj.get('main_contractor')
+            data['company_name_zh'] = proj.get('client') or proj.get('main_contractor')
+    elif not data.get('sc_no'):
         return resp(error='缺少判項編號', status=400)
     data['project_id'] = project_id
-    sc = db.get_subcontractor_by_sc_no(project_id, data['sc_no'])
+    sc = db.get_subcontractor_by_sc_no(project_id, data.get('sc_no')) if data.get('sc_no') != db.SVR_MAIN_SC_NO else None
     if sc:
         data['sc_id'] = sc['id']
     try:
@@ -1082,8 +1349,8 @@ def upload_sc_vo_attachment(record_id):
     if not row:
         return resp(error='記錄不存在', status=404)
     att_type = (request.form.get('type') or '').strip().lower()
-    if att_type not in ('approval', 'quotation'):
-        return resp(error='type 須為 approval 或 quotation', status=400)
+    if att_type not in ('approval', 'quotation', 'deduction', 'engineering_order'):
+        return resp(error='type 須為 approval、quotation、deduction 或 engineering_order', status=400)
     if 'file' not in request.files:
         return resp(error='沒有文件', status=400)
     file = request.files['file']
@@ -1093,7 +1360,12 @@ def upload_sc_vo_attachment(record_id):
     unique_name = f"{uuid.uuid4().hex}.{ext}"
     save_path = os.path.join(UPLOAD_DIR, unique_name)
     file.save(save_path)
-    old_path = row.get('approval_attachment') if att_type == 'approval' else row.get('quotation_attachment')
+    old_path = {
+        'approval': row.get('approval_attachment'),
+        'quotation': row.get('quotation_attachment'),
+        'deduction': row.get('deduction_attachment'),
+        'engineering_order': row.get('engineering_order_attachment'),
+    }.get(att_type)
     if old_path:
         old_full = os.path.join(UPLOAD_DIR, old_path)
         if os.path.isfile(old_full):
@@ -1453,6 +1725,54 @@ def delete_ip_receipt_attachment(ip_id):
     if not existing:
         return resp(error='糧期記錄不存在', status=404)
     old_path = db.clear_ip_receipt_attachment(ip_id)
+    if old_path:
+        full = os.path.join(UPLOAD_DIR, old_path)
+        if os.path.isfile(full):
+            try:
+                os.remove(full)
+            except OSError:
+                pass
+    return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
+
+
+@app.route('/api/interim-payments/<int:ip_id>/ip-application-attachment', methods=['POST'])
+def upload_ip_application_attachment(ip_id):
+    """上傳糧期 IP Application 附件（PDF/圖片）"""
+    existing = db.get_interim_payment(ip_id)
+    if not existing:
+        return resp(error='糧期記錄不存在', status=404)
+    if 'file' not in request.files:
+        return resp(error='沒有文件', status=400)
+    file = request.files['file']
+    if not file.filename or not allowed_file(file.filename):
+        return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
+
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(UPLOAD_DIR, unique_name)
+    file.save(save_path)
+    old_path = existing.get('ip_application_attachment')
+    if old_path:
+        old_full = os.path.join(UPLOAD_DIR, old_path)
+        if os.path.isfile(old_full):
+            try:
+                os.remove(old_full)
+            except OSError:
+                pass
+    db.set_ip_application_attachment(ip_id, unique_name, file.filename)
+    return resp({
+        'ip_application_attachment': unique_name,
+        'ip_application_attachment_name': file.filename,
+        'summary': db.get_ip_period_summary(existing['project_id']),
+    })
+
+
+@app.route('/api/interim-payments/<int:ip_id>/ip-application-attachment', methods=['DELETE'])
+def delete_ip_application_attachment(ip_id):
+    existing = db.get_interim_payment(ip_id)
+    if not existing:
+        return resp(error='糧期記錄不存在', status=404)
+    old_path = db.clear_ip_application_attachment(ip_id)
     if old_path:
         full = os.path.join(UPLOAD_DIR, old_path)
         if os.path.isfile(full):

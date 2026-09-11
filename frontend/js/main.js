@@ -1485,9 +1485,9 @@ const App = {
       dashboard: ['項目概覽', '項目財務總覽'],
       'iso-docs': ['ISO文件登記', 'ISO 文件上傳 · 主合約及分判招標合約附件'],
       payments: ['分判付款登記', '發票／中期糧款計算書登記'],
-      'sc-vo-reg': ['分判變更以及扣款登記', 'Sub-Con VO · 變更工程及扣款 · 模板快速新增'],
+      'sc-vo-reg': ['變更以及扣款登記', '主合約及分判 · 變更工程及扣款 · 模板快速新增'],
       'ip-period': ['糧期狀況', '地盤中期糧款手動編輯'],
-      'main-con-fac': ['最終結算', 'Main Con Final Account · 工程帳目總結算'],
+      'main-con-fac': ['主合約最終結算', 'Main Con Final Account · 工程帳目總結算'],
       'sc-fac': ['分判最終結算', 'SC Final Account · 每判項 PDF（3 頁）'],
       reports: ['財務報表', '付款統計分析'],
       projects: ['工程項目', '管理地盤工程項目 · Summary · 註冊及更新'],
@@ -1496,6 +1496,9 @@ const App = {
       'sc-contract-registry': ['分判合約編號', 'MS/C 分判工程合約編號表 · P1 PDF'],
       staff: ['項目負責人管理', 'Master List 項目負責人 · 工程項目選人'],
       settings: ['系統設定', 'OCR與系統配置'],
+      'portfolio-fac': ['N 項目結算總表', '全公司主合約及分判 FAC 狀態'],
+      'portfolio-progress': ['進行中項目', 'On Progress Projects 快照'],
+      'eng-intake': ['項目登記·會簽出表', 'NN1 匯入 · Master 比對 · Word/PDF 會簽表'],
     };
     const [title, sub] = titles[page] || ['', ''];
     document.getElementById('pageTitle').textContent = title;
@@ -1522,6 +1525,9 @@ const App = {
     else if (page === 'staff') StaffRoster.refresh();
     else if (page === 'settings') Settings.load();
     else if (page === 'project-settlement') Projects.loadSettlement();
+    else if (page === 'portfolio-fac') PortfolioFac.load();
+    else if (page === 'portfolio-progress') PortfolioProgress.load();
+    else if (page === 'eng-intake') EngIntake.load();
   },
 
   quickAddPayment() {
@@ -1565,11 +1571,99 @@ const App = {
 const Dashboard = {
   charts: {},
 
+  openPortfolioFac(kpi) {
+    if (typeof PortfolioFac === 'undefined') {
+      App.navigate('portfolio-fac');
+      return;
+    }
+    if (kpi === 'on-progress') {
+      PortfolioFac.statusFilter = 'On Progress';
+      PortfolioFac.quickFilter = '';
+    } else if (kpi === 'completed') {
+      PortfolioFac.statusFilter = 'Completed';
+      PortfolioFac.quickFilter = '';
+    } else if (kpi === 'fa-pending' || kpi === 'sc-pending' || kpi === 'dlp-soon') {
+      PortfolioFac.statusFilter = 'all';
+      PortfolioFac.quickFilter = kpi;
+    } else {
+      PortfolioFac.statusFilter = 'On Progress';
+      PortfolioFac.quickFilter = '';
+    }
+    App.navigate('portfolio-fac');
+  },
+
+  openPortfolioFacForProject() {
+    const code = App.currentProject?.project_code;
+    if (code && typeof PortfolioFac !== 'undefined') {
+      PortfolioFac.statusFilter = 'all';
+      PortfolioFac.quickFilter = '';
+      PortfolioFac.q = code;
+      const el = document.getElementById('pfSearch');
+      if (el) el.value = code;
+    }
+    App.navigate('portfolio-fac');
+  },
+
+  async loadCompanyFacStats() {
+    const set = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = v ?? '—';
+    };
+    try {
+      const s = await api('GET', '/portfolio/stats', null, { silent: true });
+      set('dashFacOnProgress', s?.on_progress ?? '—');
+      set('dashFacCompleted', s?.completed ?? '—');
+      set('dashFacFaPending', s?.client_fa_pending ?? '—');
+      set('dashFacScPending', s?.sc_fac_pending ?? '—');
+      set('dashFacDlpSoon', s?.dlp_soon ?? '—');
+    } catch (e) {
+      ['dashFacOnProgress', 'dashFacCompleted', 'dashFacFaPending', 'dashFacScPending', 'dashFacDlpSoon']
+        .forEach((id) => set(id, '—'));
+    }
+  },
+
+  async loadProjectFac(projectId, switchSeq) {
+    const card = document.getElementById('dashFacProject');
+    const body = document.getElementById('dashFacProjectBody');
+    if (!card || !body) return;
+    try {
+      const item = await api('GET', `/portfolio/by-project/${projectId}`, null, { silent: true });
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      if (!item) {
+        card.hidden = true;
+        return;
+      }
+      card.hidden = false;
+      const scPending = (item.subcontractors || []).filter(
+        (sc) => PortfolioCommon.slotHasData(sc) && (sc.fac_status || '').trim() !== 'Completed',
+      ).length;
+      const dlpChip = PortfolioCommon.dlpChipHtml(item.dlp_expiry_date);
+      const dlpHint = dlpChip
+        ? `${PortfolioCommon.dash(item.dlp_expiry_date)} ${dlpChip}`
+        : PortfolioCommon.dash(item.dlp_expiry_date);
+      body.innerHTML = `
+        <div class="dash-fac-project-grid">
+          <div><span class="pf-drawer-label">N Code</span>${PortfolioCommon.dash(item.n_code)}</div>
+          <div><span class="pf-drawer-label">項目狀態</span><span class="${PortfolioCommon.statusClass(item.project_progress_status)}">${PortfolioCommon.statusLabel(item.project_progress_status)}</span></div>
+          <div><span class="pf-drawer-label">Client FA</span><span class="${PortfolioCommon.statusClass(item.client_fac_status)}">${PortfolioCommon.clientFaLabel(item.client_fac_status)}</span></div>
+          <div><span class="pf-drawer-label">PC Cert</span>${item.pc_cert_done ? '<span class="portfolio-check">✔</span>' : '<span class="td-muted">—</span>'}</div>
+          <div><span class="pf-drawer-label">DLP 到期</span>${dlpHint}</div>
+          <div><span class="pf-drawer-label">分判待完成</span>${scPending ? `<strong>${scPending}</strong> 判` : '<span class="td-muted">—</span>'}</div>
+          <div><span class="pf-drawer-label">Retention</span>${item.retention_to_release != null ? fmt(item.retention_to_release) : '<span class="td-muted">—</span>'}</div>
+          <div><span class="pf-drawer-label">預計完工</span>${PortfolioCommon.dash(item.expected_completion_date)}</div>
+        </div>`;
+    } catch (e) {
+      card.hidden = true;
+    }
+  },
+
   async load(switchSeq) {
+    await this.loadCompanyFacStats();
     const p = App.currentProject;
     if (!p) {
       document.getElementById('dashboardNoProject').style.display = '';
       document.getElementById('dashboardContent').style.display = 'none';
+      document.getElementById('dashFacProject')?.setAttribute('hidden', '');
       return;
     }
     const projectId = p.id;
@@ -1593,6 +1687,9 @@ const Dashboard = {
     document.getElementById('dashProgress').textContent = progress !== '—' ? `${progress}%` : '—';
 
     updateDashIpTotals(summary.ip_period);
+
+    await this.loadProjectFac(projectId, switchSeq);
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
 
     // 付款登記統計
     const payments = await api('GET', `/projects/${projectId}/payments`);

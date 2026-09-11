@@ -4,9 +4,245 @@
 
 ## [未發布]
 
-`APP_VERSION`: `v2-20260828-baseline` · 分支 `v2/portfolio`
+`APP_VERSION`: `v2-20260911-sc-fac-p2-gap` · 分支 `v2/portfolio`
+
+### 變更
+- **分判最終結算 PDF**：P2 結算表與三段聲明之間加約 2–3 行間距
+
+`APP_VERSION`: `v2-20260911-sc-fac-p2-full` · 分支 `v2/portfolio`
+
+### 變更
+- **分判最終結算 PDF**：P2 重複 P1 工程帳目總結算內容，再接 QS 三段聲明 + 附錄 I 同款雙簽；附錄 I/II 保留
+
+`APP_VERSION`: `v2-20260911-sc-fac-p2-decl` · 分支 `v2/portfolio`
+
+### 變更
+- **分判最終結算 PDF**：工程帳目總結算新增 P2（QS 三段聲明 + 附錄 I 同款美博／分判商雙簽）；附錄 I/II 保留
+
+`APP_VERSION`: `v2-20260911-mcf-labels` · 分支 `v2/portfolio`
+
+### 變更
+- **主合約最終結算**：側欄「最終結算」改名；LAD／保固證書英文標籤；新增保修期 DLP 天數及到期日；Testing & Commissioning 僅 N21 石鼓洲項目顯示
+
+`APP_VERSION`: `v2-20260911-ip-application` · 分支 `v2/portfolio`
+
+### 變更
+- **糧期狀況**：新增 IP Application、美博申請付款、申請日期三欄；新增/編輯表對齊附圖（含 IP Application 附件上傳）
+
+`APP_VERSION`: `v2-20260911-vo-reg-sc-approval` · 分支 `v2/portfolio`
+
+### 變更
+- **分判變更以及扣款登記**：保留「審批表 PDF」，另加「工程指令 PDF」欄（獨立附件欄位）
+
+`APP_VERSION`: `v2-20260911-vo-reg-main` · 分支 `v2/portfolio`
+
+### 變更
+- **變更以及扣款登記**：導航改名；新增「主合約變更以及扣款登記」區塊（工程指令 PDF、扣款 PDF）
+
+`APP_VERSION`: `v2-20260904-signoff-tpl41` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記**：移除「載入演示」；改為正式上傳 NN1 Excel 流程
+
+`APP_VERSION`: `v2-20260904-signoff-tpl40` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記·日期規則**：遞交 ≤ 截標；招標須早於兩者；招標距遞交/截標約 10 個工作天（不含週六日）提示
+- **儲存 rematch**：405 時本機 fallback；rematch 改 silent；僅 NN1 編號變更時才呼叫 API
+
+`APP_VERSION`: `v2-20260904-signoff-tpl39` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記·NN1 編號**：改可編輯；儲存後重新比對 Master 並更新項目編號
+
+`APP_VERSION`: `v2-20260904-signoff-tpl38` · 分支 `v2/portfolio`
+
+### 修正
+- **截標時間·上/下午**：移除外層 label 嵌套，點空白不再誤選「上午」
+
+`APP_VERSION`: `v2-20260904-signoff-tpl37` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記 UI**：分判報價前加「分判商名稱」；Master `subcon_company` 可自動帶入；出表寫入附件欄
+
+`APP_VERSION`: `v2-20260904-signoff-tpl36` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記 UI**：PM 補欄加 NN1 編號（顯示 Master 比對鍵）
+- **NN1 編號正規化**：`Q.0080/25` → `Q080/25`（去 Q. 前綴、合併多餘 leading zero）
+
+`APP_VERSION`: `v2-20260904-signoff-tpl35` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約年期**：出表直接讀 DOM 日期；後端阻斷 Master 開工/完工誤填
+- **項目登記 UI**：項目負責人下加開工／完工日期（Master 備用，不出會簽表）
+
+`APP_VERSION`: `v2-20260904-signoff-tpl34` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約年期**：徹底切斷 Master 開工／完工 fallback；空日期不填；清除誤存草稿
+
+`APP_VERSION`: `v2-20260903-signoff-tpl33` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約年期**：與 Master 開工／完工分欄；僅 `合約年期（起／迄）` 填入會簽表
+
+`APP_VERSION`: `v2-20260903-signoff-tpl32` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·截標時間**：選「不填」保留 `(上/下午__:__)`；選上/下午時時間填底線 run
+
+`APP_VERSION`: `v2-20260903-signoff-tpl31` · 分支 `v2/portfolio`
+
+### 修正
+- **項目登記·審批類別「其他」**：說明欄改顯示於 radio 下方，選「其他」即展開並聚焦
+
+`APP_VERSION`: `v2-20260903-signoff-tpl30` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記·截標時間**：上／下午改 radio 三選一（上午｜下午｜不填），樣式同審批類別
+
+`APP_VERSION`: `v2-20260903-signoff-tpl29` · 分支 `v2/portfolio`
+
+### 修正
+- **截標時間·上/下午**：改刪除線標示；未選則無線；可再按取消
+
+`APP_VERSION`: `v2-20260903-signoff-tpl28` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記·截標時間**：可選上/下午（橫線標示）＋12 小時制；供方名稱｜標書編號同一行
+
+`APP_VERSION`: `v2-20260903-signoff-tpl27` · 分支 `v2/portfolio`
+
+### 變更
+- **會簽出表·合約月數**：恢復 Template 置中填寫 `(共 X 月)`
+- **項目登記 UI**：PM 補欄次序改為同會簽表 Template
+
+`APP_VERSION`: `v2-20260903-signoff-tpl26` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約月數**：`(共 X月)` 月數靠右填寫，「月」前不留空格
+
+`APP_VERSION`: `v2-20260903-signoff-tpl25` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽 Template 更新**：合約年期「至」改回 12pt（日期區仍 11pt）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl24` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約年期**：日期區改 11pt；`(共 X 月)` 維持 12pt（含上次合約年期列）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl23` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約月數**：改只填 `(共 X 月)` 底線槽，不再壓縮日期區（修正 1.5 月錯位）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl22` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約月數**：小數（如 1.5）自動擴槽＋壓縮日期空格，維持 `(共 1.5 月)` 單行
+
+`APP_VERSION`: `v2-20260903-signoff-tpl21` · 分支 `v2/portfolio`
+
+### 變更
+- **項目登記·合約期**：改為數值欄（月），支援 1、5、0.5 等；會簽表「共 X 月」優先採此值
+
+`APP_VERSION`: `v2-20260903-signoff-tpl20` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽 PDF 預覽**：Word COM 改 `DispatchEx` + `ExportAsFixedFormat`，避免 fallback 簡表
+
+`APP_VERSION`: `v2-20260903-signoff-tpl19` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·截標日期及時間**：保留 Template 11pt（不再被表單統一 12pt 覆蓋）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl18` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽 Template 更新（tpl18）**：簽署列改填 cells 2–3（新版 4 欄表）；附件欄支援空 cell 直接填文字
+
+`APP_VERSION`: `v2-20260903-signoff-tpl17` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽 Template 更新**：適配新版 `投標合約會簽表Template.docx`（日期/合約年期用 font underline 空格；截標時間保留 literal `_` 線；「其他」底線欄）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl16` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·字級**：表單填寫區（部份一＋簽署列）統一 12pt（Word sz 24），修正日期欄 11pt 導致底線較幼
+
+`APP_VERSION`: `v2-20260903-signoff-tpl15` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·底線**：項目名稱底線延伸至整格（對齊上方「日」位）；合約總價 `$` 與金額同一底線段並延伸至 Template 線尾；統一 `w:u single` 粗度
+
+`APP_VERSION`: `v2-20260903-signoff-tpl14` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約年期**：年月日數字改 font underline（與遞交日期欄一致），保留 Template 字級與格位
+
+`APP_VERSION`: `v2-20260903-signoff-tpl13` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·合約年期**：改在 Template 底線欄填年月日，保留原 run 字級（不再重建段落導致 PDF 字變小）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl12` · 分支 `v2/portfolio`
+
+### 改善
+- **會簽出表·編輯**：右欄加「儲存／取消」、未儲存狀態提示；換項目前確認捨棄；本機 localStorage 保留各項目草稿
+
+`APP_VERSION`: `v2-20260903-signoff-tpl11` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·審批「其他」**：「其他」與說明之間加兩空格；說明文字用底線 run 填寫（與 Word 底線欄一致）
+
+`APP_VERSION`: `v2-20260903-signoff-tpl10` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·審批類別**：方格改 Unicode ☑/☐（Wingdings 經 Word→PDF 勾選仍會反）；右欄編輯自動同步至項目；payload 雙路徑帶 `approval_category`
+
+`APP_VERSION`: `v2-20260903-signoff-tpl9` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表·審批類別**：修正 Wingdings 方格 run 的 `rFonts` 被覆寫導致 PDF 預覽勾選反了（選合約卻見兩項已勾）；改為只替換 `w:sym`、保留 Template 標楷體 rPr
+
+`APP_VERSION`: `v2-20260903-signoff-tpl2` · 分支 `v2/portfolio`
+
+### 改善
+- **會簽出表**：改用統一 Template 填欄（保留底線 run）；審批類別 tick；頁首 LOGO 換 `assets/mepork_logo`；先預覽 PDF 再下載
+
+### 改善
+- **會簽出表**：改為統一使用 `Ref/投標合約會簽表Template.docx` 空白模板填欄（不再逐項目 docx）
+
+### 改善
+- **會簽出表**：Word 改為保留模板 run 格式替換（版式不變）；PDF 本機經 Word 轉換（與 docx 一致）；右欄全部會簽內容可編輯
 
 ### 新增
+- **項目登記·會簽出表（工程部 MVP）**：NN1 Excel 匯入、Master List 比對、PM 可填日期（可留空）、一鍵下載 Word（Ref 模板套印）及 PDF
+- **API**：`GET /api/eng/intake/demo`、`POST /api/eng/intake/preview`、`POST /api/eng/signoff/generate`、`GET /api/eng/signoff/template`
+
+### 改善
+- **N 項目結算總表**：頂欄改兩行排版（篩選／快捷 vs 顯示／匯入）；Client 欄修正文字重疊；分判矩陣改下拉選系統分判；修正 Excel 匯入分判名稱點下拉後消失
+
+### 改善
+- **N 項目結算總表 DLP 提示**：改為整列淡色底（已過期／90 天內）+ DLP 到期欄 chip；移除每格紅／黃豎線；表上方加圖例
+
+### 新增
+- **全公司總表 P4**：「從系統同步」回填 PC/Defect Cert（Main FAC 附件）、Retention、空白 DLP／預計完工、空槽分判名稱；保留 Client FA／分判 FAC 手填狀態
+- **Dashboard FAC KPI**：全公司快照（進行中、已完成、Client FA 待辦、分判待簽、DLP 90 天內）點擊跳 N 項目總表；本項目 FAC 摘要卡
+- **API**：`GET /api/portfolio/stats`、`GET /api/portfolio/by-project/<id>`
+
+### 新增
+- **全公司總表 P3**：N 項目結算總表分判 FAC 矩陣（15 槽 inline 編輯、🔗 分判 FAC）；列點擊 drawer；`PUT /api/portfolio/projects/<id>/sc-status`
+
+### 改善
+- **N 項目結算總表**：預設精簡 11 欄（完整 19 欄／自選欄位）；快捷篩選 Client FA 待辦、DLP 90 天內、分判待簽；描述兩行截斷；DLP 將到期／已過期列標示
+
+### 新增
+- **全公司總表 P2**：N 項目結算總表／進度表 Excel 匯入（預覽後 upsert，未配對可建 placeholder）與匯出（FA 49 欄 r2 順序）；FA 左欄 DLP／PC Cert／Defect Cert 可編
+- **全公司總表 P1**：`portfolio_projects` / `portfolio_sc_fac_status` / `portfolio_imports`；側欄「進行中項目」11 欄 +「N 項目結算總表」左欄；從既有 `projects` 自動補列；預計完工／Remark／狀態可編
 - **V2 並行環境**：獨立 worktree `OSsysCU-v2`、本機 `:5001` + `_data/`、Topbar 試用 badge、`DEPLOYMENT_TIER`
 - 文件：`docs/V2 Parallel Environment.md`、本機腳本 `scripts/run_local_v2.ps1`
 

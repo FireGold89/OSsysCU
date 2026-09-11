@@ -27,7 +27,7 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=20260827-ux1">
+    <link rel="stylesheet" href="css/style.css?v=20260911-sc-tier">
   <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -92,20 +92,33 @@
         <span class="nav-icon">💰</span><span class="nav-label">分判付款登記</span>
         <span class="nav-badge" id="payBadge">0</span>
       </div>
-      <div class="nav-item" data-page="sc-vo-reg" onclick="App.navigate('sc-vo-reg')" title="分判變更以及扣款登記">
-        <span class="nav-icon">📋</span><span class="nav-label">分判變更以及扣款登記</span>
+      <div class="nav-item" data-page="sc-vo-reg" onclick="App.navigate('sc-vo-reg')" title="變更以及扣款登記">
+        <span class="nav-icon">📋</span><span class="nav-label">變更以及扣款登記</span>
       </div>
       <div class="nav-item" data-page="ip-period" onclick="App.navigate('ip-period')" title="糧期狀況">
         <span class="nav-icon">🏗️</span><span class="nav-label">糧期狀況</span>
       </div>
-      <div class="nav-item" data-page="main-con-fac" onclick="App.navigate('main-con-fac')" title="最終結算">
-        <span class="nav-icon">📑</span><span class="nav-label">最終結算</span>
+      <div class="nav-item" data-page="main-con-fac" onclick="App.navigate('main-con-fac')" title="主合約最終結算">
+        <span class="nav-icon">📑</span><span class="nav-label">主合約最終結算</span>
       </div>
       <div class="nav-item" data-page="sc-fac" onclick="App.navigate('sc-fac')" title="分判最終結算">
         <span class="nav-icon">📋</span><span class="nav-label">分判最終結算</span>
       </div>
       <div class="nav-item" data-page="reports" onclick="App.navigate('reports')" title="財務報表">
         <span class="nav-icon">📈</span><span class="nav-label">財務報表</span>
+      </div>
+
+      <div class="nav-section-title sidebar-expand-only" style="margin-top:12px">全公司總表</div>
+      <div class="nav-item" data-page="portfolio-fac" onclick="App.navigate('portfolio-fac')" title="N 項目結算總表">
+        <span class="nav-icon">📋</span><span class="nav-label">N 項目結算總表</span>
+      </div>
+      <div class="nav-item" data-page="portfolio-progress" onclick="App.navigate('portfolio-progress')" title="進行中項目">
+        <span class="nav-icon">🚧</span><span class="nav-label">進行中項目</span>
+      </div>
+
+      <div class="nav-section-title sidebar-expand-only" style="margin-top:12px">工程部</div>
+      <div class="nav-item" data-page="eng-intake" onclick="App.navigate('eng-intake')" title="項目登記·會簽出表">
+        <span class="nav-icon">📝</span><span class="nav-label">項目登記·會簽出表</span>
       </div>
 
       <div class="nav-section-title sidebar-expand-only" style="margin-top:12px">管理</div>
@@ -187,6 +200,31 @@
 
       <!-- ─── 項目概覽 ────────────────────────── -->
       <div class="page active" id="page-dashboard">
+        <div class="dash-fac-company-wrap" id="dashFacCompanyWrap">
+          <div class="stats-block dash-fac-company">
+            <div class="stats-block-title dash-fac-company-head">
+              <span>📋 全公司 FAC 快照</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Dashboard.openPortfolioFac()">開啟總表</button>
+            </div>
+            <div class="stats-grid" id="dashFacStats">
+              <div class="stat-card stat-card-click" data-kpi="on-progress" onclick="Dashboard.openPortfolioFac('on-progress')" title="進行中項目">
+                <div class="stat-label">進行中</div><div class="stat-value" id="dashFacOnProgress">—</div>
+              </div>
+              <div class="stat-card success stat-card-click" data-kpi="completed" onclick="Dashboard.openPortfolioFac('completed')" title="已完成項目">
+                <div class="stat-label">已完成</div><div class="stat-value" id="dashFacCompleted">—</div>
+              </div>
+              <div class="stat-card warning stat-card-click" data-kpi="fa-pending" onclick="Dashboard.openPortfolioFac('fa-pending')" title="Client FA 未完成">
+                <div class="stat-label">Client FA 待辦</div><div class="stat-value" id="dashFacFaPending">—</div>
+              </div>
+              <div class="stat-card info stat-card-click" data-kpi="sc-pending" onclick="Dashboard.openPortfolioFac('sc-pending')" title="分判 FAC 待簽">
+                <div class="stat-label">分判待簽</div><div class="stat-value" id="dashFacScPending">—</div>
+              </div>
+              <div class="stat-card danger stat-card-click" data-kpi="dlp-soon" onclick="Dashboard.openPortfolioFac('dlp-soon')" title="DLP 90 天內到期（含已過期）">
+                <div class="stat-label">DLP 90 天內</div><div class="stat-value" id="dashFacDlpSoon">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div id="dashboardNoProject" class="empty-state" style="display:none">
           <div class="empty-icon">📁</div>
           <div class="empty-title">請先選擇項目</div>
@@ -228,6 +266,16 @@
                 <div class="dash-hero-meta-label">狀態</div>
                 <div class="dash-hero-meta-value" id="dashProjStatusMeta">—</div>
               </div>
+            </div>
+          </div>
+
+          <div class="card dash-fac-project" id="dashFacProject" hidden>
+            <div class="card-header">
+              <div class="card-title">📋 本項目 FAC</div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Dashboard.openPortfolioFacForProject()">N 項目總表</button>
+            </div>
+            <div class="card-body dash-fac-project-body" id="dashFacProjectBody">
+              <div class="empty-state" style="padding:20px">載入中…</div>
             </div>
           </div>
 
@@ -747,8 +795,56 @@
         </div>
       </div>
 
-      <!-- ─── 分判變更以及扣款登記 ───────────────────────── -->
+      <!-- ─── 變更以及扣款登記 ───────────────────────── -->
       <div class="page" id="page-sc-vo-reg">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div class="card-title">📑 主合約變更以及扣款登記
+              <span class="badge badge-muted" id="mvrCount">0 條</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary btn-sm" onclick="ScVoReg.openAdd('main')">➕ 新增主合約登記</button>
+              <button class="btn btn-secondary btn-sm" onclick="ScVoReg.exportCsv('main')">📤 匯出 CSV</button>
+            </div>
+          </div>
+          <div class="toolbar" style="padding:0 16px 12px;border:none">
+            <div class="search-wrap">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="mvrSearch" placeholder="搜尋 VO/CC 編號、內容…" oninput="ScVoReg.searchMain()">
+            </div>
+            <select class="form-input" id="mvrFilterType" style="width:auto;min-width:140px" onchange="ScVoReg.filterMainByType()">
+              <option value="">全部類型</option>
+              <option value="vo">變更工程</option>
+              <option value="deduction">扣款</option>
+            </select>
+          </div>
+          <div class="table-wrap svr-matrix-wrap table-scroll-y" style="border:none;border-radius:0">
+            <table class="svr-matrix-table">
+              <thead>
+                <tr>
+                  <th rowspan="2">主合約</th>
+                  <th rowspan="2">公司名稱</th>
+                  <th colspan="4" class="svr-th-vo">變更工程</th>
+                  <th colspan="4" class="svr-th-ded">扣款</th>
+                  <th rowspan="2">操作</th>
+                </tr>
+                <tr>
+                  <th class="svr-th-vo">變更工程編號</th>
+                  <th class="svr-th-vo">變更內容</th>
+                  <th class="svr-th-vo th-num">變更金額</th>
+                  <th class="svr-th-vo">工程指令 PDF</th>
+                  <th class="svr-th-ded">扣款編號</th>
+                  <th class="svr-th-ded">扣款內容</th>
+                  <th class="svr-th-ded th-num">扣款金額</th>
+                  <th class="svr-th-ded">扣款 PDF</th>
+                </tr>
+              </thead>
+              <tbody id="mvrTableBody">
+                <tr><td colspan="11"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
         <div id="svrQuickAdd" class="sv-quick-add" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
         <div class="toolbar">
           <div class="search-wrap">
@@ -763,16 +859,16 @@
             <option value="vo">變更工程</option>
             <option value="deduction">扣款</option>
           </select>
-          <button class="btn btn-primary" onclick="ScVoReg.openAdd()">➕ 新增變更登記</button>
+          <button class="btn btn-primary" onclick="ScVoReg.openAdd('subcontractor')">➕ 新增分判登記</button>
           <button class="btn btn-secondary" onclick="ScVoReg.openTplManager()">⚙️ 管理範本</button>
-          <button class="btn btn-secondary" onclick="ScVoReg.exportCsv()">📤 匯出 CSV</button>
+          <button class="btn btn-secondary" onclick="ScVoReg.exportCsv('subcontractor')">📤 匯出 CSV</button>
         </div>
         <div class="card" style="margin-bottom:0">
           <div class="card-header">
             <div class="card-title">📋 分判變更以及扣款登記
               <span class="badge badge-muted" id="svrCount">0 條</span>
             </div>
-            <div style="font-size:11px;color:var(--text-muted)">Sub-Con VO · 變更工程及扣款 · 模板快速新增 · 中期糧款多選套用</div>
+            <div style="font-size:11px;color:var(--text-muted)">分判 VO / 扣款 · 模板快速新增 · 中期糧款多選套用</div>
           </div>
           <div class="table-wrap svr-matrix-wrap table-scroll-y" style="border:none;border-radius:0">
             <table class="svr-matrix-table">
@@ -780,7 +876,7 @@
                 <tr>
                   <th rowspan="2">判項編號</th>
                   <th rowspan="2">公司名稱</th>
-                  <th colspan="4" class="svr-th-vo">變更工程</th>
+                  <th colspan="5" class="svr-th-vo">變更工程</th>
                   <th colspan="3" class="svr-th-ded">扣款</th>
                   <th rowspan="2">糧款套用</th>
                   <th rowspan="2">操作</th>
@@ -790,13 +886,14 @@
                   <th class="svr-th-vo">變更內容</th>
                   <th class="svr-th-vo th-num">變更金額</th>
                   <th class="svr-th-vo">審批表 PDF</th>
+                  <th class="svr-th-vo">工程指令 PDF</th>
                   <th class="svr-th-ded">扣款編號</th>
                   <th class="svr-th-ded">扣款內容</th>
                   <th class="svr-th-ded th-num">扣款金額</th>
                 </tr>
               </thead>
               <tbody id="svrTableBody">
-                <tr><td colspan="11"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+                <tr><td colspan="12"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
               </tbody>
             </table>
           </div>
@@ -960,6 +1057,222 @@
           </div>
           <div class="card-body" id="settleBody">
             <div class="empty-state" style="padding:48px">請從工程項目選擇「註冊及更新」</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── N 項目結算總表 ──────────────────────── -->
+      <div class="page" id="page-portfolio-fac">
+        <div class="toolbar portfolio-toolbar pf-toolbar">
+          <div class="pf-toolbar-main">
+            <div class="portfolio-tabs" role="tablist">
+              <button type="button" class="portfolio-tab active" data-status="On Progress" onclick="PortfolioFac.setStatus('On Progress')">進行中</button>
+              <button type="button" class="portfolio-tab" data-status="Completed" onclick="PortfolioFac.setStatus('Completed')">已完成</button>
+              <button type="button" class="portfolio-tab" data-status="all" onclick="PortfolioFac.setStatus('all')">全部</button>
+            </div>
+            <select class="form-input master-filter pf-toolbar-pm" id="pfPmFilter" onchange="PortfolioFac.load()">
+              <option value="">全部 PM</option>
+            </select>
+            <input type="text" class="form-input master-search pf-toolbar-search" id="pfSearch" placeholder="搜尋 Project / N Code / 業主…" onkeydown="if(event.key==='Enter')PortfolioFac.load()">
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioFac.load()">搜尋</button>
+            <div class="portfolio-quick" role="group" aria-label="快捷篩選">
+              <button type="button" class="portfolio-chip-btn" data-quick="fa-pending" onclick="PortfolioFac.setQuick('fa-pending')">Client FA 待辦</button>
+              <button type="button" class="portfolio-chip-btn" data-quick="dlp-soon" onclick="PortfolioFac.setQuick('dlp-soon')">DLP 90天內</button>
+              <button type="button" class="portfolio-chip-btn" data-quick="sc-pending" onclick="PortfolioFac.setQuick('sc-pending')">分判待簽</button>
+            </div>
+          </div>
+          <div class="pf-toolbar-actions">
+            <span class="form-hint pf-toolbar-import-hint" id="pfLastImport">尚未匯入 Excel</span>
+            <div class="portfolio-tabs pf-toolbar-view" role="group" aria-label="顯示欄位">
+              <button type="button" class="portfolio-tab active" id="pfDensityCompact" onclick="PortfolioFac.setDensity('compact')">精簡</button>
+              <button type="button" class="portfolio-tab" id="pfDensityFull" onclick="PortfolioFac.setDensity('full')">完整 19 欄</button>
+              <button type="button" class="portfolio-tab" id="pfMatrixToggle" onclick="PortfolioFac.toggleMatrix()">分判矩陣</button>
+            </div>
+            <div class="col-picker-wrap" id="pfColPickerWrap">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="PortfolioFac.toggleColPicker(event)">⚙️ 欄位</button>
+              <div class="col-picker-panel" id="pfColPickerPanel" hidden></div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioCommon.pickImport('fa')">📤 匯入 Excel</button>
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioCommon.downloadExport('/portfolio/export/fa-list', 'N項目結算總表.xlsx')">📥 匯出 Excel</button>
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioFac.syncFromProjects()" title="補列、DLP／Retention 衍生欄、空槽分判名稱">🔄 從系統同步</button>
+          </div>
+        </div>
+        <div class="stats-grid" id="pfStats">
+          <div class="stat-card stat-card-click" data-kpi="on-progress" onclick="PortfolioFac.setStatus('On Progress')" title="只看進行中項目">
+            <div class="stat-label">進行中</div><div class="stat-value" id="pfStatOnProgress">—</div>
+          </div>
+          <div class="stat-card success stat-card-click" data-kpi="completed" onclick="PortfolioFac.setStatus('Completed')" title="只看已完成項目">
+            <div class="stat-label">已完成</div><div class="stat-value" id="pfStatCompleted">—</div>
+          </div>
+          <div class="stat-card warning stat-card-click" data-kpi="fa-pending" onclick="PortfolioFac.setQuick('fa-pending')" title="Client FA 未完成">
+            <div class="stat-label">Client FA 待辦</div><div class="stat-value" id="pfStatFaPending">—</div>
+          </div>
+          <div class="stat-card stat-card-click" data-kpi="sc-pending" onclick="PortfolioFac.setQuick('sc-pending')" title="分判 FAC 未完成">
+            <div class="stat-label">分判待簽</div><div class="stat-value" id="pfStatScPending">—</div>
+          </div>
+        </div>
+        <p class="pf-dlp-legend" aria-hidden="false">
+          <span class="pf-legend-item"><span class="pf-legend-swatch pf-legend-overdue"></span>整列淡紅底 · DLP 已過期</span>
+          <span class="pf-legend-item"><span class="pf-legend-swatch pf-legend-soon"></span>整列淡黃底 · DLP 90 天內到期</span>
+          <span class="pf-legend-item">DLP 到期欄顯示天數 chip</span>
+          <span class="pf-legend-item"><span class="pf-legend-swatch pf-legend-status-done"></span>已完成</span>
+          <span class="pf-legend-item"><span class="pf-legend-swatch pf-legend-status-progress"></span>進行中</span>
+          <span class="pf-legend-item"><span class="pf-legend-swatch pf-legend-status-pending"></span>待簽</span>
+          <span class="pf-legend-item">判1…判15 下拉選系統分判（🔄 從系統同步可自動填）</span>
+        </p>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📋 N 項目結算總表</div>
+            <div class="card-sub-wrap">
+              <span class="pf-matrix-hint" id="pfMatrixHint" hidden>分判矩陣</span>
+              <div class="card-sub" id="pfListCount">—</div>
+            </div>
+          </div>
+          <div class="table-wrap portfolio-table-wrap">
+            <table class="portfolio-table portfolio-fac-table is-compact">
+              <thead>
+                <tr id="pfTableHeadRow">
+                  <th class="portfolio-sticky pf-sticky-0" data-col="n_code">N Code</th>
+                  <th class="portfolio-sticky pf-sticky-1" data-col="project_code">Project Code</th>
+                  <th class="portfolio-sticky pf-sticky-2" data-col="description">項目描述</th>
+                  <th data-col="pm">PM</th>
+                  <th data-col="commencement_date">開工</th>
+                  <th data-col="contract_completion_date">合約完工</th>
+                  <th data-col="pc_date">PC Date</th>
+                  <th data-col="pc_cert_done">PC Cert</th>
+                  <th data-col="dlp_commencement_date">DLP 開始</th>
+                  <th data-col="dlp_days">DLP (日)</th>
+                  <th data-col="dlp_expiry_date">DLP 到期</th>
+                  <th data-col="retention_to_release">Retention</th>
+                  <th data-col="defect_cert_done">Defect Cert</th>
+                  <th data-col="expected_completion_date">預計完工</th>
+                  <th data-col="portfolio_remark">Remark</th>
+                  <th data-col="contract_sum">Contract Sum</th>
+                  <th data-col="project_progress_status">項目狀態</th>
+                  <th data-col="client">Client</th>
+                  <th data-col="client_fac_status">Client FA</th>
+                </tr>
+              </thead>
+              <tbody id="pfTableBody">
+                <tr><td colspan="19"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 進行中項目 ──────────────────────── -->
+      <div class="page" id="page-portfolio-progress">
+        <div class="toolbar portfolio-toolbar">
+          <div class="toolbar-left">
+            <div class="portfolio-tabs" role="tablist">
+              <button type="button" class="portfolio-tab active" data-status="On Progress" onclick="PortfolioProgress.setStatus('On Progress')">進行中</button>
+              <button type="button" class="portfolio-tab" data-status="Completed" onclick="PortfolioProgress.setStatus('Completed')">已完成</button>
+              <button type="button" class="portfolio-tab" data-status="all" onclick="PortfolioProgress.setStatus('all')">全部</button>
+            </div>
+            <select class="form-input master-filter" id="ppPmFilter" onchange="PortfolioProgress.load()">
+              <option value="">全部 PM</option>
+            </select>
+            <input type="text" class="form-input master-search" id="ppSearch" placeholder="搜尋 Project / 業主…" onkeydown="if(event.key==='Enter')PortfolioProgress.load()">
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioProgress.load()">搜尋</button>
+          </div>
+          <div class="toolbar-right">
+            <span class="form-hint" id="ppLastImport">尚未匯入 Excel</span>
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioCommon.pickImport('progress')">📤 匯入 Excel</button>
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioCommon.downloadExport('/portfolio/export/progress-list', '進行中項目.xlsx')">📥 匯出 Excel</button>
+            <button class="btn btn-secondary btn-sm" onclick="PortfolioProgress.syncFromProjects()">🔄 從系統同步</button>
+          </div>
+        </div>
+        <div class="stats-grid" id="ppStats">
+          <div class="stat-card"><div class="stat-label">進行中</div><div class="stat-value" id="ppStatOnProgress">—</div></div>
+          <div class="stat-card success"><div class="stat-label">已完成</div><div class="stat-value" id="ppStatCompleted">—</div></div>
+          <div class="stat-card"><div class="stat-label">項目總數</div><div class="stat-value" id="ppStatTotal">—</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🚧 進行中項目</div>
+            <div class="card-sub" id="ppListCount">—</div>
+          </div>
+          <div class="table-wrap portfolio-table-wrap">
+            <table class="portfolio-table portfolio-progress-table">
+              <thead>
+                <tr>
+                  <th class="portfolio-sticky pp-sticky-0">Project Code</th>
+                  <th class="portfolio-sticky pp-sticky-1">描述</th>
+                  <th>Client</th>
+                  <th>PM</th>
+                  <th>開工</th>
+                  <th>完工</th>
+                  <th>PC</th>
+                  <th>預計完工</th>
+                  <th>Remark</th>
+                  <th>Contract Sum</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody id="ppTableBody">
+                <tr><td colspan="11"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 項目登記 · 會簽出表 ──────────────────────── -->
+      <div class="page" id="page-eng-intake">
+        <div class="toolbar ei-toolbar">
+          <div class="toolbar-left" style="flex-wrap:wrap;gap:8px;align-items:center">
+            <input type="file" id="eiFileInput" accept=".xlsx,.xls" hidden>
+            <button type="button" class="btn btn-primary btn-sm" onclick="EngIntake.pickFile()">📤 上傳 NN1 Excel</button>
+            <label class="form-hint" style="display:flex;align-items:center;gap:6px;margin:0">
+              負責人後綴
+              <select class="form-input" id="eiPersonCode" style="width:88px" title="上傳時用於組 Master 編號後綴（例：/dc）">
+                <option value="dc">dc</option>
+                <option value="jy">jy</option>
+                <option value="kp">kp</option>
+                <option value="kl">kl</option>
+                <option value="jc">jc</option>
+                <option value="jw">jw</option>
+              </select>
+            </label>
+            <span class="form-hint" id="eiSourceFile">—</span>
+          </div>
+        </div>
+        <div class="stats-grid" id="eiStats"></div>
+        <div class="ei-layout">
+          <div class="card ei-list-card">
+            <div class="card-header">
+              <div class="card-title">NN1 項目清單</div>
+              <div class="card-sub">比對 Master List · 點列選取</div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table ei-table">
+                <thead>
+                  <tr>
+                    <th>NN1 編號</th>
+                    <th>Master 編號</th>
+                    <th>工程名稱</th>
+                    <th class="text-right">金額</th>
+                    <th>開工</th>
+                    <th>完工</th>
+                    <th>Master</th>
+                    <th>缺欄</th>
+                  </tr>
+                </thead>
+                <tbody id="eiTableBody">
+                  <tr><td colspan="8"><div class="empty-state" style="padding:32px">請上傳 NN1 Excel 開始</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card ei-editor-card">
+            <div class="card-header">
+              <div class="card-title">PM 補欄 · 一鍵出表</div>
+              <div class="card-sub">全部欄位可編輯 · 日期可留空</div>
+            </div>
+            <div id="eiEditor" class="ei-editor-body">
+              <p class="text-muted">選擇左側項目以編輯 PM 欄位並出表</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1502,7 +1815,7 @@
   </div>
 </div>
 
-<!-- ─── 模態框：分判變更以及扣款登記 ─────────────────────── -->
+<!-- ─── 模態框：變更以及扣款登記 ─────────────────────── -->
 <div class="modal-backdrop" id="svrModal">
   <div class="modal modal-lg">
     <div class="modal-header">
@@ -1512,6 +1825,7 @@
     <div class="modal-body">
       <input type="hidden" id="svrModalId">
       <input type="hidden" id="svrLineCode">
+      <input type="hidden" id="svrScope" value="subcontractor">
       <div class="form-group">
         <label class="form-label">項目範本 <span style="color:var(--text-muted);font-weight:400">快速填寫</span></label>
         <select class="form-input" id="svrTemplate" onchange="ScVoReg.onTemplatePick()">
@@ -1552,7 +1866,7 @@
           <label class="form-label">報價單號碼</label>
           <input type="text" class="form-input" id="svrQuotNo" placeholder="Q-001">
         </div>
-        <div class="form-group">
+        <div class="form-group" id="svrScNoGroup">
           <label class="form-label">判項編號 <span class="required">*</span></label>
           <select class="form-input" id="svrScNo" onchange="ScVoReg.onScChange(this.value)">
             <option value="">— 選擇判項編號 —</option>
@@ -1606,22 +1920,32 @@
             <input type="text" class="form-input" id="svrOaNo">
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="svrMainVoGroup">
           <label class="form-label">主合約變更編號</label>
           <input type="text" class="form-input" id="svrMainContractVoNo" placeholder="MC-VO-001">
         </div>
         <div class="form-row">
-          <div class="form-group">
+          <div class="form-group" id="svrApprovalGroup">
             <label class="form-label">合約價格變更審批表</label>
             <input type="file" class="form-input" id="svrApprovalFile" accept=".pdf,.png,.jpg,.jpeg">
             <div id="svrApprovalExisting" class="form-hint" style="display:none"></div>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="svrEngOrderGroup">
+            <label class="form-label">工程指令上傳</label>
+            <input type="file" class="form-input" id="svrEngOrderFile" accept=".pdf,.png,.jpg,.jpeg">
+            <div id="svrEngOrderExisting" class="form-hint" style="display:none"></div>
+          </div>
+          <div class="form-group" id="svrQuotationGroup">
             <label class="form-label">報價單上傳</label>
             <input type="file" class="form-input" id="svrQuotationFile" accept=".pdf,.png,.jpg,.jpeg">
             <div id="svrQuotationExisting" class="form-hint" style="display:none"></div>
           </div>
         </div>
+      </div>
+      <div class="form-group" id="svrDeductionFileGroup" style="display:none">
+        <label class="form-label">扣款 PDF 附件</label>
+        <input type="file" class="form-input" id="svrDeductionFile" accept=".pdf,.png,.jpg,.jpeg">
+        <div id="svrDeductionExisting" class="form-hint" style="display:none"></div>
       </div>
       <div class="form-group">
         <label class="form-label">備注</label>
@@ -2263,7 +2587,7 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group ip-col-frozen-hidden">
+        <div class="form-group">
           <label class="form-label">申請日期</label>
           <input type="date" class="form-input" id="ipAppliedDate">
         </div>
@@ -2273,8 +2597,8 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group ip-col-frozen-hidden">
-          <label class="form-label">申請金額</label>
+        <div class="form-group">
+          <label class="form-label">美博申請付款</label>
           <input type="number" step="0.01" class="form-input" id="ipAppAmt" placeholder="0.00">
         </div>
         <div class="form-group">
@@ -2282,15 +2606,27 @@
           <input type="number" step="0.01" class="form-input" id="ipCertAmt" placeholder="0.00">
         </div>
       </div>
-      <div class="ip-cert-section">
-        <div class="form-label" style="margin-bottom:8px">IP Cert. 附件</div>
-        <div class="ip-receipt-attach-row">
-          <input type="file" id="ipCertFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
-            onchange="IpPeriod.onIpCertFileSelected(event)">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickIpCertFile()">📄 上傳 IP Cert.</button>
-          <span class="form-hint" id="ipCertAttachHint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</span>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">IP Application 附件</label>
+          <div class="ip-receipt-attach-row">
+            <input type="file" id="ipAppFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+              onchange="IpPeriod.onIpAppFileSelected(event)">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickIpAppFile()">📄 上傳 IP Application</button>
+          </div>
+          <div id="ipAppAttachList" class="ip-receipt-attach-list"></div>
+          <div class="form-hint" id="ipAppAttachHint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</div>
         </div>
-        <div id="ipCertAttachList" class="ip-receipt-attach-list"></div>
+        <div class="form-group">
+          <label class="form-label">IP Cert. 附件</label>
+          <div class="ip-receipt-attach-row">
+            <input type="file" id="ipCertFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+              onchange="IpPeriod.onIpCertFileSelected(event)">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickIpCertFile()">📄 上傳 IP Cert.</button>
+          </div>
+          <div id="ipCertAttachList" class="ip-receipt-attach-list"></div>
+          <div class="form-hint" id="ipCertAttachHint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</div>
+        </div>
       </div>
       <div class="form-row ip-col-frozen-hidden">
         <div class="form-group">
@@ -2996,17 +3332,50 @@
   </div>
 </div>
 
+<!-- ─── N 項目結算總表 · 詳情 drawer ──────────────────────── -->
+<div class="pf-drawer-backdrop" id="pfDrawerBackdrop" hidden onclick="PortfolioFac.closeDrawer()"></div>
+<aside class="pf-drawer" id="pfDrawer" aria-hidden="true">
+  <div class="pf-drawer-header">
+    <div>
+      <div class="pf-drawer-title" id="pfDrawerTitle">—</div>
+      <div class="pf-drawer-sub" id="pfDrawerSub">—</div>
+    </div>
+    <button type="button" class="modal-close" onclick="PortfolioFac.closeDrawer()" aria-label="關閉">✕</button>
+  </div>
+  <div class="pf-drawer-body" id="pfDrawerBody">
+    <div class="empty-state" style="padding:32px">請選擇項目列</div>
+  </div>
+</aside>
+
+<!-- ─── 模態框：全公司總表 Excel 匯入 ──────────────────────── -->
+<div class="modal-backdrop" id="pfImportModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title" id="pfImportTitle">匯入 Excel</div>
+      <button class="modal-close" onclick="PortfolioCommon.closeImportModal()">✕</button>
+    </div>
+    <div class="modal-body" id="pfImportPreview">
+      <div class="empty-state" style="padding:24px">請選擇檔案</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="PortfolioCommon.closeImportModal()">取消</button>
+      <button class="btn btn-primary" onclick="PortfolioCommon.confirmImport()">確認寫入資料庫</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="pfImportFile" accept=".xlsx,.xls" style="display:none" onchange="PortfolioCommon.onImportFile(event)">
+
 <!-- Scripts -->
-<script src="js/main.js?v=20260827-vault-hold"></script>
-<script src="js/col_picker.js?v=20260813k"></script>
-<script src="js/iso_docs.js?v=20260814e"></script>
+<script src="js/main.js?v=v2-20260829-p4"></script>
+<script src="js/col_picker.js?v=v2-20260828-p3"></script>
+<script src="js/iso_docs.js?v=20260911-sc-tier"></script>
 <script src="js/payments.js?v=20260815u"></script>
-<script src="js/sc_vo_reg.js?v=20260815b"></script>
-<script src="js/main_con_fac.js?v=20260827-mcf-pdf"></script>
-<script src="js/sc_fac.js?v=20260813p"></script>
+<script src="js/sc_vo_reg.js?v=20260911-eng-upload"></script>
+<script src="js/main_con_fac.js?v=20260911-mcf-labels"></script>
+<script src="js/sc_fac.js?v=20260911-sc-fac-p2"></script>
 <script src="js/projects.js?v=20260814e"></script>
 <script src="js/hk_banks.js?v=20260805c"></script>
-<script src="js/ip_period.js?v=20260805h"></script>
+<script src="js/ip_period.js?v=20260911-ip-app"></script>
 <script src="js/ocr.js?v=20260814a"></script>
 <script src="js/reports.js?v=20260815-layout2"></script>
 <script src="js/ip_reconcile.js?v=20260805a"></script>
@@ -3014,5 +3383,8 @@
 <script src="js/master_list.js?v=20260815a"></script>
 <script src="js/sc_contract_registry.js?v=20260814c"></script>
 <script src="js/staff.js?v=20260827-staff2"></script>
+<script src="js/portfolio_progress.js?v=v2-20260831-pf-status"></script>
+<script src="js/portfolio_fac.js?v=v2-20260831-pf-status"></script>
+<script src="js/eng_intake.js?v=v2-20260904-signoff-tpl41"></script>
 </body>
 </html>

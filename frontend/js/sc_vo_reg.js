@@ -1,9 +1,13 @@
-/* ─── sc_vo_reg.js — 分判變更以及扣款登記（矩陣 + 模板快速新增） ── */
+/* ─── sc_vo_reg.js — 變更以及扣款登記（主合約 + 分判 · 矩陣 + 模板） ── */
 const ScVoReg = {
+  MAIN_SC_NO: '__MAIN__',
   data: [],
   filtered: [],
+  mainData: [],
+  mainFiltered: [],
   templates: [],
   _refManual: false,
+  _modalScope: 'subcontractor',
 
   async ensureTemplates() {
     if (this.templates.length) return;
@@ -30,8 +34,14 @@ const ScVoReg = {
     await this.ensureTemplates();
     this.renderQuickAdd();
     const scNo = document.getElementById('svrFilterSc')?.value || '';
-    let rows = await api('GET', `/projects/${p.id}/sc-vo-records${scNo ? `?sc_no=${encodeURIComponent(scNo)}` : ''}`) || [];
-    this.data = rows;
+    const scQs = scNo ? `&sc_no=${encodeURIComponent(scNo)}` : '';
+    const [mainRows, scRows] = await Promise.all([
+      api('GET', `/projects/${p.id}/sc-vo-records?scope=main`, null, { silent: true }) || [],
+      api('GET', `/projects/${p.id}/sc-vo-records?scope=subcontractor${scQs}`, null, { silent: true }) || [],
+    ]);
+    this.mainData = mainRows;
+    this.data = scRows;
+    this.applyMainFilters();
     this.applyFilters();
   },
 
@@ -95,10 +105,16 @@ const ScVoReg = {
   },
 
   quickAdd(code) {
-    this.openAdd();
+    this.openAdd('subcontractor');
     const sel = document.getElementById('svrTemplate');
     if (sel) sel.value = code;
     this._applyTemplate(code);
+  },
+
+  _mainCompanyLabel() {
+    const p = App.currentProject;
+    if (!p) return '—';
+    return p.client || p.main_contractor || p.project_name_zh || p.project_name_en || '—';
   },
 
   _scCompany(scNo) {
@@ -130,13 +146,27 @@ const ScVoReg = {
     App.navigate('payments', { openPaymentId: paymentId });
   },
 
-  _searchHaystack(r) {
+  _searchHaystack(r, isMain) {
+    const company = isMain
+      ? this._mainCompanyLabel()
+      : this._scCompany(r.sc_no);
     return [
       r.sc_no, r.ref_no, r.description, r.service_description,
       r.company_name_en, r.company_name_zh, r.invoice_no, r.quotation_no,
       r.seq_no, r.main_contract_vo_no, r.oa_ref, r.oa_no, r.remark,
-      this._scCompany(r.sc_no),
+      company,
     ].filter(Boolean).join(' ').toLowerCase();
+  },
+
+  applyMainFilters() {
+    const q = (document.getElementById('mvrSearch')?.value || '').trim().toLowerCase();
+    const type = document.getElementById('mvrFilterType')?.value || '';
+    this.mainFiltered = this.mainData.filter(r => {
+      if (type && r.record_type !== type) return false;
+      if (!q) return true;
+      return this._searchHaystack(r, true).includes(q);
+    });
+    this.renderMain();
   },
 
   applyFilters() {
@@ -150,24 +180,105 @@ const ScVoReg = {
     this.render();
   },
 
+  searchMain() { this.applyMainFilters(); },
   search() { this.applyFilters(); },
+  filterMainByType() { this.applyMainFilters(); },
   filterByType() { this.applyFilters(); },
   filterBySc() { this.load(); },
 
-  _pdfCell(r) {
-    if (r.record_type !== 'vo') return '—';
-    const path = r.approval_attachment;
+  _attachmentLink(path, name, fallbackLabel) {
     if (!path) return '—';
-    const name = escHtml(r.approval_attachment_name || '審批表');
+    const label = escHtml(name || fallbackLabel || '檔案');
+    return `<a href="${uploadUrl(path)}" target="_blank" rel="noopener" class="svr-pdf-link">📄 ${label}</a>`;
+  },
+
+  _approvalPdfCell(r) {
+    if (r.record_type !== 'vo') return '—';
+    return this._attachmentLink(r.approval_attachment, r.approval_attachment_name, '審批表');
+  },
+
+  _engOrderPdfCell(r) {
+    if (r.record_type !== 'vo') return '—';
+    const isMain = r.scope === 'main' || r.sc_no === this.MAIN_SC_NO;
+    const path = r.engineering_order_attachment || (isMain ? r.approval_attachment : null);
+    const name = r.engineering_order_attachment
+      ? r.engineering_order_attachment_name
+      : (isMain ? r.approval_attachment_name : null);
+    return this._attachmentLink(path, name, '工程指令');
+  },
+
+  _dedPdfCell(r) {
+    if (r.record_type !== 'deduction') return '—';
+    const path = r.deduction_attachment;
+    if (!path) return '—';
+    const name = escHtml(r.deduction_attachment_name || '扣款附件');
     return `<a href="${uploadUrl(path)}" target="_blank" rel="noopener" class="svr-pdf-link">📄 ${name}</a>`;
   },
 
   renderEmpty() {
+    const scEmpty = `<tr><td colspan="12"><div class="empty-state" style="padding:48px"><div class="empty-icon">📁</div><div class="empty-title">請先選擇項目</div></div></td></tr>`;
+    const mainEmpty = `<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-icon">📁</div><div class="empty-title">請先選擇項目</div></div></td></tr>`;
     const tbody = document.getElementById('svrTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:48px"><div class="empty-icon">📁</div><div class="empty-title">請先選擇項目</div></div></td></tr>`;
+    const mbody = document.getElementById('mvrTableBody');
+    if (tbody) tbody.innerHTML = scEmpty;
+    if (mbody) mbody.innerHTML = mainEmpty;
     const count = document.getElementById('svrCount');
+    const mcount = document.getElementById('mvrCount');
     if (count) count.textContent = '0 條';
+    if (mcount) mcount.textContent = '0 條';
+  },
+
+  renderMain() {
+    const tbody = document.getElementById('mvrTableBody');
+    const countEl = document.getElementById('mvrCount');
+    if (!tbody) return;
+
+    const rows = this.mainFiltered;
+    const total = rows.length;
+    const all = this.mainData.length;
+    if (countEl) {
+      countEl.textContent = total === all ? `${total} 條` : `${total} / ${all} 條`;
+    }
+
+    if (!rows.length) {
+      const msg = all ? '無符合搜尋／篩選的記錄' : '暫無主合約變更工程 / 扣款記錄';
+      const sub = all ? '請調整搜尋或篩選條件' : '按「新增主合約登記」開始登記';
+      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px"><div class="empty-icon">📝</div><div class="empty-title">${msg}</div><div class="empty-sub">${sub}</div></div></td></tr>`;
+      return;
+    }
+
+    const company = escHtml(this._mainCompanyLabel());
+    let html = '';
+    rows.forEach((r, idx) => {
+      const isVo = r.record_type === 'vo';
+      const amt = parseFloat(r.amount) || 0;
+      const voRef = isVo ? escHtml(r.ref_no || '—') : '';
+      const voDesc = isVo ? escHtml(r.description || '—') : '';
+      const voAmt = isVo ? fmt(amt) : '';
+      const dedRef = !isVo ? escHtml(r.ref_no || '—') : '';
+      const dedDesc = !isVo ? escHtml(r.description || '—') : '';
+      const dedAmt = !isVo ? fmtExpense(amt) : '';
+
+      html += '<tr>';
+      if (idx === 0) {
+        html += `<td rowspan="${rows.length}" class="svr-sc-cell td-mono">主合約</td>`;
+        html += `<td rowspan="${rows.length}" class="svr-company-cell">${company}</td>`;
+      }
+      html += `<td class="td-mono svr-vo-col">${voRef || '—'}</td>`;
+      html += `<td class="svr-vo-col svr-desc-cell" title="${voDesc}">${voDesc || '—'}</td>`;
+      html += `<td class="td-amount svr-vo-col">${voAmt || '—'}</td>`;
+      html += `<td class="svr-vo-col svr-pdf-col">${this._engOrderPdfCell(r)}</td>`;
+      html += `<td class="td-mono svr-ded-col">${dedRef || '—'}</td>`;
+      html += `<td class="svr-ded-col svr-desc-cell" title="${dedDesc}">${dedDesc || '—'}</td>`;
+      html += `<td class="td-amount svr-ded-col ${!isVo && amt < 0 ? 'negative' : ''}">${dedAmt || '—'}</td>`;
+      html += `<td class="svr-ded-col svr-pdf-col">${this._dedPdfCell(r)}</td>`;
+      html += `<td><div style="display:flex;gap:4px">
+        <button class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="ScVoReg.openEdit(${r.id})">✏️</button>
+        <button class="btn btn-icon btn-danger btn-sm" title="刪除" onclick="ScVoReg.delete(${r.id})">🗑️</button>
+      </div></td>`;
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
   },
 
   render() {
@@ -192,8 +303,8 @@ const ScVoReg = {
       const msg = all
         ? '無符合搜尋／篩選的記錄'
         : '暫無變更工程 / 扣款記錄';
-      const sub = all ? '請調整搜尋或篩選條件' : '用上方模板快速新增，或按「新增變更登記」';
-      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px"><div class="empty-icon">📝</div><div class="empty-title">${msg}</div><div class="empty-sub">${sub}</div></div></td></tr>`;
+      const sub = all ? '請調整搜尋或篩選條件' : '用上方模板快速新增，或按「新增分判登記」';
+      tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state" style="padding:40px"><div class="empty-icon">📝</div><div class="empty-title">${msg}</div><div class="empty-sub">${sub}</div></div></td></tr>`;
       return;
     }
 
@@ -221,7 +332,8 @@ const ScVoReg = {
         html += `<td class="td-mono svr-vo-col">${voRef || '—'}</td>`;
         html += `<td class="svr-vo-col svr-desc-cell" title="${voDesc}">${voDesc || '—'}</td>`;
         html += `<td class="td-amount svr-vo-col">${voAmt || '—'}</td>`;
-        html += `<td class="svr-vo-col svr-pdf-col">${this._pdfCell(r)}</td>`;
+        html += `<td class="svr-vo-col svr-pdf-col">${this._approvalPdfCell(r)}</td>`;
+        html += `<td class="svr-vo-col svr-pdf-col">${this._engOrderPdfCell(r)}</td>`;
         html += `<td class="td-mono svr-ded-col">${dedRef || '—'}</td>`;
         html += `<td class="svr-ded-col svr-desc-cell" title="${dedDesc}">${dedDesc || '—'}</td>`;
         html += `<td class="td-amount svr-ded-col ${!isVo && amt < 0 ? 'negative' : ''}">${dedAmt || '—'}</td>`;
@@ -260,16 +372,28 @@ const ScVoReg = {
     return el ? el.value : 'vo';
   },
 
+  _isMainModal() {
+    return this._modalScope === 'main';
+  },
+
   onTypeChange() {
     const isVo = this._regType() === 'vo';
+    const isMain = this._isMainModal();
     const amtLabel = document.getElementById('svrAmtLabel');
     const contentLabel = document.getElementById('svrContentLabel');
     const refLabel = document.getElementById('svrRefLabel');
     const refInput = document.getElementById('svrRefNo');
     const contentInput = document.getElementById('svrContent');
     const quotGroup = document.getElementById('svrQuotGroup');
+    const quotUploadGroup = document.getElementById('svrQuotationGroup');
+    const approvalGroup = document.getElementById('svrApprovalGroup');
+    const engOrderGroup = document.getElementById('svrEngOrderGroup');
     const authSection = document.getElementById('svrAuthSection');
     const dedHint = document.getElementById('svrDedAmtHint');
+    const dedFileGroup = document.getElementById('svrDeductionFileGroup');
+    const scNoGroup = document.getElementById('svrScNoGroup');
+    const mainVoGroup = document.getElementById('svrMainVoGroup');
+    const tplGroup = document.getElementById('svrTemplate')?.closest('.form-group');
 
     if (amtLabel) {
       amtLabel.innerHTML = isVo
@@ -280,9 +404,16 @@ const ScVoReg = {
     if (refLabel) refLabel.textContent = isVo ? '變更工程編號' : '扣款編號';
     if (refInput) refInput.placeholder = isVo ? 'VO-001' : 'CC-001';
     if (contentInput) contentInput.placeholder = isVo ? '變更描述' : '扣款原因';
-    if (quotGroup) quotGroup.style.display = isVo ? '' : 'none';
+    if (quotGroup) quotGroup.style.display = isVo && !isMain ? '' : 'none';
+    if (quotUploadGroup) quotUploadGroup.style.display = isVo && !isMain ? '' : 'none';
+    if (approvalGroup) approvalGroup.style.display = isVo && !isMain ? '' : 'none';
+    if (engOrderGroup) engOrderGroup.style.display = isVo ? '' : 'none';
     if (authSection) authSection.style.display = isVo ? '' : 'none';
     if (dedHint) dedHint.style.display = isVo ? 'none' : '';
+    if (dedFileGroup) dedFileGroup.style.display = !isVo && isMain ? '' : 'none';
+    if (scNoGroup) scNoGroup.style.display = isMain ? 'none' : '';
+    if (mainVoGroup) mainVoGroup.style.display = isMain ? 'none' : '';
+    if (tplGroup) tplGroup.style.display = isMain ? 'none' : '';
     this.suggestRefNo();
   },
 
@@ -293,7 +424,9 @@ const ScVoReg = {
   async suggestRefNo() {
     if (document.getElementById('svrModalId')?.value || this._refManual) return;
     const p = App.currentProject;
-    const scNo = document.getElementById('svrScNo')?.value;
+    const scNo = this._isMainModal()
+      ? this.MAIN_SC_NO
+      : document.getElementById('svrScNo')?.value;
     if (!p || !scNo) return;
     const t = this._regType();
     try {
@@ -327,19 +460,31 @@ const ScVoReg = {
       if (el) el.value = '';
     });
     const approval = document.getElementById('svrApprovalFile');
+    const engOrder = document.getElementById('svrEngOrderFile');
     const quotation = document.getElementById('svrQuotationFile');
+    const deduction = document.getElementById('svrDeductionFile');
     if (approval) approval.value = '';
+    if (engOrder) engOrder.value = '';
     if (quotation) quotation.value = '';
+    if (deduction) deduction.value = '';
     const lineEl = document.getElementById('svrLineCode');
     if (lineEl) lineEl.value = '';
     const tplSel = document.getElementById('svrTemplate');
     if (tplSel) tplSel.value = '';
     this._setAttachmentUi('approval', null, null);
+    this._setAttachmentUi('engineering_order', null, null);
     this._setAttachmentUi('quotation', null, null);
+    this._setAttachmentUi('deduction', null, null);
   },
 
   _setAttachmentUi(type, path, name) {
-    const box = document.getElementById(type === 'approval' ? 'svrApprovalExisting' : 'svrQuotationExisting');
+    const idMap = {
+      approval: 'svrApprovalExisting',
+      engineering_order: 'svrEngOrderExisting',
+      quotation: 'svrQuotationExisting',
+      deduction: 'svrDeductionExisting',
+    };
+    const box = document.getElementById(idMap[type]);
     if (!box) return;
     if (path) {
       box.style.display = '';
@@ -351,11 +496,13 @@ const ScVoReg = {
   },
 
   _readForm() {
-    const scNo = document.getElementById('svrScNo').value;
-    const sc = (App.scList || []).find(s => s.sc_no === scNo);
+    const isMain = this._isMainModal();
+    const scNo = isMain ? this.MAIN_SC_NO : document.getElementById('svrScNo').value;
+    const sc = isMain ? null : (App.scList || []).find(s => s.sc_no === scNo);
     const t = this._regType();
     const amount = parseFloat(document.getElementById('svrAmount').value) || 0;
     return {
+      scope: isMain ? 'main' : 'subcontractor',
       sc_no: scNo,
       sc_id: sc?.id || null,
       record_type: t,
@@ -399,13 +546,38 @@ const ScVoReg = {
     const tplSel = document.getElementById('svrTemplate');
     if (tplSel) tplSel.value = r.line_code || '';
     this._setAttachmentUi('approval', r.approval_attachment, r.approval_attachment_name);
+    this._setAttachmentUi(
+      'engineering_order',
+      r.engineering_order_attachment,
+      r.engineering_order_attachment_name,
+    );
     this._setAttachmentUi('quotation', r.quotation_attachment, r.quotation_attachment_name);
+    this._setAttachmentUi('deduction', r.deduction_attachment, r.deduction_attachment_name);
+  },
+
+  _fillMainCompanyFields() {
+    const p = App.currentProject;
+    if (!p) return;
+    const en = document.getElementById('svrCompanyEn');
+    const zh = document.getElementById('svrCompanyZh');
+    const label = p.client || p.main_contractor || '';
+    if (en && !en.value) en.value = label;
+    if (zh && !zh.value) zh.value = label;
   },
 
   async _uploadPendingFiles(recordId) {
-    const approval = document.getElementById('svrApprovalFile')?.files?.[0];
-    const quotation = document.getElementById('svrQuotationFile')?.files?.[0];
-    for (const [type, file] of [['approval', approval], ['quotation', quotation]]) {
+    const isMain = this._isMainModal();
+    const isVo = this._regType() === 'vo';
+    const approval = isVo && !isMain ? document.getElementById('svrApprovalFile')?.files?.[0] : null;
+    const engOrder = isVo ? document.getElementById('svrEngOrderFile')?.files?.[0] : null;
+    const quotation = isVo && !isMain ? document.getElementById('svrQuotationFile')?.files?.[0] : null;
+    const deduction = !isVo && isMain ? document.getElementById('svrDeductionFile')?.files?.[0] : null;
+    for (const [type, file] of [
+      ['approval', approval],
+      ['engineering_order', engOrder],
+      ['quotation', quotation],
+      ['deduction', deduction],
+    ]) {
       if (!file) continue;
       const fd = new FormData();
       fd.append('file', file);
@@ -416,9 +588,13 @@ const ScVoReg = {
     }
   },
 
-  async openAdd() {
+  async openAdd(scope) {
+    this._modalScope = scope === 'main' ? 'main' : 'subcontractor';
+    document.getElementById('svrScope').value = this._modalScope;
     await this.ensureTemplates();
-    document.getElementById('svrModalTitle').textContent = '新增變更登記';
+    document.getElementById('svrModalTitle').textContent = this._isMainModal()
+      ? '新增主合約登記'
+      : '新增分判登記';
     document.getElementById('svrModalId').value = '';
     this._refManual = false;
     this._resetFormFields();
@@ -430,21 +606,31 @@ const ScVoReg = {
       seqEl.placeholder = '儲存時自動分配';
       seqEl.readOnly = true;
     }
-    document.getElementById('svrScNo').value = document.getElementById('svrFilterSc')?.value || '';
+    if (this._isMainModal()) {
+      this._fillMainCompanyFields();
+    } else {
+      document.getElementById('svrScNo').value = document.getElementById('svrFilterSc')?.value || '';
+      if (document.getElementById('svrScNo').value) {
+        this.onScChange(document.getElementById('svrScNo').value);
+      }
+    }
     const voRadio = document.querySelector('input[name="svrRegType"][value="vo"]');
     if (voRadio) voRadio.checked = true;
-    if (document.getElementById('svrScNo').value) this.onScChange(document.getElementById('svrScNo').value);
     document.getElementById('svrModal').classList.add('open');
     this.onTypeChange();
+    if (this._isMainModal()) this.suggestRefNo();
   },
 
   async openEdit(id) {
     await this.ensureTemplates();
     const r = await api('GET', `/sc-vo-records/${id}`);
     if (!r) return;
+    const isMain = r.scope === 'main' || r.sc_no === this.MAIN_SC_NO;
+    this._modalScope = isMain ? 'main' : 'subcontractor';
+    document.getElementById('svrScope').value = this._modalScope;
     const t = r.record_type === 'deduction' ? 'deduction' : 'vo';
     this._refManual = !this._isPlaceholderRef(r.ref_no, t);
-    document.getElementById('svrModalTitle').textContent = '編輯變更登記';
+    document.getElementById('svrModalTitle').textContent = isMain ? '編輯主合約登記' : '編輯分判登記';
     document.getElementById('svrModalId').value = r.id;
     this.populateScFilter();
     this.populateTemplateSelect();
@@ -469,7 +655,7 @@ const ScVoReg = {
     const p = App.currentProject;
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     const data = this._readForm();
-    if (!data.sc_no) { toast('請選擇判項編號', 'warning'); return; }
+    if (!this._isMainModal() && !data.sc_no) { toast('請選擇判項編號', 'warning'); return; }
     if (!data.amount) {
       toast(data.record_type === 'vo' ? '請輸入變更金額' : '請輸入扣款金額', 'warning');
       return;
@@ -486,12 +672,12 @@ const ScVoReg = {
         recordId = res?.id;
         toast('已新增', 'success');
       }
-      if (recordId && data.record_type === 'vo') {
+      if (recordId) {
         await this._uploadPendingFiles(recordId);
       }
       this.closeModal();
       await this.load();
-      if (App.currentProject) {
+      if (!this._isMainModal() && App.currentProject) {
         App.scList = await api('GET', `/projects/${App.currentProject.id}/subcontractors`) || [];
         Payments.populateScFilter?.();
       }
@@ -513,19 +699,49 @@ const ScVoReg = {
     } catch (e) {}
   },
 
-  exportCsv() {
-    if (!this.filtered.length) { toast('沒有資料可匯出', 'warning'); return; }
-    const headers = [
-      '序號', '類型', '判項編號', '公司名稱(英)', '公司名稱(中)',
-      '變更工程編號', '變更內容', '變更金額', '審批表',
-      '扣款編號', '扣款內容', '扣款金額',
-      '發票日期', '發票號碼', '報價單號碼', '主合約變更編號',
-      'OA參考', 'OA編號', '工程/服務描述', '備注',
-    ];
-    const rows = this.filtered.map(r => {
+  exportCsv(scope) {
+    const isMain = scope === 'main';
+    const list = isMain ? this.mainFiltered : this.filtered;
+    if (!list.length) { toast('沒有資料可匯出', 'warning'); return; }
+    const headers = isMain
+      ? [
+        '序號', '類型', '主合約', '公司名稱(英)', '公司名稱(中)',
+        '變更工程編號', '變更內容', '變更金額', '工程指令 PDF',
+        '扣款編號', '扣款內容', '扣款金額', '扣款 PDF',
+        '發票日期', '發票號碼', '工程/服務描述', '備注',
+      ]
+      : [
+        '序號', '類型', '判項編號', '公司名稱(英)', '公司名稱(中)',
+        '變更工程編號', '變更內容', '變更金額', '審批表 PDF', '工程指令 PDF',
+        '扣款編號', '扣款內容', '扣款金額',
+        '發票日期', '發票號碼', '報價單號碼', '主合約變更編號',
+        'OA參考', 'OA編號', '工程/服務描述', '備注',
+      ];
+    const rows = list.map(r => {
       const isVo = r.record_type === 'vo';
       const amt = parseFloat(r.amount) || 0;
-      const company = this._scCompany(r.sc_no);
+      const company = isMain ? this._mainCompanyLabel() : this._scCompany(r.sc_no);
+      if (isMain) {
+        return [
+          r.seq_no,
+          isVo ? '變更工程' : '扣款',
+          '主合約',
+          r.company_name_en || company,
+          r.company_name_zh,
+          isVo ? (r.ref_no || '') : '',
+          isVo ? (r.description || '') : '',
+          isVo ? fmtNumPlain(amt) : '',
+          isVo ? (r.engineering_order_attachment_name || r.approval_attachment_name || '') : '',
+          !isVo ? (r.ref_no || '') : '',
+          !isVo ? (r.description || '') : '',
+          !isVo ? fmtNumPlain(Math.abs(amt)) : '',
+          !isVo ? (r.deduction_attachment_name || '') : '',
+          r.invoice_date,
+          r.invoice_no,
+          r.service_description,
+          r.remark,
+        ];
+      }
       return [
         r.seq_no,
         isVo ? '變更工程' : '扣款',
@@ -536,6 +752,7 @@ const ScVoReg = {
         isVo ? (r.description || '') : '',
         isVo ? fmtNumPlain(amt) : '',
         isVo ? (r.approval_attachment_name || '') : '',
+        isVo ? (r.engineering_order_attachment_name || '') : '',
         !isVo ? (r.ref_no || '') : '',
         !isVo ? (r.description || '') : '',
         !isVo ? fmtNumPlain(Math.abs(amt)) : '',
@@ -550,7 +767,8 @@ const ScVoReg = {
       ];
     });
     const code = App.currentProject?.project_code || 'project';
-    downloadCsv([headers, ...rows], `sc_vo_reg_${code}_${new Date().toISOString().slice(0, 10)}.csv`);
+    const prefix = isMain ? 'main_vo_reg' : 'sc_vo_reg';
+    downloadCsv([headers, ...rows], `${prefix}_${code}_${new Date().toISOString().slice(0, 10)}.csv`);
   },
 
   tplCatalog: [],

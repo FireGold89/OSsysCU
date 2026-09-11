@@ -22,6 +22,8 @@ MAIN_FAC_MIGRATIONS = [
     ('fac_lad_max', 'REAL'),
     ('fac_testing_commission_date', 'TEXT'),
     ('fac_make_good_date', 'TEXT'),
+    ('fac_dlp_days', 'INTEGER'),
+    ('fac_dlp_expiry_date', 'TEXT'),
     ('fac_statement_path', 'TEXT'),
     ('fac_statement_name', 'TEXT'),
     ('fac_pc_cert_path', 'TEXT'),
@@ -35,7 +37,18 @@ MAIN_FAC_WRITABLE = [
     'fac_fluctuations_g', 'fac_variations_d_override', 'fac_contra_charge_j_override',
     'fac_total_paid_i_override', 'fac_paid_as_at_date',
     'fac_lad_rate', 'fac_lad_max', 'fac_testing_commission_date', 'fac_make_good_date',
+    'fac_dlp_days', 'fac_dlp_expiry_date',
 ]
+
+
+def is_n21_stonecutters_project(project):
+    """測試和調試完成日期僅適用 N21 石鼓洲項目"""
+    if not project:
+        return False
+    code = (project.get('project_code') or '').upper()
+    name = f"{project.get('project_name_zh') or ''}{project.get('project_name_en') or ''}"
+    blob = f"{code}{name}".upper()
+    return 'N21' in blob or '石鼓洲' in name
 
 
 def _fval(v, default=0.0):
@@ -155,8 +168,11 @@ def build_main_con_fac(project, vo_totals=None, interim_items=None):
             'lad_max': project.get('fac_lad_max'),
             'pc_cert_date': project.get('pc_cert_date'),
             'dlp_commencement_date': project.get('dlp_cert_date'),
+            'fac_dlp_days': project.get('fac_dlp_days'),
+            'fac_dlp_expiry_date': project.get('fac_dlp_expiry_date'),
             'testing_commission_date': project.get('fac_testing_commission_date'),
             'make_good_date': project.get('fac_make_good_date') or project.get('dlp_cert_date'),
+            'show_testing_commission': is_n21_stonecutters_project(project),
             'mp_fac_signed_date': project.get('mp_fac_signed_date'),
             'retention_release_label': retention_release_label(project),
             'retention_release_date': project.get('retention_release_date'),

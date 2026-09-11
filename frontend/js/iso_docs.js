@@ -10,11 +10,13 @@ const IsoDocs = {
   _view: 'main',
   _mainSubTab: 'contract',
   _dragBound: false,
+  /** 暫隱藏頂部「ISO 附件完成度」卡片 */
+  _SHOW_PROGRESS: false,
 
   /** 主合約分 Tab 槽位（Sprint B） */
   MAIN_SLOT_GROUPS: {
     contract: ['main_contract_loa', 'supplemental_optional'],
-    tender: ['partner_list', 'mou', 'nda', 'mepo_tmc', 'hkmo_tmc', 'tender_signoff', 'other'],
+    tender: ['partner_list', 'mou_nda', 'mepo_tmc', 'hkmo_tmc', 'tender_signoff', 'other'],
   },
 
   MAIN_COLS: [
@@ -24,24 +26,28 @@ const IsoDocs = {
     { slot: null, label: '補充合約金額', kind: 'amount_supp' },
     { slot: 'supplemental_optional', label: '補充合約或 Optional 工程(如有)', short: '補充/Optional', optional: true },
     { slot: 'partner_list', label: '工程及管理投標合作伙伴名單確定表(如有)', short: '合作伙伴名單', optional: true },
-    { slot: 'mou', label: '合作備忘錄(如有)', short: 'MOU', optional: true },
-    { slot: 'nda', label: '保密協議(如有)', short: 'NDA', optional: true },
-    { slot: 'mepo_tmc', label: '美博招投標管理委員會會議記錄(如有)', short: '美博 TMC', optional: true },
-    { slot: 'hkmo_tmc', label: '港澳公司招投標管理委員會會議記錄(如有)', short: '港澳 TMC', optional: true },
+    { slot: 'mou_nda', label: '合作備忘錄及保密協議(如有)', short: '合作備忘錄及保密協議', optional: true },
+    { slot: 'mepo_tmc', label: '美博招投標會議記錄(如有)', short: '美博招投標會議記錄', optional: true },
+    { slot: 'hkmo_tmc', label: '港澳招投標會議記錄(如有)', short: '港澳招投標會議記錄', optional: true },
     { slot: 'tender_signoff', label: '投標會簽表', short: '投標會簽' },
     { slot: 'other', label: '其他', short: '其他', optional: true },
+  ],
+
+  /** 分判 ISO 槽位定義（實際顯示依合約金額 tier） */
+  SC_FILE_COLS: [
+    { slot: 'sc_contract', label: '分判合約', short: '分判合約' },
+    { slot: 'tender_confirm', label: '參與投標確認單', short: '參與投標確認單' },
+    { slot: 'tender_collect', label: '領取標書記錄', short: '領取標書記錄' },
+    { slot: 'integrity_declaration', label: '聲明、誠信及範圍表及道德承擔條款', short: '聲明誠信及範圍表' },
+    { slot: 'tender_opening', label: '開標記錄', short: '開標記錄' },
+    { slot: 'contract_signoff', label: '合約會簽表', short: '合約會簽' },
+    { slot: 'mepo_tmc', label: '美博招投標會議記錄', short: '美博招投標會議記錄' },
+    { slot: 'hkmo_tmc', label: '港澳招投標會議記錄', short: '港澳招投標會議記錄' },
   ],
 
   SC_COLS: [
     { slot: null, label: '分判商', kind: 'label', sticky: 0 },
     { slot: null, label: '合約金額', kind: 'amount', sticky: 1 },
-    { slot: 'tender_confirm', label: '參與投標承判確認單', short: '承判確認' },
-    { slot: 'tender_collect', label: '領取標書記錄', short: '領取標書' },
-    { slot: 'tender_opening', label: '開標記錄(如有)', short: '開標記錄', optional: true },
-    { slot: 'mepo_tmc', label: '美博招投標管理委員會會議記錄(如有)', short: '美博 TMC', optional: true },
-    { slot: 'hkmo_tmc', label: '港澳公司招投標管理委員會會議記錄(如有)', short: '港澳 TMC', optional: true },
-    { slot: 'contract_signoff', label: '合約會簽表', short: '合約會簽' },
-    { slot: 'other', label: '其他', short: '其他', optional: true },
   ],
 
   _fileSlots(cols) {
@@ -50,6 +56,60 @@ const IsoDocs = {
 
   _colBySlot(slot, cols) {
     return cols.find(c => c.slot === slot);
+  },
+
+  _scAmount(sc) {
+    const v = sc?.contract_amount ?? sc?.contract_sum ?? 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  },
+
+  /** 依合約金額決定需提交之分判 ISO 槽位 */
+  _scTierSlots(amount) {
+    const a = Number(amount) || 0;
+    if (a < 100000) return [];
+    if (a < 300000) return ['contract_signoff'];
+    if (a < 1000000) {
+      return ['sc_contract', 'tender_confirm', 'tender_collect', 'integrity_declaration', 'contract_signoff'];
+    }
+    if (a < 3000000) {
+      return ['sc_contract', 'tender_confirm', 'tender_collect', 'integrity_declaration', 'tender_opening', 'contract_signoff'];
+    }
+    return [
+      'sc_contract', 'tender_confirm', 'tender_collect', 'integrity_declaration',
+      'tender_opening', 'contract_signoff', 'mepo_tmc', 'hkmo_tmc',
+    ];
+  },
+
+  _scColsForAmount(amount) {
+    const order = this.SC_FILE_COLS;
+    const slots = new Set(this._scTierSlots(amount));
+    return order.filter(c => slots.has(c.slot));
+  },
+
+  _scColsUnion(rows) {
+    const seen = new Set();
+    const out = [];
+    (rows || []).forEach(sc => {
+      this._scTierSlots(this._scAmount(sc)).forEach(slot => {
+        if (seen.has(slot)) return;
+        seen.add(slot);
+        const col = this._colBySlot(slot, this.SC_FILE_COLS);
+        if (col) out.push(col);
+      });
+    });
+    return out;
+  },
+
+  _sortScRows(rows) {
+    return [...(rows || [])].sort((a, b) => {
+      const aa = this._scAmount(a);
+      const ba = this._scAmount(b);
+      const aHi = aa >= 300000;
+      const bHi = ba >= 300000;
+      if (aHi !== bHi) return aHi ? -1 : 1;
+      return ba - aa;
+    });
   },
 
   _mainColsForGroup(group) {
@@ -84,7 +144,6 @@ const IsoDocs = {
 
   _computeStats(b) {
     const mainSlots = this._fileSlots(this.MAIN_COLS);
-    const scSlots = this._fileSlots(this.SC_COLS);
     const mainFiles = b.main_files || {};
     const rows = b.subcontractors || [];
 
@@ -102,18 +161,17 @@ const IsoDocs = {
 
     let scDone = 0;
     let scRequiredDone = 0;
-    let scRequiredTotal = rows.length * scSlots.filter(c => !c.optional).length;
+    let scRequiredTotal = 0;
+    let scTotal = 0;
     rows.forEach(sc => {
-      const files = sc.files || {};
-      scSlots.forEach(col => {
-        const ok = this._hasFile(files[col.slot]);
-        if (ok) scDone += 1;
-        if (!col.optional && ok) scRequiredDone += 1;
-      });
+      const rs = this._scRowStats(sc);
+      scDone += rs.done;
+      scRequiredDone += rs.requiredDone;
+      scRequiredTotal += rs.requiredTotal;
+      scTotal += rs.total;
     });
 
     const mainTotal = mainSlots.length;
-    const scTotal = rows.length * scSlots.length;
     const totalDone = mainDone + scDone;
     const totalSlots = mainTotal + scTotal;
     const requiredDone = mainRequiredDone + scRequiredDone;
@@ -131,15 +189,17 @@ const IsoDocs = {
   },
 
   _scRowStats(sc) {
-    const scSlots = this._fileSlots(this.SC_COLS);
+    const scSlots = this._scColsForAmount(this._scAmount(sc));
     const files = sc.files || {};
     let done = 0;
     let requiredDone = 0;
-    let requiredTotal = scSlots.filter(c => !c.optional).length;
+    const requiredTotal = scSlots.length;
     scSlots.forEach(col => {
       const ok = this._hasFile(files[col.slot]);
-      if (ok) done += 1;
-      if (!col.optional && ok) requiredDone += 1;
+      if (ok) {
+        done += 1;
+        requiredDone += 1;
+      }
     });
     return { done, total: scSlots.length, requiredDone, requiredTotal };
   },
@@ -249,6 +309,11 @@ const IsoDocs = {
   _renderProgress(b) {
     const el = document.getElementById('isoDocsProgress');
     if (!el) return;
+    if (!this._SHOW_PROGRESS) {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
     if (b._filesPending) {
       el.hidden = true;
       return;
@@ -328,6 +393,8 @@ const IsoDocs = {
       if (savedSub === 'contract' || savedSub === 'tender') this._mainSubTab = savedSub;
     } catch (e) { /* ignore */ }
 
+    b.subcontractors = this._sortScRows(b.subcontractors);
+
     this._renderLibraryBar(b);
     this._renderProgress(b);
     this.setView(this._view);
@@ -343,7 +410,7 @@ const IsoDocs = {
     if (filterNote) {
       const n = (b.subcontractors || []).length;
       filterNote.textContent = n
-        ? `分判顯示 SC 類主判項 ${n} 項（不含 M-/O- 物料及其他、已排除項）`
+        ? `分判顯示 SC 類主判項 ${n} 項 · ≥30萬優先 · 附件依合約金額自動顯示`
         : '';
     }
 
@@ -394,7 +461,6 @@ const IsoDocs = {
     const el = document.getElementById('isoScCards');
     if (!el) return;
     const rows = b.subcontractors || [];
-    const slots = this._fileSlots(this.SC_COLS);
     const pending = b._filesPending;
 
     if (!rows.length) {
@@ -403,14 +469,14 @@ const IsoDocs = {
     }
 
     el.innerHTML = rows.map(sc => {
+      const slots = this._scColsForAmount(this._scAmount(sc));
       const rs = this._scRowStats(sc);
       const pct = rs.total ? Math.round((rs.done / rs.total) * 100) : 0;
       const badgeCls = rs.requiredDone >= rs.requiredTotal ? 'iso-row-badge iso-row-badge-ok' : 'iso-row-badge iso-row-badge-warn';
-      const badge = pending ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total}">${pct}%</span>`;
-      const tiles = slots.map(col => {
-        const file = sc.files?.[col.slot];
-        return this._slotTile('subcontractor', sc.id, col, file, pending);
-      }).join('');
+      const badge = pending || !rs.total ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total}">${pct}%</span>`;
+      const tiles = slots.length
+        ? slots.map(col => this._slotTile('subcontractor', sc.id, col, sc.files?.[col.slot], pending)).join('')
+        : '<div class="iso-sc-empty-tier">無需提交 ISO 文件（合約金額 HK$100,000 以下）</div>';
       return `<article class="iso-sc-card">
         <header class="iso-sc-card-head">
           <div><strong>${escHtml(sc.company_name_zh || '—')}</strong>
@@ -532,30 +598,46 @@ const IsoDocs = {
     if (!el) return;
     const rows = b.subcontractors || [];
     const pending = b._filesPending ? ' iso-cell-pending' : '';
-    const head = `<thead><tr>${this.SC_COLS.map(c => this._thCell(c)).join('')}</tr></thead>`;
+    const stickyCols = this.SC_COLS.filter(c => c.kind);
+    const fileCols = this._scColsUnion(rows);
+    const colCount = stickyCols.length + Math.max(fileCols.length, 1);
+    const head = `<thead><tr>${stickyCols.map(c => this._thCell(c)).join('')}${fileCols.map(c => this._thCell(c)).join('')}</tr></thead>`;
 
     if (!rows.length) {
-      el.innerHTML = `${head}<tbody><tr><td colspan="${this.SC_COLS.length}" class="td-muted" style="padding:20px;text-align:center">尚無分判資料 · 請先在「分判合約登記表」新增判項</td></tr></tbody>`;
+      el.innerHTML = `${head}<tbody><tr><td colspan="${colCount}" class="td-muted" style="padding:20px;text-align:center">尚無分判資料 · 請先在「分判合約登記表」新增判項</td></tr></tbody>`;
       return;
     }
 
     const body = rows.map(sc => {
+      const tierSlots = new Set(this._scTierSlots(this._scAmount(sc)));
       const rs = this._scRowStats(sc);
       const pct = rs.total ? Math.round((rs.done / rs.total) * 100) : 0;
       const badgeCls = rs.requiredDone >= rs.requiredTotal ? 'iso-row-badge iso-row-badge-ok' : 'iso-row-badge iso-row-badge-warn';
-      const cells = this.SC_COLS.map(col => {
+      const stickyCells = stickyCols.map(col => {
         if (col.kind === 'label') {
           const sub = sc.sc_no ? `<div class="iso-cell-sub">${escHtml(sc.sc_no)}</div>` : '';
-          const badge = b._filesPending ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total} · 必填 ${rs.requiredDone}/${rs.requiredTotal}">${pct}%</span>`;
+          const badge = b._filesPending || !rs.total ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total} · 必填 ${rs.requiredDone}/${rs.requiredTotal}">${pct}%</span>`;
           return this._tdSticky(col, `<div class="iso-label-wrap">${escHtml(sc.company_name_zh || '—')}${badge}</div>${sub}`);
         }
         if (col.kind === 'amount') {
           return this._tdSticky(col, fmt(sc.contract_amount));
         }
-        const file = sc.files?.[col.slot];
-        return `<td class="iso-file-cell${pending}${this._fileCellClass(file, col)}">${this._fileCell('subcontractor', sc.id, col.slot, file, b._filesPending, col.optional)}</td>`;
+        return '';
       }).join('');
-      return `<tr>${cells}</tr>`;
+
+      if (!tierSlots.size) {
+        const span = Math.max(fileCols.length, 1);
+        return `<tr>${stickyCells}<td colspan="${span}" class="td-muted iso-file-cell-na">無需提交 ISO 文件</td></tr>`;
+      }
+
+      const fileCells = (fileCols.length ? fileCols : this._scColsForAmount(this._scAmount(sc))).map(col => {
+        if (!tierSlots.has(col.slot)) {
+          return '<td class="iso-file-cell iso-file-cell-na">—</td>';
+        }
+        const file = sc.files?.[col.slot];
+        return `<td class="iso-file-cell${pending}${this._fileCellClass(file, col)}">${this._fileCell('subcontractor', sc.id, col.slot, file, b._filesPending, false)}</td>`;
+      }).join('');
+      return `<tr>${stickyCells}${fileCells}</tr>`;
     }).join('');
 
     el.innerHTML = `${head}<tbody>${body}</tbody>`;
