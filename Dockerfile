@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-arphic-ukai \
     fonts-noto-cjk \
     fonts-liberation \
+    fonts-dejavu-core \
     fonts-crosextra-carlito \
     fonts-crosextra-caladea \
     libreoffice-writer \

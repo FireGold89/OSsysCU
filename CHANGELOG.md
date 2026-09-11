@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260911-signoff-onepage` · 分支 `v2/portfolio`
+
+### 修正
+- **項目登記·會簽出表 PDF**：Linux 將 Wingdings 方格改 Unicode+DejaVu Sans（修正「?」）；移除 tblLayout 撐版、壓行高使維持單頁
+
 `APP_VERSION`: `v2-20260911-signoff-pdf-parity` · 分支 `v2/portfolio`
 
 ### 修正

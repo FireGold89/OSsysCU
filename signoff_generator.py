@@ -58,9 +58,17 @@ TEMPLATE_LOGO_CY = 850197
 
 COMPANY_NAME = '美博工程服務有限公司'
 DEPT_NAME = '美博'
-# Wingdings sym 經 Word→PDF 在本機常顯示反了；改 Unicode 方格，Word/PDF 一致
+# 審批方格：本機 Word 用 Arial Unicode 方格；Linux LO 用 DejaVu Sans（無 Wingdings）
 CHECKBOX_CHECKED = '\u2611'
 CHECKBOX_UNCHECKED = '\u2610'
+CHECKBOX_FONT_WIN = 'Arial'
+CHECKBOX_FONT_LINUX = 'DejaVu Sans'
+_WINGDINGS_SYM_RUN_RE = re.compile(
+    r'<w:r\b[^>]*>(?:(?!</w:r>).)*?'
+    r'<w:sym w:font="Wingdings(?:\s2)?" w:char="[^"]*"/>'
+    r'(?:(?!</w:r>).)*?</w:r>',
+    re.DOTALL,
+)
 CONTRACT_DATE_WIDTHS = (6, 5, 5)
 _DATE_SLOT_RE = re.compile(r'(_+)年(_+)月(_+)')
 OTHER_SPACER = '  '
@@ -728,8 +736,23 @@ def _fill_contract_end_cell(cell, iso_date, months) -> None:
         return
 
 
+def _checkbox_font_name() -> str:
+    return CHECKBOX_FONT_WIN if sys.platform == 'win32' else CHECKBOX_FONT_LINUX
+
+
+def _make_checkbox_run_xml(checked: bool, *, font: str | None = None) -> str:
+    font = font or _checkbox_font_name()
+    ch = CHECKBOX_CHECKED if checked else CHECKBOX_UNCHECKED
+    return (
+        f'<w:r><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" '
+        f'w:eastAsia="{font}" w:cs="{font}"/>'
+        f'<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>'
+        f'<w:t xml:space="preserve">{ch}</w:t></w:r>'
+    )
+
+
 def _set_checkbox_run(run, checked: bool) -> None:
-    """審批方格：Unicode ☑/☐（Wingdings w:sym 在本機 Word→PDF 會勾選反了）。"""
+    """審批方格：Unicode ☑/☐ + Arial（本機 Word）；Template 同意/不同意方格於 Linux 另做 sym 替換。"""
     run.text = ''
     for child in list(run._element):
         if child.tag != qn('w:rPr'):
@@ -742,10 +765,11 @@ def _set_checkbox_run(run, checked: bool) -> None:
     if rfonts is None:
         rfonts = OxmlElement('w:rFonts')
         rpr.insert(0, rfonts)
-    rfonts.set(qn('w:ascii'), '標楷體')
-    rfonts.set(qn('w:eastAsia'), '標楷體')
-    rfonts.set(qn('w:hAnsi'), '標楷體')
-    rfonts.set(qn('w:cs'), 'Arial')
+    font = _checkbox_font_name()
+    rfonts.set(qn('w:ascii'), font)
+    rfonts.set(qn('w:eastAsia'), font)
+    rfonts.set(qn('w:hAnsi'), font)
+    rfonts.set(qn('w:cs'), font)
     bold = rpr.find(qn('w:b'))
     if bold is not None:
         rpr.remove(bold)
@@ -920,22 +944,55 @@ def _replace_fonts_in_xml(xml: str, mapping: dict[str, str]) -> str:
     return xml
 
 
-def _ensure_tbl_layout_fixed(xml: str) -> str:
-    """LibreOffice 對無 tblLayout 的表格常自動縮放，與 Word 版面不一致。"""
-    if '<w:tblLayout' in xml:
-        return xml
+def _convert_wingdings_syms_to_unicode(xml: str, *, font: str) -> str:
+    """Template 同意/不同意方格：Linux 無 Wingdings → Unicode + DejaVu Sans。"""
+    return _WINGDINGS_SYM_RUN_RE.sub(_make_checkbox_run_xml(False, font=font), xml)
 
-    def _inject(m: re.Match[str]) -> str:
-        block = m.group(0)
-        if 'w:tblLayout' in block:
-            return block
-        return block.replace('<w:tblPr>', '<w:tblPr><w:tblLayout w:type="fixed"/>', 1)
 
-    return re.sub(r'<w:tblPr>.*?</w:tblPr>', _inject, xml, flags=re.DOTALL)
+def _normalize_unicode_checkbox_runs(xml: str, *, font: str) -> str:
+    """審批類別 ☑/☐ run 在 Linux 改用 DejaVu Sans（標楷體/Carlito 無方格字元）。"""
+    for char in (CHECKBOX_CHECKED, CHECKBOX_UNCHECKED):
+        run_pat = re.compile(
+            rf'(<w:r\b[^>]*>(?:(?!</w:r>).)*?<w:t[^>]*>){re.escape(char)}(</w:t>(?:(?!</w:r>).)*?</w:r>)',
+            re.DOTALL,
+        )
+
+        def _repl(m: re.Match[str], *, ch: str = char) -> str:
+            return _make_checkbox_run_xml(ch == CHECKBOX_CHECKED, font=font)
+
+        xml = run_pat.sub(_repl, xml)
+    return xml
+
+
+def _compact_document_for_single_page(xml: str) -> str:
+    """LibreOffice 字距/行高略大時壓至一頁（本機 Word 本為單頁）。"""
+    xml = re.sub(
+        r'w:spacing w:line="360" w:lineRule="exact"',
+        'w:spacing w:line="300" w:lineRule="exact"',
+        xml,
+    )
+    xml = re.sub(
+        r'w:spacing w:line="360" w:lineRule="auto"',
+        'w:spacing w:line="300" w:lineRule="exact"',
+        xml,
+    )
+
+    def _shrink_row(m: re.Match[str]) -> str:
+        val = max(240, int(int(m.group(1)) * 0.93))
+        rule = m.group(2)
+        if rule:
+            return f'w:trHeight w:val="{val}" w:hRule="{rule}"'
+        return f'w:trHeight w:val="{val}"'
+
+    return re.sub(
+        r'w:trHeight w:val="(\d+)"(?: w:hRule="(\w+)")?',
+        _shrink_row,
+        xml,
+    )
 
 
 def _patch_docx_for_linux_pdf(docx_bytes: bytes) -> bytes:
-    """Zeabur：字型對應 + 固定表格版面，使 LO 轉 PDF 接近本機 Word。"""
+    """Zeabur：字型對應 + 方格字元 + 單頁壓版，使 LO 轉 PDF 接近本機 Word。"""
     if sys.platform == 'win32':
         return docx_bytes
     in_buf = BytesIO(docx_bytes)
@@ -948,7 +1005,13 @@ def _patch_docx_for_linux_pdf(docx_bytes: bytes) -> bytes:
                     text = data.decode('utf-8')
                     text = _replace_fonts_in_xml(text, _LINUX_FONT_MAP)
                     if item.filename == 'word/document.xml':
-                        text = _ensure_tbl_layout_fixed(text)
+                        text = _convert_wingdings_syms_to_unicode(
+                            text, font=CHECKBOX_FONT_LINUX,
+                        )
+                        text = _normalize_unicode_checkbox_runs(
+                            text, font=CHECKBOX_FONT_LINUX,
+                        )
+                        text = _compact_document_for_single_page(text)
                     data = text.encode('utf-8')
                 zout.writestr(item, data)
     return out_buf.getvalue()
