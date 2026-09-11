@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender1 \
     fonts-wqy-zenhei \
+    libreoffice-writer \
+    libreoffice-java-common \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

@@ -9,6 +9,7 @@ import io
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -25,7 +26,10 @@ from docx.text.run import Run
 from qs_report_pdf import FONT, _esc, ensure_pdf_font, ensure_pdf_font_bold
 
 REF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Ref')
-TEMPLATE_FILENAME = '投標合約會簽表Template.docx'
+ASSETS_SIGNOFF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'signoff')
+# 部署用 ASCII 檔名；本機 Ref 仍可用中文 Template 檔
+DEPLOY_TEMPLATE_FILENAME = 'signoff_template.docx'
+LEGACY_TEMPLATE_FILENAME = '投標合約會簽表Template.docx'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Template 頁首 LOGO 尺寸（EMU，取自 Template.docx header）
@@ -180,13 +184,21 @@ def _fill_other_underscores(paragraph, text: str) -> None:
 
 
 def get_signoff_template_path():
-    direct = os.path.join(REF_DIR, TEMPLATE_FILENAME)
-    if os.path.isfile(direct):
-        return direct
+    """優先 assets/signoff（隨 Git 部署）；其次 Ref/ 本機參考。"""
+    deploy = os.path.join(ASSETS_SIGNOFF_DIR, DEPLOY_TEMPLATE_FILENAME)
+    if os.path.isfile(deploy):
+        return deploy
+    legacy = os.path.join(REF_DIR, LEGACY_TEMPLATE_FILENAME)
+    if os.path.isfile(legacy):
+        return legacy
     if os.path.isdir(REF_DIR):
         for name in os.listdir(REF_DIR):
             if name.endswith('Template.docx'):
                 return os.path.join(REF_DIR, name)
+    if os.path.isdir(ASSETS_SIGNOFF_DIR):
+        for name in os.listdir(ASSETS_SIGNOFF_DIR):
+            if name.endswith('.docx'):
+                return os.path.join(ASSETS_SIGNOFF_DIR, name)
     return None
 
 
@@ -926,9 +938,42 @@ def _docx_bytes_to_pdf_win(docx_bytes: bytes) -> bytes | None:
             pass
 
 
+def _docx_bytes_to_pdf_libreoffice(docx_bytes: bytes) -> bytes | None:
+    """Linux Docker（Zeabur）：LibreOffice headless 轉 PDF，版面接近本機 Word。"""
+    for binary in ('libreoffice', 'soffice'):
+        if not shutil.which(binary):
+            continue
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                docx_path = os.path.join(tmp, 'signoff.docx')
+                with open(docx_path, 'wb') as f:
+                    f.write(docx_bytes)
+                proc = subprocess.run(
+                    [
+                        binary, '--headless', '--norestore', '--nologo',
+                        '--convert-to', 'pdf', '--outdir', tmp, docx_path,
+                    ],
+                    capture_output=True,
+                    timeout=120,
+                    check=False,
+                )
+                if proc.returncode != 0:
+                    continue
+                pdf_path = os.path.join(tmp, 'signoff.pdf')
+                if os.path.isfile(pdf_path):
+                    with open(pdf_path, 'rb') as f:
+                        return f.read()
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return None
+
+
 def generate_signoff_pdf(payload, template_path=None):
     docx_bytes = generate_signoff_docx(payload, template_path=template_path)
     pdf = _docx_bytes_to_pdf_win(docx_bytes)
+    if pdf:
+        return pdf
+    pdf = _docx_bytes_to_pdf_libreoffice(docx_bytes)
     if pdf:
         return pdf
     return _generate_signoff_pdf_reportlab(payload)

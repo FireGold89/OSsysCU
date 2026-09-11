@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260911-signoff-deploy` · 分支 `v2/portfolio`
+
+### 修正
+- **項目登記·會簽出表**：會簽 Template 納入 `assets/signoff/` 隨部署；Zeabur 以 LibreOffice 將套印 docx 轉 PDF（與本機 Word 預覽一致）
+
 `APP_VERSION`: `v2-20260911-sc-fac-p2-gap` · 分支 `v2/portfolio`
 
 ### 變更
