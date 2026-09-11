@@ -32,6 +32,26 @@ DEPLOY_TEMPLATE_FILENAME = 'signoff_template.docx'
 LEGACY_TEMPLATE_FILENAME = '投標合約會簽表Template.docx'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Linux LibreOffice：Template 內 MS 字型名 → 容器已裝 metric-compatible 字型
+_LINUX_FONT_MAP = {
+    '新細明體': 'AR PL UMing TW',
+    '新宋体': 'AR PL UMing CN',
+    'SimSun': 'AR PL UMing CN',
+    '宋体': 'AR PL UMing CN',
+    '標楷體': 'AR PL UKai TW',
+    '标楷体': 'AR PL UKai TW',
+    'DFKai-SB': 'AR PL UKai TW',
+    'Arial': 'Carlito',
+    'Calibri': 'Carlito',
+    'Times New Roman': 'Caladea',
+}
+_LO_PDF_FILTER = (
+    'pdf:writer_pdf_Export:'
+    '{"SelectPdfVersion":{"type":"long","value":"1"},'
+    '"UseLosslessCompression":{"type":"boolean","value":"true"},'
+    '"ExportFormFields":{"type":"boolean","value":"false"}}'
+)
+
 # Template 頁首 LOGO 尺寸（EMU，取自 Template.docx header）
 TEMPLATE_LOGO_CX = 8194261
 TEMPLATE_LOGO_CY = 850197
@@ -893,6 +913,47 @@ def _generate_signoff_docx_blank(payload):
     return buf.getvalue()
 
 
+def _replace_fonts_in_xml(xml: str, mapping: dict[str, str]) -> str:
+    for old, new in mapping.items():
+        for attr in ('ascii', 'eastAsia', 'hAnsi', 'cs'):
+            xml = xml.replace(f'w:{attr}="{old}"', f'w:{attr}="{new}"')
+    return xml
+
+
+def _ensure_tbl_layout_fixed(xml: str) -> str:
+    """LibreOffice 對無 tblLayout 的表格常自動縮放，與 Word 版面不一致。"""
+    if '<w:tblLayout' in xml:
+        return xml
+
+    def _inject(m: re.Match[str]) -> str:
+        block = m.group(0)
+        if 'w:tblLayout' in block:
+            return block
+        return block.replace('<w:tblPr>', '<w:tblPr><w:tblLayout w:type="fixed"/>', 1)
+
+    return re.sub(r'<w:tblPr>.*?</w:tblPr>', _inject, xml, flags=re.DOTALL)
+
+
+def _patch_docx_for_linux_pdf(docx_bytes: bytes) -> bytes:
+    """Zeabur：字型對應 + 固定表格版面，使 LO 轉 PDF 接近本機 Word。"""
+    if sys.platform == 'win32':
+        return docx_bytes
+    in_buf = BytesIO(docx_bytes)
+    out_buf = BytesIO()
+    with zipfile.ZipFile(in_buf, 'r') as zin:
+        with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename.startswith('word/') and item.filename.endswith('.xml'):
+                    text = data.decode('utf-8')
+                    text = _replace_fonts_in_xml(text, _LINUX_FONT_MAP)
+                    if item.filename == 'word/document.xml':
+                        text = _ensure_tbl_layout_fixed(text)
+                    data = text.encode('utf-8')
+                zout.writestr(item, data)
+    return out_buf.getvalue()
+
+
 def _docx_bytes_to_pdf_win(docx_bytes: bytes) -> bytes | None:
     if sys.platform != 'win32':
         return None
@@ -940,22 +1001,34 @@ def _docx_bytes_to_pdf_win(docx_bytes: bytes) -> bytes | None:
 
 def _docx_bytes_to_pdf_libreoffice(docx_bytes: bytes) -> bytes | None:
     """Linux Docker（Zeabur）：LibreOffice headless 轉 PDF，版面接近本機 Word。"""
+    docx_bytes = _patch_docx_for_linux_pdf(docx_bytes)
     for binary in ('libreoffice', 'soffice'):
         if not shutil.which(binary):
             continue
         try:
             with tempfile.TemporaryDirectory() as tmp:
+                profile_dir = os.path.join(tmp, 'lo_profile')
+                os.makedirs(profile_dir, exist_ok=True)
                 docx_path = os.path.join(tmp, 'signoff.docx')
                 with open(docx_path, 'wb') as f:
                     f.write(docx_bytes)
+                env = os.environ.copy()
+                env['HOME'] = tmp
+                env.setdefault('LANG', 'zh_TW.UTF-8')
+                env.setdefault('LC_ALL', 'zh_TW.UTF-8')
+                env.setdefault('SAL_USE_VCLPLUGIN', 'svp')
                 proc = subprocess.run(
                     [
-                        binary, '--headless', '--norestore', '--nologo',
-                        '--convert-to', 'pdf', '--outdir', tmp, docx_path,
+                        binary,
+                        f'-env:UserInstallation=file:///{profile_dir.replace(os.sep, "/")}',
+                        '--headless', '--norestore', '--nologo', '--invisible',
+                        '--convert-to', _LO_PDF_FILTER,
+                        '--outdir', tmp, docx_path,
                     ],
                     capture_output=True,
                     timeout=120,
                     check=False,
+                    env=env,
                 )
                 if proc.returncode != 0:
                     continue

@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260911-signoff-pdf-parity` · 分支 `v2/portfolio`
+
+### 修正
+- **項目登記·會簽出表 PDF**：Docker 安裝 AR PL 明/楷、Carlito/Caladea + fontconfig 別名；Linux 轉 PDF 前正規化 docx 字型與固定表格版面，使 V2 匯出接近本機 Word
+
 `APP_VERSION`: `v2-20260911-signoff-deploy` · 分支 `v2/portfolio`
 
 ### 修正

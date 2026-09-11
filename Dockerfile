@@ -8,10 +8,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
+    fontconfig \
     fonts-wqy-zenhei \
+    fonts-arphic-uming \
+    fonts-arphic-ukai \
+    fonts-noto-cjk \
+    fonts-liberation \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
     libreoffice-writer \
     libreoffice-java-common \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -f
+
+COPY docker/signoff-fonts.conf /etc/fonts/conf.d/99-signoff.conf
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
