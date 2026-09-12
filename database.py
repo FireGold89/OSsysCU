@@ -5120,14 +5120,54 @@ def get_project_summary(project_id):
     profit_e = contract_a - total_d
     profit_rate = (profit_e / contract_a * 100) if contract_a else 0
 
-    ip_period = get_ip_period_summary(project_id)
+    proj = dict(project)
+    ip_rows = conn.execute("""
+        SELECT * FROM interim_payments WHERE project_id=?
+        ORDER BY seq_no, ip_no
+    """, (project_id,)).fetchall()
+    ip_items = calc_ip_cumulative_pcts(
+        [enrich_interim_payment(r) for r in ip_rows],
+        contract_a,
+    )
+    ip_period = {
+        'site_period_text': proj.get('site_period_text'),
+        'project_name_en': proj.get('project_name_en'),
+        'project_name_zh': proj.get('project_name_zh'),
+        'project_name': proj.get('project_name'),
+        'project_code': proj.get('project_code'),
+        'contract_amount': contract_a,
+        'items': ip_items,
+        'sc_matrix': None,
+        'totals': {
+            'total_income': proj.get('ip_total_income') or 0,
+            'total_expenditure': proj.get('ip_total_expenditure') or 0,
+            'advance': proj.get('ip_advance') or 0,
+        },
+    }
+
+    payment_count = conn.execute("""
+        SELECT COUNT(*) FROM payment_records
+        WHERE project_id=? AND (revoked_at IS NULL OR revoked_at = '')
+    """, (project_id,)).fetchone()[0]
+    recent_payments = conn.execute("""
+        SELECT pr.id, pr.invoice_date, pr.sc_no, pr.company_name_en, pr.company_name_zh,
+               pr.description, pr.paid_amount, pr.invoice_no,
+               sc.company_name_en AS sc_company
+        FROM payment_records pr
+        LEFT JOIN subcontractors sc ON sc.id = pr.sc_id
+        WHERE pr.project_id=? AND (pr.revoked_at IS NULL OR pr.revoked_at = '')
+        ORDER BY pr.invoice_date DESC, pr.seq_no DESC, pr.id DESC
+        LIMIT 8
+    """, (project_id,)).fetchall()
 
     conn.close()
     return {
-        'project': dict(project),
+        'project': proj,
         'sc_stats': [dict(r) for r in sc_stats],
         'total_paid': totals['total_paid'] or 0,
         'total_remainder': totals['total_remainder'] or 0,
+        'payment_count': int(payment_count or 0),
+        'recent_payments': [dict(r) for r in recent_payments],
         'ip_period': ip_period,
         'contract_calc': {
             'main_contract_amount': contract_a,

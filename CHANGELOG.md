@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260912-dashboard-perf` · 分支 `v2/portfolio`
+
+### 改善
+- **項目概覽載入**：summary 合併查詢、略過分包糧期矩陣；Dashboard 並行 API、不再等背景頁預載；全公司 FAC 統計 45 秒快取
+
 `APP_VERSION`: `v2-20260911-signoff-onepage` · 分支 `v2/portfolio`
 
 ### 修正

@@ -1270,7 +1270,7 @@ const App = {
       await this.selectProject(this.projects[0].id);
     }
     this._updateProjectSettlementNav();
-    this.navigate('dashboard');
+    this.navigate('dashboard', { skipLoad: true });
   },
 
   async syncDeploymentBadge() {
@@ -1444,7 +1444,9 @@ const App = {
     bgLoads.push(SC.load(switchSeq));
     if (active !== 'ip-period') bgLoads.push(IpPeriod.load(switchSeq));
     if (active !== 'reports') bgLoads.push(Reports.load(switchSeq));
-    await Promise.all(bgLoads);
+    if (bgLoads.length) {
+      Promise.all(bgLoads).catch(() => {});
+    }
 
     if (switchSeq !== this._projectSwitchSeq) return;
     if (active === 'iso-docs') IsoDocs.load();
@@ -1507,7 +1509,7 @@ const App = {
     this._syncQuickAddBtn();
 
     // 載入頁面數據
-    if (page === 'dashboard') Dashboard.load();
+    if (page === 'dashboard' && !options?.skipLoad) Dashboard.load();
     else if (page === 'iso-docs') IsoDocs.load();
     else if (page === 'payments') {
       if (options?.tab) Payments._pendingTab = options.tab;
@@ -1657,53 +1659,30 @@ const Dashboard = {
     }
   },
 
-  async load(switchSeq) {
-    await this.loadCompanyFacStats();
-    const p = App.currentProject;
-    if (!p) {
-      document.getElementById('dashboardNoProject').style.display = '';
-      document.getElementById('dashboardContent').style.display = 'none';
-      document.getElementById('dashFacProject')?.setAttribute('hidden', '');
-      return;
-    }
-    const projectId = p.id;
-    document.getElementById('dashboardNoProject').style.display = 'none';
-    document.getElementById('dashboardContent').style.display = '';
+  _applySummary(summary, p, switchSeq, projectId) {
+    if (!summary || !App.currentProject || App.currentProject.id != projectId) return false;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return false;
 
-    const summary = await api('GET', `/reports/summary/${projectId}`);
-    if (!summary || !App.currentProject || App.currentProject.id != projectId) return;
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-
-    // 統計卡片
     const totalPaid = summary.total_paid || 0;
     const totalRem = summary.total_remainder || 0;
     const contractAmt = summary.project?.contract_amount || p.contract_amount || 0;
     const progress = contractAmt > 0 ? ((totalPaid / contractAmt) * 100).toFixed(FMT_DECIMALS) : '—';
 
     updateDashProjectHero(summary.project || p, summary.ip_period);
-
     setAmtEl(document.getElementById('dashTotalPaid'), totalPaid, 'expense');
     setAmtEl(document.getElementById('dashRemainder'), totalRem, 'expense');
     document.getElementById('dashProgress').textContent = progress !== '—' ? `${progress}%` : '—';
-
     updateDashIpTotals(summary.ip_period);
 
-    await this.loadProjectFac(projectId, switchSeq);
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-
-    // 付款登記統計
-    const payments = await api('GET', `/projects/${projectId}/payments`);
-    if (!App.currentProject || App.currentProject.id != projectId) return;
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-    document.getElementById('dashPayCount').textContent = payments?.length || 0;
-    document.getElementById('payBadge').textContent = payments?.length || 0;
+    const payCount = summary.payment_count ?? (summary.recent_payments || []).length;
+    document.getElementById('dashPayCount').textContent = payCount;
+    document.getElementById('payBadge').textContent = payCount;
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
 
     renderContractCalc(summary.contract_calc, 'dashContractCalc');
     renderSiteIpPeriod(summary.ip_period, 'dashSiteIp', { editable: false, hideProjectMeta: true });
 
-    // 最近記錄
-    const recent = (payments || []).slice(0, 8);
+    const recent = summary.recent_payments || [];
     const tbody = document.getElementById('dashRecentPayments');
     if (recent.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:24px">暫無付款登記</div></td></tr>`;
@@ -1720,9 +1699,31 @@ const Dashboard = {
       `).join('');
     }
 
-    // 圖表
     this._lastScStats = summary.sc_stats || [];
     this.renderCharts(this._lastScStats);
+    return true;
+  },
+
+  async load(switchSeq) {
+    const p = App.currentProject;
+    if (!p) {
+      document.getElementById('dashboardNoProject').style.display = '';
+      document.getElementById('dashboardContent').style.display = 'none';
+      document.getElementById('dashFacProject')?.setAttribute('hidden', '');
+      return;
+    }
+    const projectId = p.id;
+    document.getElementById('dashboardNoProject').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = '';
+
+    const statsP = this.loadCompanyFacStats();
+    const summaryP = api('GET', `/reports/summary/${projectId}`, null, { silent: true });
+    const facP = this.loadProjectFac(projectId, switchSeq);
+
+    const summary = await summaryP;
+    if (!this._applySummary(summary, p, switchSeq, projectId)) return;
+
+    await Promise.all([statsP, facP]);
   },
 
   renderCharts(scStats) {

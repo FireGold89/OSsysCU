@@ -6,6 +6,7 @@ P2：FA 匯入／匯出、左欄可編、分判槽寫入（矩陣 UI 於 P3）�
 P3：分判 FAC 矩陣 15 槽 inline 編輯 + SC 連結 + drawer。
 P4：從系統同步衍生欄 + Dashboard KPI stats。
 """
+import time
 from datetime import datetime, timedelta
 
 import database as db
@@ -207,12 +208,22 @@ def _compute_stats(conn):
     }
 
 
+_PORTFOLIO_STATS_CACHE = {'at': 0.0, 'data': None}
+_PORTFOLIO_STATS_TTL_SEC = 45
+
+
 def get_portfolio_stats():
     """全公司 FAC KPI（Dashboard / stats API）。"""
+    now = time.time()
+    cached = _PORTFOLIO_STATS_CACHE
+    if cached['data'] is not None and (now - cached['at']) < _PORTFOLIO_STATS_TTL_SEC:
+        return cached['data']
     ensure_rows_from_projects()
     conn = get_conn()
     stats = _compute_stats(conn)
     conn.close()
+    cached['at'] = now
+    cached['data'] = stats
     return stats
 
 
