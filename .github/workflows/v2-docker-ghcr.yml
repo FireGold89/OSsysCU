@@ -1,0 +1,32 @@
+# V2 映像推至 GHCR — Zeabur 以「Docker Image」部署，繞過 registry-oci ImagePull 失敗
+name: V2 Docker GHCR
+
+on:
+  push:
+    branches: [v2/portfolio]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/firegold89/ossyscu-v2:latest
+            ghcr.io/firegold89/ossyscu-v2:${{ github.sha }}

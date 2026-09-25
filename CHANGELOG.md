@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260925-ghcr` · 分支 `v2/portfolio`
+
+### 改善
+- **Zeabur V2 部署**：Dockerfile 改回 main 最小映像；GitHub Actions 推 `ghcr.io/firegold89/ossyscu-v2` 供 Zeabur「Docker Image」拉取（繞過 registry-oci ImagePull 失敗）
+
 `APP_VERSION`: `v2-20260925-docker-slim` · 分支 `v2/portfolio`
 
 ### 改善
