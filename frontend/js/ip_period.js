@@ -35,33 +35,86 @@ const IpPeriod = {
     return dateDisp || '';
   },
 
+  _legacyReceiptRecord(r) {
+    return {
+      method: r.receipt_method,
+      cheque_no: r.receipt_cheque_no,
+      bank: r.receipt_bank,
+      date: r.receipt_date,
+      note: r.receipt_note,
+      attachment: r.receipt_attachment,
+      attachment_name: r.receipt_attachment_name,
+    };
+  },
+
+  _mergeReceiptRecord(rec, legacy, idx) {
+    const base = idx === 0 ? (legacy || {}) : {};
+    const pick = (primary, ...fallbacks) => {
+      for (const val of [primary, ...fallbacks]) {
+        const s = val == null ? '' : String(val).trim();
+        if (s) return s;
+      }
+      return '';
+    };
+    return {
+      method: pick(rec?.method, rec?.receipt_method, base.method) || null,
+      cheque_no: pick(rec?.cheque_no, rec?.receipt_cheque_no, base.cheque_no) || null,
+      bank: pick(rec?.bank, rec?.receipt_bank, base.bank) || null,
+      date: pick(rec?.date, rec?.receipt_date, base.date) || null,
+      note: pick(rec?.note, rec?.receipt_note, base.note) || null,
+      attachment: rec?.attachment || rec?.receipt_attachment || base.attachment || null,
+      attachment_name: rec?.attachment_name || rec?.receipt_attachment_name || base.attachment_name || null,
+    };
+  },
+
+  _receiptRecordHasContent(rec) {
+    return !!(rec.method || rec.cheque_no || rec.bank || rec.date || rec.note || rec.attachment);
+  },
+
+  _receiptRecordsForCell(r) {
+    const legacy = this._legacyReceiptRecord(r);
+    let records = (r.receipt_records && r.receipt_records.length)
+      ? r.receipt_records.map((rec, idx) => this._mergeReceiptRecord(rec, legacy, idx))
+      : [];
+    if (!records.length && this._receiptRecordHasContent(legacy)) {
+      records = [legacy];
+    }
+    return records.filter(rec => this._receiptRecordHasContent(rec));
+  },
+
+  _receiptLineText(rec, r, idx, total) {
+    let display = this._formatReceiptPreview(
+      rec.method,
+      rec.cheque_no,
+      rec.bank,
+      rec.date,
+      rec.note,
+    );
+    if (!display && rec.cheque_no) {
+      const no = String(rec.cheque_no).trim();
+      display = no.startsWith('#') ? no : `#${no.replace(/^#/, '')}`;
+    }
+    if (!display && r.receipt_display) {
+      const parts = String(r.receipt_display).split(/\s*·\s*/);
+      if (parts[idx]) display = parts[idx];
+      else if (total === 1) display = r.receipt_display;
+    }
+    if (!display && idx === 0 && r.receipt_cheque_no) {
+      const no = String(r.receipt_cheque_no).trim();
+      display = no.startsWith('#') ? no : `#${no.replace(/^#/, '')}`;
+    }
+    return display;
+  },
+
   _receiptCellHtml(r) {
-    const records = (r.receipt_records && r.receipt_records.length)
-      ? r.receipt_records
-      : (r.receipt_display || r.receipt_attachment
-        ? [{
-          method: r.receipt_method,
-          cheque_no: r.receipt_cheque_no,
-          bank: r.receipt_bank,
-          date: r.receipt_date,
-          note: r.receipt_note,
-          attachment: r.receipt_attachment,
-          attachment_name: r.receipt_attachment_name,
-        }]
-        : []);
+    const records = this._receiptRecordsForCell(r);
     if (!records.length) {
       return `<td class="ip-receipt-cell" onclick="event.stopPropagation()"><span class="td-muted">—</span></td>`;
     }
     const lines = records.map((rec, i) => {
-      const display = this._formatReceiptPreview(
-        rec.method || rec.receipt_method,
-        rec.cheque_no || rec.receipt_cheque_no,
-        rec.bank || rec.receipt_bank,
-        rec.date || rec.receipt_date,
-        rec.note || rec.receipt_note,
-      );
-      const attach = rec.attachment || rec.receipt_attachment;
-      const attachName = escHtml(rec.attachment_name || rec.receipt_attachment_name || '支票附件');
+      const display = this._receiptLineText(rec, r, i, records.length);
+      const attach = rec.attachment;
+      const attachName = escHtml(rec.attachment_name || '支票附件');
       const safePath = (attach || '').replace(/'/g, "\\'");
       const clipIcon = attach
         ? `<button type="button" class="ip-receipt-clip" title="附件：${attachName}"

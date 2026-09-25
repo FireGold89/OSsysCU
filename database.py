@@ -4621,9 +4621,15 @@ def _parse_receipt_records_json(raw):
 
 def get_ip_receipt_records(row):
     records = _parse_receipt_records_json(row.get('receipt_records_json'))
-    if records:
-        return records
     legacy = _legacy_receipt_from_row(row)
+    if records:
+        if legacy:
+            merged = dict(records[0])
+            for key in ('method', 'cheque_no', 'bank', 'date', 'note', 'attachment', 'attachment_name'):
+                if not merged.get(key) and legacy.get(key):
+                    merged[key] = legacy[key]
+            records[0] = _normalize_receipt_record(merged)
+        return records
     return [legacy] if legacy else []
 
 

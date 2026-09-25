@@ -1,12 +1,45 @@
-_tmp_yescan/
-__pycache__/
-*.py[cod]
-*.db
-uploads/
+# Git / IDE
 .git/
 .gitignore
-# 保留主資料 Excel（糧期/合同同步需要）
-# *.xlsx
-啟動系統.bat
+.cursor/
+.kilo/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# 本機資料（Zeabur 用 /data Volume）
+_data/
+uploads/
+*.db
 .env
 .env.*
+*.bat
+
+# 文件 / 參考（非 runtime）
+docs/
+Ref/
+CHANGELOG.md
+RELEASE.md
+v2.env.example
+
+# 備份腳本（容器內不需）
+scripts/backup_release.ps1
+scripts/backup_release.sh
+
+# 測試與暫存
+_tmp*/
+_tmp*
+test_*.png
+test_*.pdf
+test_*.docx
+
+# 大型 Office 參考（會簽 Template 已放 assets/signoff/）
+*.pptx
+*.xlsx

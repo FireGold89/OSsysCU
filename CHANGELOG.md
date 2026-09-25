@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20260925-docker-slim` · 分支 `v2/portfolio`
+
+### 改善
+- **Zeabur 部署**：精簡 Docker 映像（移除 LibreOffice Java、Noto CJK；擴充 `.dockerignore`；明確 COPY 清單），緩解 ImagePullFailed
+
 `APP_VERSION`: `v2-20260912-dashboard-perf` · 分支 `v2/portfolio`
 
 ### 改善
