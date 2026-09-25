@@ -664,6 +664,10 @@ const Projects = {
       </div>`;
   },
 
+  exportExcel() {
+    downloadExcelExport('/company-summary/export', '工程項目_Summary.xlsx');
+  },
+
   importSummary() {
     document.getElementById('projSummaryFile')?.click();
   },
@@ -721,7 +725,7 @@ const Projects = {
   _num(id) {
     const v = document.getElementById(id)?.value;
     if (v === '' || v == null) return null;
-    const n = parseFloat(v);
+    const n = parseAmt(v);
     return Number.isNaN(n) ? null : n;
   },
 
@@ -749,7 +753,15 @@ const Projects = {
   _set(id, val) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.value = val == null || val === '' ? '' : val;
+    if (val == null || val === '') {
+      el.value = '';
+      return;
+    }
+    if (el.matches?.('input[type=number][step="0.01"], input.amt-input, input.iso-amt-input')) {
+      el.value = fmtInputNum(val);
+    } else {
+      el.value = val;
+    }
   },
 
   _retentionDateOneOff: 'pRetentionDateOneOff',
@@ -1125,7 +1137,7 @@ const Projects = {
       document.getElementById('pClient').value = row.client_name;
     }
     if (row.awarded_amount && !document.getElementById('pAmt').value) {
-      document.getElementById('pAmt').value = row.awarded_amount;
+      document.getElementById('pAmt').value = fmtInputNum(row.awarded_amount);
     }
     this.closeMasterPick();
     toast('已帶入報價資料', 'success');
@@ -1214,19 +1226,19 @@ const Projects = {
           <div class="form-group">
             <label class="form-label">覆寫 C — 物料及其他支出 (HK$)</label>
             <input type="number" class="form-input" id="settleMaterialC" placeholder="留空則自動計算" step="0.01"
-              value="${storedManualC != null && storedManualC !== '' ? storedManualC : ''}">
+              value="${storedManualC != null && storedManualC !== '' ? fmtInputNum(storedManualC) : ''}">
             <div class="form-hint">Cover Page 結算用；含 M/O 判項、除外 (C) 扣減（不含上表人工分攤）</div>
           </div>
           <div class="form-group">
             <label class="form-label">財務會作調撥（人工分攤）(HK$)</label>
             <input type="number" class="form-input" id="settleLabour" placeholder="0" step="0.01"
-              value="${project?.labour_allocation ?? labour ?? ''}">
+              value="${project?.labour_allocation != null && project?.labour_allocation !== '' ? fmtInputNum(project.labour_allocation) : (labour ? fmtInputNum(labour) : '')}">
             <div class="form-hint">與項目編輯表單「待辦」欄位同步</div>
           </div>
           <div class="form-group">
             <label class="form-label">結算工程總額 (HK$)</label>
             <input type="number" class="form-input" id="settleFinalSub" step="0.01"
-              value="${project?.final_subcontract_sum ?? s.final_subcontract_sum ?? s.subcontract_sum_b ?? ''}">
+              value="${fmtInputNum(project?.final_subcontract_sum ?? s.final_subcontract_sum ?? s.subcontract_sum_b ?? '')}">
           </div>
           <div class="form-group">
             <label class="form-label">分判商工程帳目總結算日</label>
@@ -1270,6 +1282,7 @@ const Projects = {
         </div>
       </div>
     `;
+    AmountInput.init(body.querySelector('.settle-side') || body);
   },
 
   async saveSettlement() {
@@ -1282,9 +1295,9 @@ const Projects = {
     const labourRaw = document.getElementById('settleLabour')?.value;
     const data = {
       ...project,
-      material_other_expenses: matRaw === '' || matRaw == null ? null : parseFloat(matRaw),
-      labour_allocation: labourRaw === '' || labourRaw == null ? 0 : parseFloat(labourRaw),
-      final_subcontract_sum: parseFloat(document.getElementById('settleFinalSub')?.value) || 0,
+      material_other_expenses: parseAmtOrNull(matRaw),
+      labour_allocation: parseAmtOrZero(labourRaw),
+      final_subcontract_sum: parseAmtOrZero(document.getElementById('settleFinalSub')?.value),
       sc_fac_signed_date: document.getElementById('settleScFacDate')?.value || null,
     };
 
@@ -1525,8 +1538,8 @@ const SC = {
         company_name_en: document.getElementById('scCompanyEn')?.value?.trim() || null,
         company_name_zh: document.getElementById('scCompanyZh')?.value?.trim() || null,
         description: this.buildDescText(),
-        contract_amount: parseFloat(document.getElementById('scAmt')?.value) || 0,
-        contract_sum: parseFloat(document.getElementById('scContractSum')?.value) || 0,
+        contract_amount: parseAmtOrZero(document.getElementById('scAmt')?.value) || 0,
+        contract_sum: parseAmtOrZero(document.getElementById('scContractSum')?.value) || 0,
         quotation_no: document.getElementById('scQuotNo')?.value?.trim() || null,
         sub_contract_no: null,
       };
@@ -1586,6 +1599,7 @@ const SC = {
       </tr>
     `).join('');
 
+    AmountInput.init(document.getElementById('scItemsBody'));
     this._updateDescItemsTotal();
   },
 
@@ -1594,8 +1608,8 @@ const SC = {
     if (!totalEl) return;
     let sum = 0;
     this._descItems.forEach(it => {
-      const a = parseFloat(it.amount);
-      if (!isNaN(a)) sum += a;
+      const a = parseAmt(it.amount);
+      if (!Number.isNaN(a)) sum += a;
     });
     totalEl.innerHTML = this._descItems.length
       ? `明細合計: <strong>${fmt(sum)}</strong> (${this._descItems.length} 項)`
@@ -1785,7 +1799,7 @@ const SC = {
       amount = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
     }
     if (amount) {
-      const vo = parseFloat(document.getElementById('scVoAmt').value) || 0;
+      const vo = parseAmtOrZero(document.getElementById('scVoAmt').value) || 0;
       document.getElementById('scContractSum').value = fmtInputNum(amount);
       document.getElementById('scAmt').value = fmtInputNum(amount + vo);
       const paidStr = document.getElementById('scPaidAmt').value;
@@ -2072,8 +2086,8 @@ const SC = {
   },
 
   calcRevised() {
-    const h = parseFloat(document.getElementById('scContractSum').value) || 0;
-    const v = parseFloat(document.getElementById('scVoAmt').value) || 0;
+    const h = parseAmtOrZero(document.getElementById('scContractSum').value);
+    const v = parseAmtOrZero(document.getElementById('scVoAmt').value);
     document.getElementById('scAmt').value = fmtInputNum(h + v);
     const paidStr = document.getElementById('scPaidAmt').value;
     if (paidStr) {
@@ -2110,6 +2124,7 @@ const SC = {
     this.onEntryTypeChange();
     this.updateMsCHint();
     document.getElementById('scModal').classList.add('open');
+    AmountInput.init(document.getElementById('scModal'));
   },
 
   async openEdit(id) {
@@ -2164,6 +2179,7 @@ const SC = {
     this.onEntryTypeChange();
     this.updateMsCHint();
     document.getElementById('scModal').classList.add('open');
+    AmountInput.init(document.getElementById('scModal'));
   },
 
   closeModal() {
@@ -2305,13 +2321,13 @@ const SC = {
       company_name_en: document.getElementById('scCompanyEn').value || null,
       company_name_zh: document.getElementById('scCompanyZh').value || null,
       description: this.buildDescText(),
-      contract_sum: parseFloat(document.getElementById('scContractSum').value) || 0,
-      vo_amount: parseFloat(document.getElementById('scVoAmt').value) || 0,
-      contract_amount: parseFloat(document.getElementById('scAmt').value) || 0,
+      contract_sum: parseAmtOrZero(document.getElementById('scContractSum').value) || 0,
+      vo_amount: parseAmtOrZero(document.getElementById('scVoAmt').value) || 0,
+      contract_amount: parseAmtOrZero(document.getElementById('scAmt').value) || 0,
       quotation_date: isContract ? null : (document.getElementById('scQuotDate').value || null),
       oa_date: document.getElementById('scOaDate').value || null,
       retention_sum: isContract
-        ? (parseFloat(document.getElementById('scRetentionSum').value) || null)
+        ? parseAmtOrNull(document.getElementById('scRetentionSum').value)
         : null,
       oa_status: isContract ? null : (document.getElementById('scOaStatus').value || null),
       oa_ref: null,

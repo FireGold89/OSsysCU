@@ -27,7 +27,7 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=20260911-sc-tier">
+    <link rel="stylesheet" href="css/style.css?v=v2-20260925-ip-receipts">
   <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -989,6 +989,7 @@
           <button class="btn btn-primary" onclick="Projects.openAdd()">➕ 新增項目</button>
           <button class="btn btn-secondary" onclick="Projects.importSummary()">📥 匯入 Summary</button>
           <button class="btn btn-secondary" onclick="Projects.syncSummaryRef()">🔄 同步 Ref/Summary.xlsx</button>
+          <button class="btn btn-secondary" onclick="Projects.exportExcel()">📥 匯出 Excel</button>
           <button class="btn btn-secondary" onclick="App.importExcel()">📥 地盤付款表</button>
           <input type="file" id="projSummaryFile" accept=".xlsx,.xls" hidden onchange="Projects.onSummaryFile(this)">
           <div style="flex:1"></div>
@@ -1303,6 +1304,7 @@
             <button class="btn btn-secondary btn-sm" onclick="MasterList.openAutoLink()">🔗 自動配對</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterTradeCats.openManage()">📂 工作範疇</button>
             <button class="btn btn-primary btn-sm" onclick="MasterList.openSync()">🔄 同步 Master List</button>
+            <button class="btn btn-secondary btn-sm" onclick="MasterList.exportExcel()">📥 匯出 Excel</button>
             <div class="col-picker-wrap" id="masterColPickerWrap">
               <button type="button" class="btn btn-secondary btn-sm" onclick="MasterList.toggleColPicker(event)">⚙️ 欄位</button>
               <div class="col-picker-panel" id="masterColPickerPanel" hidden></div>
@@ -1351,7 +1353,7 @@
       <div class="page" id="page-sc-contract-registry">
         <div class="toolbar">
           <div class="toolbar-left scr-toolbar-filters">
-            <input type="text" class="form-input" id="scrSearch" placeholder="搜尋 MS/C、公司、項目編號…" style="max-width:220px" onkeydown="if(event.key==='Enter')ScContractRegistry.search()">
+            <input type="text" class="form-input" id="scrSearch" placeholder="搜尋 MS/C、分判商、項目編號…" style="max-width:220px" onkeydown="if(event.key==='Enter')ScContractRegistry.search()">
             <select class="form-input scr-filter-select" id="scrYearFilter" onchange="ScContractRegistry.search()">
               <option value="">全部年份</option>
             </select>
@@ -1359,12 +1361,13 @@
               <option value="">全部負責同事</option>
             </select>
             <select class="form-input scr-filter-select" id="scrCompanyFilter" onchange="ScContractRegistry.search()">
-              <option value="">全部外判公司</option>
+              <option value="">全部分判商</option>
             </select>
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.search()">搜尋</button>
           </div>
           <div class="toolbar-right">
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.syncFromRef()">🔄 同步 Ref Excel</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.exportExcel()">📥 匯出 Excel</button>
             <button type="button" class="btn btn-primary btn-sm" onclick="ScContractRegistry.openAdd()">➕ 新增 MS/C</button>
             <div class="col-picker-wrap" id="scrColPickerWrap">
               <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.toggleColPicker(event)">⚙️ 欄位</button>
@@ -1390,7 +1393,7 @@
               <thead id="scrTableHead">
                 <tr>
                   <th class="scr-col-ms th-sortable" data-col="ms" data-sort="sub_contract_no" onclick="ScContractRegistry.sortBy('sub_contract_no')">合約編號<span class="sort-icon">↕</span></th>
-                  <th class="scr-col-co th-sortable" data-col="co" data-sort="company" onclick="ScContractRegistry.sortBy('company')">外判公司<span class="sort-icon">↕</span></th>
+                  <th class="scr-col-co th-sortable" data-col="co" data-sort="company" onclick="ScContractRegistry.sortBy('company')">分判商<span class="sort-icon">↕</span></th>
                   <th class="scr-col-works" data-col="works">工程項目</th>
                   <th class="scr-col-proj th-sortable" data-col="proj" data-sort="project_code" onclick="ScContractRegistry.sortBy('project_code')">項目編號<span class="sort-icon">↕</span></th>
                   <th class="scr-col-person th-sortable" data-col="person" data-sort="person" onclick="ScContractRegistry.sortBy('person')">負責同事<span class="sort-icon">↕</span></th>
@@ -2639,62 +2642,19 @@
         </div>
       </div>
       <div class="ip-receipt-section">
-        <div class="form-label" style="margin-bottom:8px">收款記錄（支票／過數）</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">方式</label>
-            <select class="form-input" id="ipReceiptMethod" onchange="IpPeriod.onReceiptMethodChange()">
-              <option value="">— 未填 —</option>
-              <option value="cheque">支票</option>
-              <option value="transfer">過數</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">收款日期</label>
-            <input type="date" class="form-input" id="ipReceiptDate" onchange="IpPeriod._updateReceiptPreview()">
-          </div>
+        <div class="ip-receipt-section-head">
+          <div class="form-label">收款記錄（支票／過數）</div>
+          <button type="button" class="btn-ip-receipt-add" onclick="IpPeriod.addReceiptRow()"
+            title="新增一張支票／過數" aria-label="新增收款記錄">+</button>
         </div>
-        <div id="ipReceiptChequeFields" class="form-row" style="display:none">
-          <div class="form-group">
-            <label class="form-label">支票號碼</label>
-            <input type="text" class="form-input" id="ipReceiptChequeNo" placeholder="#828310" oninput="IpPeriod._updateReceiptPreview()">
-          </div>
-          <div class="form-group">
-            <label class="form-label">銀行</label>
-            <div class="ip-bank-combo" id="ipReceiptBankCombo">
-              <button type="button" class="form-input ip-bank-combo-trigger" id="ipReceiptBankTrigger"
-                onclick="IpPeriod.toggleBankDropdown(event)" aria-haspopup="listbox" aria-expanded="false">
-                <span class="ip-bank-combo-label" id="ipReceiptBankLabel">— 請選擇銀行 —</span>
-                <span class="ip-bank-chevron" aria-hidden="true">▾</span>
-              </button>
-              <input type="hidden" id="ipReceiptBank" value="">
-              <div class="ip-bank-dropdown" id="ipReceiptBankDropdown" hidden>
-                <input type="text" class="form-input ip-bank-search" id="ipReceiptBankSearch"
-                  placeholder="搜尋代碼或銀行名稱…" oninput="IpPeriod.filterBankSelect()" autocomplete="off">
-                <ul class="ip-bank-list" id="ipReceiptBankList" role="listbox"></ul>
-              </div>
-            </div>
-            <div class="ip-bank-custom-row">
-              <span class="ip-bank-custom-label">或自填</span>
-              <input type="text" class="form-input ip-bank-custom" id="ipReceiptBankCustom"
-                inputmode="numeric" maxlength="3" placeholder="3 位代碼，如 061"
-                oninput="IpPeriod.onBankCustomInput()">
-            </div>
-            <div class="form-hint" id="ipReceiptBankHint">主流本地銀行，或自填 3 位代碼</div>
-          </div>
+        <div id="ipReceiptRowsList"></div>
+        <div class="ip-bank-dropdown ip-bank-dropdown-shared" id="ipReceiptBankDropdown" hidden>
+          <input type="text" class="form-input ip-bank-search" id="ipReceiptBankSearch"
+            placeholder="搜尋代碼或銀行名稱…" oninput="IpPeriod.filterBankSelect()" autocomplete="off">
+          <ul class="ip-bank-list" id="ipReceiptBankList" role="listbox"></ul>
         </div>
-        <div id="ipReceiptTransferFields" class="form-group" style="display:none">
-          <label class="form-label">過數備註</label>
-          <input type="text" class="form-input" id="ipReceiptNote" placeholder="轉帳參考／備註" oninput="IpPeriod._updateReceiptPreview()">
-        </div>
-        <div class="form-hint" id="ipReceiptPreview"></div>
-        <div class="ip-receipt-attach-row">
-          <input type="file" id="ipReceiptFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
-            onchange="IpPeriod.onReceiptFileSelected(event)">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickReceiptFile()">📎 上傳支票附件</button>
-          <span class="form-hint" id="ipReceiptAttachHint">PDF / PNG / JPG</span>
-        </div>
-        <div id="ipReceiptAttachList" class="ip-receipt-attach-list"></div>
+        <input type="file" id="ipReceiptFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+          onchange="IpPeriod.onReceiptFileSelected(event)">
       </div>
       <div id="ipPctHint" class="form-hint" style="margin-top:4px"></div>
     </div>
@@ -3260,7 +3220,7 @@
       <div class="section-title">基本資料</div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">外判公司</label>
+          <label class="form-label">分判商</label>
           <input type="text" class="form-input" id="scrCompany">
         </div>
         <div class="form-group">
@@ -3366,25 +3326,25 @@
 <input type="file" id="pfImportFile" accept=".xlsx,.xls" style="display:none" onchange="PortfolioCommon.onImportFile(event)">
 
 <!-- Scripts -->
-<script src="js/main.js?v=v2-20260912-dashboard-perf"></script>
+<script src="js/main.js?v=v2-20260925-excel-export"></script>
 <script src="js/col_picker.js?v=v2-20260828-p3"></script>
-<script src="js/iso_docs.js?v=20260911-sc-tier"></script>
-<script src="js/payments.js?v=20260815u"></script>
-<script src="js/sc_vo_reg.js?v=20260911-eng-upload"></script>
-<script src="js/main_con_fac.js?v=20260911-mcf-labels"></script>
+<script src="js/iso_docs.js?v=v2-20260924-amt-fmt"></script>
+<script src="js/payments.js?v=v2-20260924-amt-fmt"></script>
+<script src="js/sc_vo_reg.js?v=v2-20260924-amt-fmt"></script>
+<script src="js/main_con_fac.js?v=v2-20260925-mcf-dates"></script>
 <script src="js/sc_fac.js?v=20260911-sc-fac-p2"></script>
-<script src="js/projects.js?v=20260814e"></script>
+<script src="js/projects.js?v=v2-20260925-excel-export"></script>
 <script src="js/hk_banks.js?v=20260805c"></script>
-<script src="js/ip_period.js?v=20260911-ip-app"></script>
-<script src="js/ocr.js?v=20260814a"></script>
+<script src="js/ip_period.js?v=v2-20260925-ip-receipts"></script>
+<script src="js/ocr.js?v=v2-20260924-amt-fmt"></script>
 <script src="js/reports.js?v=20260815-layout2"></script>
 <script src="js/ip_reconcile.js?v=20260805a"></script>
 <script src="js/master_trade.js?v=20260813z"></script>
-<script src="js/master_list.js?v=20260815a"></script>
-<script src="js/sc_contract_registry.js?v=20260814c"></script>
+<script src="js/master_list.js?v=v2-20260925-excel-export"></script>
+<script src="js/sc_contract_registry.js?v=v2-20260925-scr-label"></script>
 <script src="js/staff.js?v=20260827-staff2"></script>
 <script src="js/portfolio_progress.js?v=v2-20260831-pf-status"></script>
 <script src="js/portfolio_fac.js?v=v2-20260831-pf-status"></script>
-<script src="js/eng_intake.js?v=v2-20260904-signoff-tpl41"></script>
+<script src="js/eng_intake.js?v=v2-20260924-amt-fmt"></script>
 </body>
 </html>

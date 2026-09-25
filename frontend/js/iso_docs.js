@@ -569,19 +569,20 @@ const IsoDocs = {
     }).join('');
 
     el.innerHTML = `${head}<tbody><tr>${cells}</tr></tbody>`;
+    AmountInput.init(el);
   },
 
   _suppAmountCell(p) {
     const val = p.supplemental_contract_amount ?? 0;
     const pid = p.id;
     return `<input type="number" class="iso-amt-input" step="0.01" min="0"
-      value="${Number(val) || ''}" placeholder="0"
+      value="${val != null && val !== '' ? fmtInputNum(val) : ''}" placeholder="0"
       onchange="IsoDocs.saveSupplemental(${pid}, this.value)"
       title="補充合約金額（可編輯）">`;
   },
 
   async saveSupplemental(projectId, raw) {
-    const amount = parseFloat(raw) || 0;
+    const amount = parseAmtOrZero(raw);
     try {
       this._board = await api('PATCH', `/projects/${projectId}/iso-meta`, {
         supplemental_contract_amount: amount,

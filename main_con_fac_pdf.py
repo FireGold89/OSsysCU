@@ -337,10 +337,6 @@ def _key_dates_table(fac: dict, styles, theme: str) -> Table:
     rows.append(_date_row(
         '保修期開始日期', 'Commencement of DLP', kd.get('dlp_commencement_date'), styles,
     ))
-    dlp_days_val = ed.get('fac_dlp_days') or kd.get('fac_dlp_days') or kd.get('dlp_days')
-    if dlp_days_val:
-        dlp_days_val = f'{dlp_days_val} days'
-    rows.append(_date_row('保修期', 'DLP (days)', dlp_days_val, styles))
     rows.append(_date_row(
         '保修期到期日', 'DLP Expiry Date',
         ed.get('fac_dlp_expiry_date') or kd.get('fac_dlp_expiry_date'), styles,
@@ -351,7 +347,7 @@ def _key_dates_table(fac: dict, styles, theme: str) -> Table:
             ed.get('fac_testing_commission_date') or kd.get('testing_commission_date'), styles,
         ))
     rows.append(_date_row(
-        '修補缺陷完工日期', 'Make Good Defect Completed',
+        '修補缺陷完工日期', 'Defect Correction Date',
         ed.get('fac_make_good_date') or kd.get('make_good_date'), styles,
     ))
     rows.append(_date_row(

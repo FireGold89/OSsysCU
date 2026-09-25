@@ -207,6 +207,7 @@ def _migrate_db(conn):
         ('ip_cert_attachment_name', 'TEXT'),
         ('ip_application_attachment', 'TEXT'),
         ('ip_application_attachment_name', 'TEXT'),
+        ('receipt_records_json', 'TEXT'),
     ]:
         if col not in ip_cols:
             conn.execute(f"ALTER TABLE interim_payments ADD COLUMN {col} {ddl}")
@@ -2433,6 +2434,17 @@ def delete_sc_contract_registry_row(sub_contract_no):
     return cur.rowcount > 0
 
 
+def _parse_float(val, default=0.0):
+    if val is None or val == '':
+        return default
+    try:
+        if isinstance(val, str):
+            val = val.replace(',', '').strip()
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
+
 def update_main_con_fac(project_id, data):
     from main_fac import MAIN_FAC_WRITABLE
 
@@ -2446,14 +2458,14 @@ def update_main_con_fac(project_id, data):
             if val == '' or val is None:
                 payload[key] = None
             elif key.endswith('_override'):
-                payload[key] = float(val) if val != '' else None
+                payload[key] = _parse_float(val) if val != '' else None
             elif key in (
                 'fac_remeasurement_b', 'fac_provisional_qty_e', 'fac_provisional_sums_f',
                 'fac_fluctuations_g', 'fac_lad_rate', 'fac_lad_max',
             ):
-                payload[key] = float(val or 0)
+                payload[key] = _parse_float(val, 0)
             elif key == 'fac_dlp_days':
-                payload[key] = int(float(val)) if val not in ('', None) else None
+                payload[key] = int(_parse_float(val)) if val not in ('', None) else None
             else:
                 payload[key] = val
     if not payload:
@@ -4542,13 +4554,99 @@ def _format_receipt_date_display(iso_date):
         return s
 
 
-def format_ip_receipt_display(row):
-    """收款記錄顯示（支票：#828310 , 003, 22/3/2025；過數：備註 · 日期）"""
-    method = (row.get('receipt_method') or '').strip()
-    cheque_no = (row.get('receipt_cheque_no') or '').strip()
-    bank = (row.get('receipt_bank') or '').strip()
-    note = (row.get('receipt_note') or '').strip()
-    date_disp = _format_receipt_date_display(row.get('receipt_date'))
+def _empty_receipt_record():
+    return {
+        'method': None,
+        'cheque_no': None,
+        'bank': None,
+        'date': None,
+        'note': None,
+        'attachment': None,
+        'attachment_name': None,
+    }
+
+
+def _normalize_receipt_record(rec):
+    if not rec or not isinstance(rec, dict):
+        rec = {}
+    out = _empty_receipt_record()
+    method = (rec.get('method') or rec.get('receipt_method') or '').strip() or None
+    out['method'] = method
+    out['cheque_no'] = (rec.get('cheque_no') or rec.get('receipt_cheque_no') or '').strip() or None
+    out['bank'] = (rec.get('bank') or rec.get('receipt_bank') or '').strip() or None
+    out['date'] = (rec.get('date') or rec.get('receipt_date') or '').strip() or None
+    out['note'] = (rec.get('note') or rec.get('receipt_note') or '').strip() or None
+    out['attachment'] = rec.get('attachment') or rec.get('receipt_attachment') or None
+    out['attachment_name'] = rec.get('attachment_name') or rec.get('receipt_attachment_name') or None
+    return out
+
+
+def _receipt_record_is_empty(rec):
+    rec = rec or {}
+    return not any([
+        rec.get('method'), rec.get('cheque_no'), rec.get('bank'),
+        rec.get('date'), rec.get('note'), rec.get('attachment'),
+    ])
+
+
+def _legacy_receipt_from_row(row):
+    rec = _normalize_receipt_record({
+        'method': row.get('receipt_method'),
+        'cheque_no': row.get('receipt_cheque_no'),
+        'bank': row.get('receipt_bank'),
+        'date': row.get('receipt_date'),
+        'note': row.get('receipt_note'),
+        'attachment': row.get('receipt_attachment'),
+        'attachment_name': row.get('receipt_attachment_name'),
+    })
+    return None if _receipt_record_is_empty(rec) else rec
+
+
+def _parse_receipt_records_json(raw):
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    out = []
+    for item in data:
+        rec = _normalize_receipt_record(item)
+        if not _receipt_record_is_empty(rec):
+            out.append(rec)
+    return out
+
+
+def get_ip_receipt_records(row):
+    records = _parse_receipt_records_json(row.get('receipt_records_json'))
+    if records:
+        return records
+    legacy = _legacy_receipt_from_row(row)
+    return [legacy] if legacy else []
+
+
+def _legacy_fields_from_receipt_record(rec):
+    rec = rec or _empty_receipt_record()
+    return {
+        'receipt_method': rec.get('method'),
+        'receipt_cheque_no': rec.get('cheque_no'),
+        'receipt_bank': rec.get('bank'),
+        'receipt_date': rec.get('date'),
+        'receipt_note': rec.get('note'),
+        'receipt_attachment': rec.get('attachment'),
+        'receipt_attachment_name': rec.get('attachment_name'),
+    }
+
+
+def _format_single_receipt_display(rec):
+    """單筆收款記錄顯示（支票：#828310 , 003, 22/3/2025；過數：備註 · 日期）"""
+    method = (rec.get('method') or '').strip()
+    cheque_no = (rec.get('cheque_no') or '').strip()
+    bank = (rec.get('bank') or '').strip()
+    note = (rec.get('note') or '').strip()
+    date_disp = _format_receipt_date_display(rec.get('date'))
 
     if method == 'transfer' or (not cheque_no and note):
         label = note or '過數'
@@ -4571,8 +4669,75 @@ def format_ip_receipt_display(row):
     return None
 
 
+def format_ip_receipt_display(row):
+    records = get_ip_receipt_records(row)
+    if not records:
+        return None
+    parts = [_format_single_receipt_display(r) for r in records]
+    parts = [p for p in parts if p]
+    if not parts:
+        return None
+    return ' · '.join(parts)
+
+
+def _prepare_receipt_records_for_save(data, existing_row=None):
+    existing_records = get_ip_receipt_records(existing_row) if existing_row else []
+    if data.get('receipt_records') is not None:
+        incoming = [_normalize_receipt_record(r) for r in (data.get('receipt_records') or [])]
+        incoming = [r for r in incoming if not _receipt_record_is_empty(r)]
+        for i, rec in enumerate(incoming):
+            if i < len(existing_records):
+                if not rec.get('attachment') and existing_records[i].get('attachment'):
+                    rec['attachment'] = existing_records[i]['attachment']
+                    rec['attachment_name'] = existing_records[i]['attachment_name']
+        return incoming
+
+    legacy = _normalize_receipt_record({
+        'method': data.get('receipt_method'),
+        'cheque_no': data.get('receipt_cheque_no'),
+        'bank': data.get('receipt_bank'),
+        'date': data.get('receipt_date'),
+        'note': data.get('receipt_note'),
+        'attachment': data.get('receipt_attachment'),
+        'attachment_name': data.get('receipt_attachment_name'),
+    })
+    if not _receipt_record_is_empty(legacy):
+        if existing_records:
+            merged = dict(existing_records[0])
+            for key, val in legacy.items():
+                if val not in (None, ''):
+                    merged[key] = val
+            return [merged, *existing_records[1:]]
+        return [legacy]
+    return existing_records
+
+
+def _persist_receipt_records(ip_id, records):
+    records = [r for r in (records or []) if not _receipt_record_is_empty(r)]
+    legacy = _legacy_fields_from_receipt_record(records[0] if records else _empty_receipt_record())
+    json_str = json.dumps(records, ensure_ascii=False) if records else None
+    conn = get_conn()
+    conn.execute("""
+        UPDATE interim_payments SET
+            receipt_records_json=?,
+            receipt_method=?, receipt_cheque_no=?, receipt_bank=?,
+            receipt_date=?, receipt_note=?,
+            receipt_attachment=?, receipt_attachment_name=?
+        WHERE id=?
+    """, (
+        json_str,
+        legacy['receipt_method'], legacy['receipt_cheque_no'], legacy['receipt_bank'],
+        legacy['receipt_date'], legacy['receipt_note'],
+        legacy['receipt_attachment'], legacy['receipt_attachment_name'],
+        ip_id,
+    ))
+    conn.commit()
+    conn.close()
+
+
 def enrich_interim_payment(row):
     r = dict(row)
+    r['receipt_records'] = get_ip_receipt_records(r)
     r['receipt_display'] = format_ip_receipt_display(r)
     return r
 
@@ -4884,30 +5049,34 @@ def get_interim_payment(ip_id):
     return enrich_interim_payment(row) if row else None
 
 
-def set_ip_receipt_attachment(ip_id, file_path, original_filename=None):
-    conn = get_conn()
-    conn.execute("""
-        UPDATE interim_payments
-        SET receipt_attachment=?, receipt_attachment_name=?
-        WHERE id=?
-    """, (file_path, original_filename, ip_id))
-    conn.commit()
-    conn.close()
+def set_ip_receipt_attachment(ip_id, file_path, original_filename=None, record_index=0):
+    row = get_interim_payment(ip_id)
+    if not row:
+        return
+    records = list(row.get('receipt_records') or get_ip_receipt_records(row))
+    idx = max(0, int(record_index or 0))
+    while len(records) <= idx:
+        records.append(_empty_receipt_record())
+    records[idx]['attachment'] = file_path
+    records[idx]['attachment_name'] = original_filename
+    _persist_receipt_records(ip_id, records)
 
 
-def clear_ip_receipt_attachment(ip_id):
-    conn = get_conn()
-    row = conn.execute(
-        "SELECT receipt_attachment FROM interim_payments WHERE id=?", (ip_id,)
-    ).fetchone()
-    conn.execute("""
-        UPDATE interim_payments
-        SET receipt_attachment=NULL, receipt_attachment_name=NULL
-        WHERE id=?
-    """, (ip_id,))
-    conn.commit()
-    conn.close()
-    return row['receipt_attachment'] if row else None
+def clear_ip_receipt_attachment(ip_id, record_index=0):
+    row = get_interim_payment(ip_id)
+    if not row:
+        return None
+    records = list(row.get('receipt_records') or get_ip_receipt_records(row))
+    idx = max(0, int(record_index or 0))
+    if idx >= len(records):
+        return None
+    old_path = records[idx].get('attachment')
+    records[idx]['attachment'] = None
+    records[idx]['attachment_name'] = None
+    if _receipt_record_is_empty(records[idx]):
+        records.pop(idx)
+    _persist_receipt_records(ip_id, records)
+    return old_path
 
 
 def set_ip_cert_attachment(ip_id, file_path, original_filename=None):
@@ -4981,12 +5150,19 @@ def _recalc_and_save_ip_pcts(project_id):
 def upsert_interim_payment(data):
     conn = get_conn()
     project_id = data['project_id']
+    existing_row = None
+    if data.get('id'):
+        raw = conn.execute("SELECT * FROM interim_payments WHERE id=?", (data['id'],)).fetchone()
+        existing_row = dict(raw) if raw else None
+    records = _prepare_receipt_records_for_save(data, existing_row)
+    data['receipt_records_json'] = json.dumps(records, ensure_ascii=False) if records else None
+    data.update(_legacy_fields_from_receipt_record(records[0] if records else _empty_receipt_record()))
     for f in ['applied_date', 'certificate_date', 'subcon_cert_date', 'receipt_date']:
         data.setdefault(f, None)
     for f in ['application_amount', 'certified_income', 'subcon_paid']:
         data.setdefault(f, 0)
     for f in ['receipt_method', 'receipt_cheque_no', 'receipt_bank', 'receipt_note',
-              'receipt_attachment', 'receipt_attachment_name']:
+              'receipt_attachment', 'receipt_attachment_name', 'receipt_records_json']:
         data.setdefault(f, None)
     if not data.get('seq_no'):
         max_seq = conn.execute(
@@ -5004,7 +5180,7 @@ def upsert_interim_payment(data):
                 subcon_paid=:subcon_paid, subcon_cert_date=:subcon_cert_date,
                 receipt_method=:receipt_method, receipt_cheque_no=:receipt_cheque_no,
                 receipt_bank=:receipt_bank, receipt_date=:receipt_date,
-                receipt_note=:receipt_note
+                receipt_note=:receipt_note, receipt_records_json=:receipt_records_json
             WHERE id=:id AND project_id=:project_id
         """, data)
         ip_id = data['id']
@@ -5014,12 +5190,14 @@ def upsert_interim_payment(data):
                 project_id, ip_no, seq_no, applied_date,
                 application_amount, certified_income, certificate_date,
                 subcon_paid, subcon_cert_date,
-                receipt_method, receipt_cheque_no, receipt_bank, receipt_date, receipt_note
+                receipt_method, receipt_cheque_no, receipt_bank, receipt_date, receipt_note,
+                receipt_records_json
             ) VALUES (
                 :project_id, :ip_no, :seq_no, :applied_date,
                 :application_amount, :certified_income, :certificate_date,
                 :subcon_paid, :subcon_cert_date,
-                :receipt_method, :receipt_cheque_no, :receipt_bank, :receipt_date, :receipt_note
+                :receipt_method, :receipt_cheque_no, :receipt_bank, :receipt_date, :receipt_note,
+                :receipt_records_json
             )
         """, data)
         ip_id = cur.lastrowid

@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import os
 import re
+from io import BytesIO
 
+import openpyxl
+from openpyxl.styles import Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+
+import database as db
 from config import BASE_DIR
 from sc_ref import company_matches_sc, derive_parent_sc_no
 
@@ -534,3 +540,86 @@ def resolve_sub_contract_no(
                     break
 
     return '—'
+
+
+SCR_EXPORT_HEADERS = (
+    '合約編號', '分判商', '工程項目', '項目編號', '負責同事', '分判合約合額',
+    '合約會簽表', '合作伙伴', '定標會議紀錄',
+    'Final Account', 'Final Account Statement', 'ISO', 'Remark', '年份',
+)
+
+
+def _scr_export_styles():
+    fill = PatternFill('solid', fgColor='1F4E79')
+    font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
+    side = Side(style='thin', color='B0B0B0')
+    border = Border(left=side, right=side, top=side, bottom=side)
+    return fill, font, border
+
+
+def _scr_autosize(ws, cols):
+    for i in range(1, cols + 1):
+        letter = get_column_letter(i)
+        maxlen = 10
+        for cell in ws[letter]:
+            v = cell.value
+            if v is None:
+                continue
+            maxlen = max(maxlen, min(len(str(v)), 40))
+        ws.column_dimensions[letter].width = maxlen + 2
+
+
+def export_registry_bytes(
+    q=None,
+    project_core=None,
+    sheet=None,
+    person=None,
+    company=None,
+):
+    """依目前篩選匯出 MS/C 分判合約編號表"""
+    rows = db.search_sc_contract_registry(
+        q=q,
+        project_core=project_core,
+        sheet=sheet,
+        person=person,
+        company=company,
+        limit=50000,
+    )
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'MS-C Registry'
+    header_fill, header_font, header_border = _scr_export_styles()
+    body_font = Font(name='Calibri', size=10)
+    for idx, title in enumerate(SCR_EXPORT_HEADERS, start=1):
+        cell = ws.cell(1, idx, title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = header_border
+    for r_i, row in enumerate(rows, start=2):
+        vals = [
+            row.get('sub_contract_no'),
+            row.get('company'),
+            row.get('works'),
+            row.get('project_code'),
+            row.get('person_in_charge'),
+            row.get('amount'),
+            row.get('countersign'),
+            row.get('partner'),
+            row.get('tender_minutes'),
+            row.get('final_account'),
+            row.get('final_account_statement'),
+            row.get('iso_flag'),
+            row.get('remark'),
+            row.get('sheet'),
+        ]
+        for c_i, val in enumerate(vals, start=1):
+            cell = ws.cell(r_i, c_i, val)
+            cell.font = body_font
+            cell.border = header_border
+    _scr_autosize(ws, len(SCR_EXPORT_HEADERS))
+    last_row = max(1, 1 + len(rows))
+    ws.auto_filter.ref = f'A1:{get_column_letter(len(SCR_EXPORT_HEADERS))}{last_row}'
+    ws.freeze_panes = 'B2'
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

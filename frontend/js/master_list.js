@@ -137,6 +137,19 @@ const MasterList = {
     this.loadTable();
   },
 
+  exportExcel() {
+    const params = this._filterParams();
+    if (this.sortBy) {
+      params.set('sort', this.sortBy);
+      params.set('dir', this.sortDir || 'desc');
+    }
+    const year = this._getEffectiveYear();
+    const qs = params.toString();
+    const suffix = qs ? `?${qs}` : '';
+    const filename = year ? `Master_List_${year}.xlsx` : 'Master_List.xlsx';
+    downloadExcelExport(`/master/export${suffix}`, filename);
+  },
+
   _filterScopeLabel() {
     const parts = [];
     const year = this._getEffectiveYear();
@@ -831,6 +844,7 @@ const MasterList = {
     this.recalcProfit();
     await this.refreshQuotNoSuggest(true);
     document.getElementById('masterEditModal').classList.add('open');
+    AmountInput.init(document.getElementById('masterEditModal'));
   },
 
   async openEdit(rowId) {
@@ -892,6 +906,7 @@ const MasterList = {
     await this.loadFinancePanel(rowId);
     this.recalcProfit();
     document.getElementById('masterEditModal').classList.add('open');
+    AmountInput.init(document.getElementById('masterEditModal'));
   },
 
   _parseChecklist(raw) {
@@ -943,7 +958,7 @@ const MasterList = {
     const num = (id) => {
       const v = document.getElementById(id)?.value;
       if (v === '' || v == null) return null;
-      const n = parseFloat(v);
+      const n = parseAmt(v);
       return Number.isFinite(n) ? n : null;
     };
 
@@ -958,7 +973,7 @@ const MasterList = {
     }
 
     const profit = Math.round((awarded - subcon) * 100) / 100;
-    profitEl.value = profit;
+    profitEl.value = fmtInputNum(profit);
     if (quoted != null && quoted !== 0) {
       pctEl.value = Math.round((profit / quoted) * 10000) / 100;
     } else {
@@ -1113,7 +1128,7 @@ const MasterList = {
     const rowId = document.getElementById('masterEditRowId').value;
     const num = (id) => {
       const v = document.getElementById(id).value;
-      return v === '' ? null : parseFloat(v);
+      return parseAmtOrNull(v);
     };
     const intOrNull = (id) => {
       const v = document.getElementById(id).value;

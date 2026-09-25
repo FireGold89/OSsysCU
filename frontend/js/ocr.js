@@ -76,6 +76,7 @@ const OCR = {
       </tr>
     `).join('');
 
+    AmountInput.init(document.getElementById('ocrItemsBody'));
     this.syncDescription();
   },
 
@@ -203,8 +204,8 @@ const OCR = {
     const totalEl = document.getElementById('ocrItemsTotal');
     let sum = 0;
     items.forEach(it => {
-      const a = parseFloat(it.amount);
-      if (!isNaN(a)) sum += a;
+      const a = parseAmt(it.amount);
+      if (!Number.isNaN(a)) sum += a;
     });
     if (totalEl) {
       totalEl.innerHTML = items.length
@@ -472,11 +473,11 @@ const OCR = {
     if (!warn) return;
     let sum = 0;
     this.lineItems.forEach(it => {
-      const a = parseFloat(it.amount);
-      if (!isNaN(a)) sum += a;
+      const a = parseAmt(it.amount);
+      if (!Number.isNaN(a)) sum += a;
     });
-    const head = parseFloat(document.getElementById('ocrAmount')?.value);
-    if (sum > 0 && !isNaN(head) && Math.abs(sum - head) > 0.02) {
+    const head = parseAmt(document.getElementById('ocrAmount')?.value);
+    if (sum > 0 && !Number.isNaN(head) && Math.abs(sum - head) > 0.02) {
       warn.style.display = '';
       warn.textContent = `⚠️ 明細合計 ${fmt(sum)} 與表頭金額 ${fmt(head)} 不一致，請核對後再儲存`;
       return false;
@@ -759,7 +760,7 @@ const OCR = {
     const newScNo = document.getElementById('ocrNewScNo').value.trim();
     const effectiveScNo = scNo || newScNo;
     const sc = App.scList.find(s => s.sc_no === effectiveScNo);
-    const amount = parseFloat(document.getElementById('ocrAmount').value) || 0;
+    const amount = parseAmtOrZero(document.getElementById('ocrAmount').value);
     const company = document.getElementById('ocrCompany').value.trim();
     const description = this.buildDescriptionText(this.lineItems)
       || document.getElementById('ocrDescription').value

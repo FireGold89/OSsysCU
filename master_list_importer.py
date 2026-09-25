@@ -14,8 +14,11 @@ import os
 import re
 import sys
 from datetime import datetime
+from io import BytesIO
 
 import openpyxl
+from openpyxl.styles import Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 import database as db
 from master_ref import enrich_person_fields, extract_person_code_from_quotation_no, normalize_person_code
@@ -818,6 +821,94 @@ def sync_all_reference(reference_dir):
         for k in ('new', 'updated', 'unchanged'):
             combined['totals'][k] += result[k]
     return combined
+
+
+MASTER_EXPORT_HEADERS = (
+    '報價編號', '日期', '項目負責人', '類型', '中標', '屋苑/地點', '工作範疇', '內容',
+    '報價金額', '中標金額', '配對項目', '來源年份',
+)
+
+
+def _export_header_style():
+    fill = PatternFill('solid', fgColor='1F4E79')
+    font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
+    side = Side(style='thin', color='B0B0B0')
+    border = Border(left=side, right=side, top=side, bottom=side)
+    return fill, font, border
+
+
+def _autosize_sheet(ws, cols):
+    for i in range(1, cols + 1):
+        letter = get_column_letter(i)
+        maxlen = 10
+        for cell in ws[letter]:
+            v = cell.value
+            if v is None:
+                continue
+            maxlen = max(maxlen, min(len(str(v)), 36))
+        ws.column_dimensions[letter].width = maxlen + 2
+
+
+def export_master_list_bytes(
+    q=None,
+    awarded_only=False,
+    unlinked_only=False,
+    source_year=None,
+    person_in_charge=None,
+    doc_type=None,
+    sort_by=None,
+    sort_dir='desc',
+):
+    """依目前篩選匯出 Master List（Phase 1 欄位）"""
+    data = db.list_quotation_registry(
+        q=q,
+        awarded_only=awarded_only,
+        unlinked_only=unlinked_only,
+        source_year=source_year,
+        person_in_charge=person_in_charge,
+        doc_type=doc_type,
+        limit=50000,
+        offset=0,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    items = data.get('items') or []
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Master List'
+    header_fill, header_font, header_border = _export_header_style()
+    body_font = Font(name='Calibri', size=10)
+    for idx, title in enumerate(MASTER_EXPORT_HEADERS, start=1):
+        cell = ws.cell(1, idx, title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = header_border
+    for r_i, row in enumerate(items, start=2):
+        vals = [
+            row.get('quotation_no'),
+            safe_date(row.get('quote_date')),
+            row.get('person_in_charge'),
+            row.get('doc_type'),
+            row.get('awarded'),
+            row.get('site_name'),
+            row.get('trade_category'),
+            row.get('description'),
+            row.get('quoted_amount'),
+            row.get('awarded_amount'),
+            row.get('project_code'),
+            row.get('source_year'),
+        ]
+        for c_i, val in enumerate(vals, start=1):
+            cell = ws.cell(r_i, c_i, val)
+            cell.font = body_font
+            cell.border = header_border
+    _autosize_sheet(ws, len(MASTER_EXPORT_HEADERS))
+    last_row = max(1, 1 + len(items))
+    ws.auto_filter.ref = f'A1:{get_column_letter(len(MASTER_EXPORT_HEADERS))}{last_row}'
+    ws.freeze_panes = 'B2'
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 
 if __name__ == '__main__':

@@ -15,6 +15,8 @@ from reportlab.lib.units import mm
 from sc_fac_pdf import (
     BODY_EN_FONT_PT,
     BODY_FONT_PT,
+    COMPANY,
+    COMPANY_ZH,
     DEFAULT_SC_FAC_THEME,
     HDR_COL_WIDTHS,
     P1_BODY_EN_FONT_PT,
@@ -25,6 +27,13 @@ from sc_fac_pdf import (
     _variations_settle_labels,
     _vo_total_label_parts,
     normalize_sc_fac_theme,
+)
+
+_INTERNAL_SIG_ROWS = (
+    ('編制者', 'Prepared by'),
+    ('合約部', 'Contracts Dept.'),
+    ('項目部', 'Project Dept.'),
+    ('總經理', 'General Manager'),
 )
 
 FONT_NAME = 'Microsoft JhengHei'
@@ -89,6 +98,67 @@ def _cell_border(cell, *, top=False, bottom=False, bottom_double=False):
     tcPr.append(borders)
 
 
+def _sig_spacer(doc):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(54)
+    p.paragraph_format.space_after = Pt(0)
+
+
+def _underline_run(p, width_chars=42):
+    run = p.add_run('_' * width_chars)
+    run.font.name = FONT_NAME
+    run.font.size = Pt(8)
+    run.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+
+
+def _add_internal_signature(doc):
+    """P1 內部四行簽名（隨內文，非固定頁底）"""
+    _sig_spacer(doc)
+    for zh, en in _INTERNAL_SIG_ROWS:
+        tbl = doc.add_table(rows=1, cols=4)
+        tbl.autofit = True
+        _set_cell_text(tbl.rows[0].cells[0], f'{zh}:', size=8)
+        _set_cell_text(tbl.rows[0].cells[1], f'{en}:', size=7)
+        sig = tbl.rows[0].cells[2]
+        sig.text = ''
+        p = sig.paragraphs[0]
+        _underline_run(p, 36)
+        date_cell = tbl.rows[0].cells[3]
+        date_cell.text = ''
+        dp = date_cell.paragraphs[0]
+        r = dp.add_run('Date 日期: ')
+        r.font.name = FONT_NAME
+        r.font.size = Pt(8)
+        _underline_run(dp, 24)
+        doc.add_paragraph()
+
+
+def _add_dual_signature(doc):
+    """P2 / 附錄 I/II 雙簽（隨內文，非固定頁底）"""
+    _sig_spacer(doc)
+    tbl = doc.add_table(rows=4, cols=2)
+    tbl.autofit = True
+    left, right = tbl.rows[0].cells[0], tbl.rows[0].cells[1]
+    left.text = ''
+    right.text = ''
+    _underline_run(left.paragraphs[0], 40)
+    _underline_run(right.paragraphs[0], 40)
+    _set_cell_text(tbl.rows[1].cells[0], COMPANY, size=8)
+    _set_cell_text(tbl.rows[1].cells[1], 'Authorized Signature by Sub-contractor', size=8)
+    _set_cell_text(tbl.rows[2].cells[0], COMPANY_ZH, size=8)
+    _set_cell_text(tbl.rows[2].cells[1], '分判商簽章', size=8)
+    ld = tbl.rows[3].cells[0]
+    rd = tbl.rows[3].cells[1]
+    ld.text = ''
+    rd.text = ''
+    lr = ld.paragraphs[0].add_run('Date 日期: ')
+    lr.font.name = FONT_NAME
+    lr.font.size = Pt(8)
+    rr = rd.paragraphs[0].add_run('Date 日期: ')
+    rr.font.name = FONT_NAME
+    rr.font.size = Pt(8)
+
+
 def _add_para(doc, text, *, center=False, underline=False, bold=False, size=11, space_after=6):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT
@@ -133,13 +203,13 @@ def _appendix_head(doc, h, appendix, section_title):
 
 
 def _appendix_table_vo(doc, items, total):
-    hdr = ['No.', 'AI REF', 'QUO. REF.', 'DESCRIPTION', 'QTY', 'UNIT', 'RATE', 'AMOUNT']
+    hdr = ['No.', 'AI REF', 'QUO. REF.', 'DESCRIPTION', 'AMOUNT']
     rows = items or []
     extra = 2  # spacer + total
-    tbl = doc.add_table(rows=1 + max(len(rows), 1) + extra, cols=8)
+    tbl = doc.add_table(rows=1 + max(len(rows), 1) + extra, cols=5)
     for j, c in enumerate(hdr):
         cell = tbl.rows[0].cells[j]
-        align = 'center' if j in (4, 5, 6, 7) else None
+        align = 'center' if j == 4 else None
         _set_cell_text(cell, c, bold=True, align=align)
         _cell_border(cell, bottom=True)
     data_end = 1 + max(len(rows), 1)
@@ -149,42 +219,28 @@ def _appendix_table_vo(doc, items, total):
             v.get('ai_ref', ''),
             v.get('quo_ref', ''),
             v.get('description', ''),
-            str(v.get('qty', '')),
-            v.get('unit', ''),
-            _money_acct(v.get('rate')),
             _money_acct(v.get('amount')),
         ]
         for j, txt in enumerate(vals):
             red = str(txt).startswith('(')
-            if j in (4, 5, 6):
-                align = 'center'
-            elif j == 7:
-                align = 'right'
-            else:
-                align = None
+            align = 'right' if j == 4 else None
             _set_cell_text(tbl.rows[i].cells[j], txt, red=red, align=align)
     if not rows:
-        for j in range(8):
-            if j in (4, 5, 6):
-                align = 'center'
-            elif j == 7:
-                align = 'right'
-            else:
-                align = None
+        for j in range(5):
+            align = 'right' if j == 4 else None
             _set_cell_text(tbl.rows[1].cells[j], '—', align=align)
     spacer = data_end
-    for j in (5, 6, 7):
-        _cell_border(tbl.rows[spacer].cells[j], bottom=True)
+    _cell_border(tbl.rows[spacer].cells[4], bottom=True)
     total_row = spacer + 1
-    lbl = tbl.rows[total_row].cells[3]
-    lbl.merge(tbl.rows[total_row].cells[6])
+    lbl = tbl.rows[total_row].cells[0]
+    lbl.merge(tbl.rows[total_row].cells[3])
     _set_cell_vo_total_label(lbl, total)
     amt = _money_acct(total)
     _set_cell_text(
-        tbl.rows[total_row].cells[7], amt,
+        tbl.rows[total_row].cells[4], amt,
         bold=True, red=amt.startswith('('), align='right',
     )
-    _cell_border(tbl.rows[total_row].cells[7], bottom=True, bottom_double=True)
+    _cell_border(tbl.rows[total_row].cells[4], bottom=True, bottom_double=True)
     doc.add_paragraph()
 
 
@@ -316,18 +372,17 @@ def _add_statement_header_and_table(doc, data, theme):
 
 def _page1_statement(doc, data, theme):
     _add_statement_header_and_table(doc, data, theme)
-    doc.add_paragraph()
-    _add_para(doc, '— 簽名區（P1 內部簽署 · 編制者／合約部／項目部／總經理）—', size=8, space_after=4)
+    _add_internal_signature(doc)
 
 
 def _page2_statement_and_declarations(doc, data, theme):
-    """P2：同 P1 工程帳目總結算 + 三段聲明 · 頁底雙簽（Mepork · 分判商）"""
+    """P2：同 P1 工程帳目總結算 + 三段聲明 + 雙簽（隨內文）"""
     _add_statement_header_and_table(doc, data, theme)
-    for _ in range(3):
-        doc.add_paragraph()
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(18)
     for text in SC_FAC_DECLARATIONS:
         _add_para(doc, text, size=P1_BODY_FONT_PT, space_after=10)
-    _add_para(doc, '— 頁底簽章區（Mepork · 分判商 · 同附錄 I 雙簽格式）—', size=8, space_after=4)
+    _add_dual_signature(doc)
 
 
 def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
@@ -338,7 +393,7 @@ def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
     doc = Document()
     sec = doc.sections[0]
     sec.top_margin = Mm(15)
-    sec.bottom_margin = Mm(46 if theme == 'classic' else 28)
+    sec.bottom_margin = Mm(20)
     sec.left_margin = Mm(15)
     sec.right_margin = Mm(15)
 
@@ -348,7 +403,6 @@ def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
     _page2_statement_and_declarations(doc, data, theme)
 
     doc.add_page_break()
-    _landscape_section(doc)
     _appendix_head(doc, h, 'APPENDIX I', 'SUMMARY OF VARIATIONS')
     _appendix_table_vo(
         doc,
@@ -358,6 +412,7 @@ def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
     _add_para(doc,
         '分判商同意上述後加工程結算所詳列之帳目正確無誤。分判商本人/本公司亦承諾不會再向美博工程服務有限公司根據上述後加工程作出任何索償。',
         size=BODY_FONT_PT, space_after=6)
+    _add_dual_signature(doc)
 
     doc.add_page_break()
     _portrait_section(doc)
@@ -371,7 +426,7 @@ def generate_sc_fac_docx(data: dict, theme: str | None = None) -> bytes:
     _add_para(doc,
         '分判商同意上述所詳列之帳目正確無誤。分判商本人/本公司亦承諾不會再向美博工程服務有限公司根據上述之支項目作出任何索償。',
         size=BODY_FONT_PT, space_after=6)
-    _add_para(doc, '— 頁底簽章區（Mepork · 分判商）—', size=8)
+    _add_dual_signature(doc)
 
     buf = BytesIO()
     doc.save(buf)

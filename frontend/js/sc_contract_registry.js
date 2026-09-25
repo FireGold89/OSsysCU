@@ -11,7 +11,7 @@ const ScContractRegistry = {
 
   SCR_COLUMNS: [
     { id: 'ms', label: '合約編號' },
-    { id: 'co', label: '外判公司' },
+    { id: 'co', label: '分判商' },
     { id: 'works', label: '工程項目' },
     { id: 'proj', label: '項目編號' },
     { id: 'person', label: '負責同事' },
@@ -75,7 +75,7 @@ const ScContractRegistry = {
     document.getElementById('scrCompany').value = r.company || '';
     document.getElementById('scrWorks').value = r.works || '';
     document.getElementById('scrProjectCode').value = r.project_code || '';
-    document.getElementById('scrAmount').value = r.amount != null ? String(r.amount) : '';
+    document.getElementById('scrAmount').value = r.amount != null ? fmtInputNum(r.amount) : '';
     document.getElementById('scrSheet').value = r.sheet || '';
     document.getElementById('scrCountersign').value = r.countersign || '';
     document.getElementById('scrPartner').value = r.partner || '';
@@ -93,7 +93,7 @@ const ScContractRegistry = {
       works: document.getElementById('scrWorks').value.trim() || null,
       project_code: document.getElementById('scrProjectCode').value.trim() || null,
       person_in_charge: document.getElementById('scrPerson').value.trim() || null,
-      amount: parseFloat(document.getElementById('scrAmount').value) || 0,
+      amount: parseAmtOrZero(document.getElementById('scrAmount').value),
       sheet: document.getElementById('scrSheet').value.trim() || null,
       countersign: document.getElementById('scrCountersign').value.trim() || null,
       partner: document.getElementById('scrPartner').value.trim() || null,
@@ -120,7 +120,7 @@ const ScContractRegistry = {
     if (!this.filters) return;
     this._fillSelect('scrYearFilter', this.filters.years, '全部年份');
     this._fillSelect('scrPersonFilter', this.filters.persons, '全部負責同事');
-    this._fillSelect('scrCompanyFilter', this.filters.companies, '全部外判公司');
+    this._fillSelect('scrCompanyFilter', this.filters.companies, '全部分判商');
     this._syncYearSelect();
   },
 
@@ -181,6 +181,21 @@ const ScContractRegistry = {
     localStorage.setItem('qs_scr_sort_key', this._sortKey);
     localStorage.setItem('qs_scr_sort_dir', this._sortDir);
     this.render();
+  },
+
+  exportExcel() {
+    const qs = new URLSearchParams();
+    const q = document.getElementById('scrSearch')?.value?.trim();
+    const year = this._readYearFilter();
+    const person = document.getElementById('scrPersonFilter')?.value;
+    const company = document.getElementById('scrCompanyFilter')?.value;
+    if (q) qs.set('q', q);
+    if (year) qs.set('year', year);
+    if (person) qs.set('person', person);
+    if (company) qs.set('company', company);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    const filename = year ? `分判合約編號_${year}.xlsx` : '分判合約編號.xlsx';
+    downloadExcelExport(`/sc-contract-registry/export${suffix}`, filename);
   },
 
   _sortValue(row, key) {
@@ -315,6 +330,7 @@ const ScContractRegistry = {
     await this._loadPersonSelect('');
     document.getElementById('scrMsNo').readOnly = false;
     document.getElementById('scrModal').classList.add('open');
+    AmountInput.init(document.getElementById('scrModal'));
   },
 
   async openEdit(subContractNo) {
@@ -326,6 +342,7 @@ const ScContractRegistry = {
     await this._loadPersonSelect(r.person_in_charge || '');
     document.getElementById('scrMsNo').readOnly = true;
     document.getElementById('scrModal').classList.add('open');
+    AmountInput.init(document.getElementById('scrModal'));
   },
 
   closeModal() {

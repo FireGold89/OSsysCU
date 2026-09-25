@@ -11,6 +11,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     BaseDocTemplate,
+    CondPageBreak,
     Flowable,
     Frame,
     NextPageTemplate,
@@ -29,8 +30,11 @@ PAGE_P = A4
 PAGE_L = landscape(A4)
 MARGIN = 15 * mm
 CONTENT_W = PAGE_P[0] - 2 * MARGIN
-FOOTER_ZONE = 28 * mm          # P2/P3 分判商雙簽 footer
-SIG_FOOTER_ZONE = 46 * mm      # P1 內部四行簽名 footer
+FOOTER_ZONE = 28 * mm          # 舊：固定頁底雙簽區（改為隨內文 Flowable）
+SIG_FOOTER_ZONE = 46 * mm      # P1 內部四行簽名區高度
+SIG_AFTER_CONTENT = 32 * mm    # 內文與簽名區間距（藍框位置）
+DUAL_SIG_BLOCK_H = 18 * mm
+INTERNAL_SIG_BLOCK_H = SIG_FOOTER_ZONE - 3 * mm
 TITLE_FONT_PT = 16             # 與 title 樣式 fontSize 一致
 TITLE_LEADING_PT = 20          # 與 title 樣式 leading 一致
 BODY_FONT_PT = 10              # P2/P3 內文
@@ -41,6 +45,7 @@ P1_BODY_LEADING_PT = 11
 P1_BODY_EN_FONT_PT = 7
 P2_DECL_GAP = 10 * mm           # P2 結算表與聲明之間（約 2–3 行）
 TOP_LOGO_ZONE = 14 * mm         # 頁首 LOGO 區
+FRAME_CONTENT_H = PAGE_P[1] - 2 * MARGIN - TOP_LOGO_ZONE  # 每頁 Frame 可用高度
 LOGO_H = 12 * mm                 # LOGO 高度（略小於標題行）
 LOGO_W_MAX = CONTENT_W * 0.42    # 橫向 banner 最闊
 LOGO_LIFT = 6 * mm               # LOGO 向上微調（貼近頁頂）
@@ -201,96 +206,153 @@ def _draw_logo(canvas, doc):
     canvas.restoreState()
 
 
-def _on_page_p1(canvas, doc):
+def _on_page_logo_only(canvas, doc):
     _draw_logo(canvas, doc)
-    _draw_internal_footer(canvas, doc)
 
 
-def _on_page_dual(canvas, doc):
-    _draw_logo(canvas, doc)
-    _draw_dual_footer(canvas, doc)
+_INTERNAL_SIG_ROWS = (
+    ('編制者', 'Prepared by'),
+    ('合約部', 'Contracts Dept.'),
+    ('項目部', 'Project Dept.'),
+    ('總經理', 'General Manager'),
+)
 
 
-def _draw_internal_footer(canvas, doc):
-    """P1 頁底：編制者／合約部／項目部／總經理（底線供簽署）"""
-    font = _sig_font()
-    canvas.saveState()
-    left = MARGIN
-    label_w = 30 * mm
-    sig_gap = 4 * mm
-    date_label_w = 18 * mm
-    row_h = 10.5 * mm
+class AdaptiveSignatureSection(Flowable):
+    """簽名區：緊接內文 + 固定間距（藍框）；換頁孤立頁才貼底；空間不足則整段換頁。"""
 
-    rows = (
-        ('編制者', 'Prepared by'),
-        ('合約部', 'Contracts Dept.'),
-        ('項目部', 'Project Dept.'),
-        ('總經理', 'General Manager'),
-    )
+    def __init__(self, sig_block, *, min_gap=SIG_AFTER_CONTENT, width=CONTENT_W):
+        Flowable.__init__(self)
+        self.sig_block = sig_block
+        self.min_gap = min_gap
+        self.width = width
+        self.height = 0
+        self._sig_h = 0
+        self._pin_bottom = False
 
-    # 由 footer 區頂部向下排四行；底線在下，線上空間簽署
-    footer_top = MARGIN + SIG_FOOTER_ZONE - 3 * mm
-    for i, (zh, en) in enumerate(rows):
-        line_y = footer_top - (i + 1) * row_h
-        label_y = line_y + 4 * mm
+    def _reserve_h(self):
+        return self.min_gap + self._sig_h
 
-        canvas.setFont(font, 8)
-        canvas.setFillColor(COLOR_BLACK)
-        canvas.drawString(left, label_y, f'{zh}:')
-        canvas.setFont(font, 7)
-        canvas.setFillColor(COLOR_BLACK)
-        canvas.drawString(left, label_y - 3.2 * mm, f'{en}:')
+    def _is_fresh_page(self, availHeight):
+        return availHeight >= FRAME_CONTENT_H - 2 * mm
 
-        sig_x1 = left + label_w
-        sig_x2 = sig_x1 + SIG_LINE_W
-        _draw_sig_line(canvas, sig_x1, sig_x2, line_y)
+    def wrap(self, availWidth, availHeight):
+        _sw, sh = self.sig_block.wrap(availWidth, availHeight)
+        self._sig_h = sh
+        self.width = availWidth
+        needed = self._reserve_h()
+        if availHeight < needed:
+            self.height = needed
+            self._pin_bottom = False
+            return self.width, self.height
+        if self._is_fresh_page(availHeight):
+            self.height = availHeight
+            self._pin_bottom = True
+        else:
+            self.height = needed
+            self._pin_bottom = False
+        return self.width, self.height
 
-        canvas.setFont(font, 8)
-        canvas.setFillColor(colors.HexColor('#0f172a'))
-        date_x = sig_x2 + sig_gap
-        canvas.drawString(date_x, label_y, 'Date 日期:')
-        date_x1 = date_x + date_label_w
-        date_x2 = date_x1 + DATE_LINE_W
-        _draw_sig_line(canvas, date_x1, date_x2, line_y)
+    def split(self, availWidth, availHeight):
+        _sw, sh = self.sig_block.wrap(availWidth, availHeight)
+        self._sig_h = sh
+        if availHeight >= self._reserve_h():
+            return []
+        return [AdaptiveSignatureSection(
+            self.sig_block, min_gap=self.min_gap, width=self.width,
+        )]
 
-    canvas.restoreState()
+    def draw(self):
+        y = (self.height - self._sig_h) if self._pin_bottom else 0
+        self.sig_block.drawOn(self.canv, 0, y)
 
 
-def _draw_dual_footer(canvas, doc):
-    """P2/P3 頁底：左 Mepork · 右分判商簽章（底線供簽署，不過長）"""
-    font = _sig_font()
-    canvas.saveState()
-    page_w, _page_h = canvas._pagesize
-    left_x = MARGIN
-    right_x = page_w - MARGIN
-    line_y = 20 * mm
-    line_w = DUAL_SIG_LINE_W
+class InternalSignatureBlock(Flowable):
+    """P1 內部四行簽名"""
 
-    left_x2 = left_x + line_w
-    right_x1 = right_x - line_w
+    def __init__(self, width=CONTENT_W):
+        Flowable.__init__(self)
+        self.width = width
+        self.height = INTERNAL_SIG_BLOCK_H
 
-    _draw_sig_line(canvas, left_x, left_x2, line_y)
-    _draw_sig_line(canvas, right_x1, right_x, line_y)
+    def draw(self):
+        c = self.canv
+        font = _sig_font()
+        left = 0
+        label_w = 30 * mm
+        sig_gap = 4 * mm
+        date_label_w = 18 * mm
+        row_h = 10.5 * mm
+        c.saveState()
+        for i, (zh, en) in enumerate(_INTERNAL_SIG_ROWS):
+            line_y = self.height - (i + 1) * row_h
+            label_y = line_y + 4 * mm
+            c.setFont(font, 8)
+            c.setFillColor(COLOR_BLACK)
+            c.drawString(left, label_y, f'{zh}:')
+            c.setFont(font, 7)
+            c.drawString(left, label_y - 3.2 * mm, f'{en}:')
+            sig_x1 = left + label_w
+            sig_x2 = sig_x1 + SIG_LINE_W
+            _draw_sig_line(c, sig_x1, sig_x2, line_y)
+            c.setFont(font, 8)
+            c.setFillColor(colors.HexColor('#0f172a'))
+            date_x = sig_x2 + sig_gap
+            c.drawString(date_x, label_y, 'Date 日期:')
+            date_x1 = date_x + date_label_w
+            date_x2 = date_x1 + DATE_LINE_W
+            _draw_sig_line(c, date_x1, date_x2, line_y)
+        c.restoreState()
 
-    canvas.setFont(font, 8)
-    canvas.setFillColor(colors.HexColor('#0f172a'))
 
-    y = line_y - 4.5 * mm
-    canvas.drawString(left_x, y, COMPANY)
-    y -= 4 * mm
-    canvas.drawString(left_x, y, COMPANY_ZH)
-    y -= 4 * mm
-    canvas.drawString(left_x, y, 'Date 日期:')
+class DualSignatureBlock(Flowable):
+    """P2 / 附錄 I/II 雙簽"""
 
-    y = line_y - 4.5 * mm
-    rx = right_x1
-    canvas.drawString(rx, y, 'Authorized Signature by Sub-contractor')
-    y -= 4 * mm
-    canvas.drawString(rx, y, '分判商簽章')
-    y -= 4 * mm
-    canvas.drawString(rx, y, 'Date 日期:')
+    def __init__(self, width=CONTENT_W):
+        Flowable.__init__(self)
+        self.width = width
+        self.height = DUAL_SIG_BLOCK_H
 
-    canvas.restoreState()
+    def draw(self):
+        c = self.canv
+        font = _sig_font()
+        line_w = DUAL_SIG_LINE_W
+        line_y = self.height - 3 * mm
+        left_x = 0
+        right_x = self.width
+        left_x2 = left_x + line_w
+        right_x1 = right_x - line_w
+        c.saveState()
+        _draw_sig_line(c, left_x, left_x2, line_y)
+        _draw_sig_line(c, right_x1, right_x, line_y)
+        c.setFont(font, 8)
+        c.setFillColor(colors.HexColor('#0f172a'))
+        y = line_y - 4.5 * mm
+        c.drawString(left_x, y, COMPANY)
+        y -= 4 * mm
+        c.drawString(left_x, y, COMPANY_ZH)
+        y -= 4 * mm
+        c.drawString(left_x, y, 'Date 日期:')
+        y = line_y - 4.5 * mm
+        rx = right_x1
+        c.drawString(rx, y, 'Authorized Signature by Sub-contractor')
+        y -= 4 * mm
+        c.drawString(rx, y, '分判商簽章')
+        y -= 4 * mm
+        c.drawString(rx, y, 'Date 日期:')
+        c.restoreState()
+
+
+def _append_internal_signature(story):
+    reserve = SIG_AFTER_CONTENT + INTERNAL_SIG_BLOCK_H
+    story.append(CondPageBreak(reserve))
+    story.append(AdaptiveSignatureSection(InternalSignatureBlock(CONTENT_W)))
+
+
+def _append_dual_signature(story):
+    reserve = SIG_AFTER_CONTENT + DUAL_SIG_BLOCK_H
+    story.append(CondPageBreak(reserve))
+    story.append(AdaptiveSignatureSection(DualSignatureBlock(CONTENT_W)))
 
 
 def _styles(font, body_pt=BODY_FONT_PT, en_pt=BODY_EN_FONT_PT, leading_pt=None, bold_font=None):
@@ -1077,74 +1139,55 @@ def _disclaimers(styles):
 
 
 def _statement_page2(data, styles, theme=DEFAULT_SC_FAC_THEME):
-    """P2：同 P1 工程帳目總結算 + 三段聲明（頁底雙簽由 portrait_footer 模板繪製）"""
+    """P2：同 P1 工程帳目總結算 + 三段聲明 + 雙簽（隨內文）"""
     story = _statement_page(data, styles, mp_mode=False, theme=theme, show_disclaimers=False)
     story.append(Spacer(1, P2_DECL_GAP))
     for t in SC_FAC_DECLARATIONS:
         story.append(_p(t, styles, 'body'))
         story.append(Spacer(1, 3 * mm))
+    _append_dual_signature(story)
     return story
 
 
 def _appendix_table_vo(items, total, styles, theme, content_w):
-    """P2 VO 附錄表（Word 參考：8 欄 · No.–AMOUNT）"""
+    """附錄 I VO 表（直印 · 5 欄：No.–AMOUNT，不含 QTY/UNIT/RATE）"""
     col_w = [
-        content_w * 0.067, content_w * 0.089, content_w * 0.089, content_w * 0.240,
-        content_w * 0.128, content_w * 0.128, content_w * 0.128, content_w * 0.131,
+        content_w * 0.08,
+        content_w * 0.12,
+        content_w * 0.12,
+        content_w * 0.48,
+        content_w * 0.20,
     ]
-    amt_col_w = col_w[7]
-    hdr = ['No.', 'AI REF', 'QUO. REF.', 'DESCRIPTION', 'QTY', 'UNIT', 'RATE', 'AMOUNT']
+    amt_col_w = col_w[4]
+    hdr = ['No.', 'AI REF', 'QUO. REF.', 'DESCRIPTION', 'AMOUNT']
     if theme == 'classic':
         rows = [[
-            _appendix_hdr_cell(c, styles, center=(i in (4, 5, 6, 7)))
+            _appendix_hdr_cell(c, styles, center=(i == 4))
             for i, c in enumerate(hdr)
         ]]
     else:
         rows = [[
-            _p(c, styles, 'cell_b') if i not in (4, 5, 6, 7)
+            _p(c, styles, 'cell_b') if i != 4
             else _p_html(f'<para align="center"><b>{_esc(c)}</b></para>', styles, 'cell_b')
             for i, c in enumerate(hdr)
         ]]
     for i, v in enumerate(items or [], 1):
-        if theme == 'classic':
-            rows.append([
-                _p(str(i), styles, 'cell'),
-                _p(v.get('ai_ref', ''), styles, 'cell'),
-                _p(v.get('quo_ref', ''), styles, 'cell'),
-                _p(v.get('description', ''), styles, 'cell'),
-                _p_center(v.get('qty', ''), styles),
-                _p_center(v.get('unit', ''), styles),
-                _p_amt(v.get('rate'), styles, align='center'),
-                _p_amt(v.get('amount'), styles),
-            ])
-        else:
-            rows.append([
-                _p(str(i), styles, 'cell'),
-                _p(v.get('ai_ref', ''), styles, 'cell'),
-                _p(v.get('quo_ref', ''), styles, 'cell'),
-                _p(v.get('description', ''), styles, 'cell'),
-                _p_center(v.get('qty', ''), styles),
-                _p_center(v.get('unit', ''), styles),
-                _p_amt(v.get('rate'), styles, align='center'),
-                _p_amt(v.get('amount'), styles),
-            ])
-    if len(rows) == 1:
-        blank_tail = [
-            _p_center('—', styles),
-            _p_center('—', styles),
-            _p_center('—', styles),
-            _p_html('<para align="right">—</para>', styles, 'cell'),
+        row_cells = [
+            _p(str(i), styles, 'cell'),
+            _p(v.get('ai_ref', ''), styles, 'cell'),
+            _p(v.get('quo_ref', ''), styles, 'cell'),
+            _p(v.get('description', ''), styles, 'cell'),
+            _p_amt(v.get('amount'), styles),
         ]
-        if theme == 'classic':
-            rows.append([
-                _p('—', styles, 'cell'),
-                _p('—', styles, 'cell'),
-                _p('—', styles, 'cell'),
-                _p('—', styles, 'cell'),
-                *blank_tail,
-            ])
-        else:
-            rows.append([_p('—', styles, 'cell')] * 4 + blank_tail)
+        rows.append(row_cells)
+    if len(rows) == 1:
+        rows.append([
+            _p('—', styles, 'cell'),
+            _p('—', styles, 'cell'),
+            _p('—', styles, 'cell'),
+            _p('—', styles, 'cell'),
+            _p_html('<para align="right">—</para>', styles, 'cell'),
+        ])
     tbl_style = [
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -1152,32 +1195,27 @@ def _appendix_table_vo(items, total, styles, theme, content_w):
     ]
     if theme == 'classic':
         spacer_idx = len(rows)
-        rows.append([''] * 8)
+        rows.append([''] * 5)
         total_idx = len(rows)
         rows.append([
             '', '', '',
             _vo_total_label_cell(total, styles),
-            '', '', '',
             _appendix_total_amt(total, styles, amt_col_w),
         ])
         tbl_style.extend([
             ('LINEBELOW', (0, 0), (-1, 0), CLASSIC_RULE_W, COLOR_BLACK),
-            ('LINEBELOW', (5, spacer_idx), (7, spacer_idx), CLASSIC_RULE_W, COLOR_BLACK),
-            ('SPAN', (3, total_idx), (6, total_idx)),
-            ('ALIGN', (4, 0), (6, 0), 'CENTER'),
-            ('ALIGN', (7, 0), (7, 0), 'CENTER'),
-            ('ALIGN', (4, 1), (6, spacer_idx), 'CENTER'),
-            ('ALIGN', (7, 1), (7, spacer_idx), 'RIGHT'),
-            ('LEFTPADDING', (7, total_idx), (7, total_idx), 0),
-            ('RIGHTPADDING', (7, total_idx), (7, total_idx), 0),
-            ('TOPPADDING', (7, total_idx), (7, total_idx), 0),
-            ('BOTTOMPADDING', (7, total_idx), (7, total_idx), 0),
+            ('LINEBELOW', (4, spacer_idx), (4, spacer_idx), CLASSIC_RULE_W, COLOR_BLACK),
+            ('ALIGN', (4, 0), (4, 0), 'CENTER'),
+            ('ALIGN', (4, 1), (4, spacer_idx), 'RIGHT'),
+            ('LEFTPADDING', (4, total_idx), (4, total_idx), 0),
+            ('RIGHTPADDING', (4, total_idx), (4, total_idx), 0),
+            ('TOPPADDING', (4, total_idx), (4, total_idx), 0),
+            ('BOTTOMPADDING', (4, total_idx), (4, total_idx), 0),
         ])
     else:
         rows.append([
             '', '', '',
             _vo_total_label_cell(total, styles),
-            '', '', '',
             _p(_money(total), styles, 'cell_r'),
         ])
         total_idx = len(rows) - 1
@@ -1187,11 +1225,8 @@ def _appendix_table_vo(items, total, styles, theme, content_w):
             ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
             ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
             ('LINEABOVE', (0, total_idx), (-1, total_idx), 0.75, colors.HexColor('#64748b')),
-            ('SPAN', (3, total_idx), (6, total_idx)),
-            ('ALIGN', (4, 0), (6, 0), 'CENTER'),
-            ('ALIGN', (7, 0), (7, 0), 'CENTER'),
-            ('ALIGN', (4, 1), (6, total_idx - 1), 'CENTER'),
-            ('ALIGN', (7, 1), (7, total_idx), 'RIGHT'),
+            ('ALIGN', (4, 0), (4, 0), 'CENTER'),
+            ('ALIGN', (4, 1), (4, total_idx), 'RIGHT'),
             *tbl_style,
         ]
     tbl = Table(rows, colWidths=col_w)
@@ -1286,11 +1321,11 @@ def _appendix_table_contra(items, total, total_label, styles, theme, content_w):
 
 def _variations_page(data, styles, theme=DEFAULT_SC_FAC_THEME):
     h = data['header']
-    lw = landscape(A4)[0] - 2 * MARGIN
+    cw = CONTENT_W
     story = []
     if theme == 'classic':
         story.extend(_classic_appendix_head(
-            h, styles, 'APPENDIX I', 'SUMMARY OF VARIATIONS', lw,
+            h, styles, 'APPENDIX I', 'SUMMARY OF VARIATIONS', cw,
         ))
     else:
         story.extend([
@@ -1302,12 +1337,13 @@ def _variations_page(data, styles, theme=DEFAULT_SC_FAC_THEME):
     story.append(_appendix_table_vo(
         data.get('variations') or [],
         data.get('variations_total', 0),
-        styles, theme, lw,
+        styles, theme, cw,
     ))
     story.append(Spacer(1, 6 * mm))
     story.append(_p(
         '分判商同意上述後加工程結算所詳列之帳目正確無誤。分判商本人/本公司亦承諾不會再向美博工程服務有限公司根據上述後加工程作出任何索償。',
         styles, 'small'))
+    _append_dual_signature(story)
     return story
 
 
@@ -1335,10 +1371,18 @@ def _contra_charge_page(data, styles, theme=DEFAULT_SC_FAC_THEME):
     story.append(_p(
         '分判商同意上述所詳列之帳目正確無誤。分判商本人/本公司亦承諾不會再向美博工程服務有限公司根據上述之支項目作出任何索償。',
         styles, 'small'))
+    _append_dual_signature(story)
     return story
 
 
-def _statement_page(data, styles, mp_mode=False, theme=DEFAULT_SC_FAC_THEME, show_disclaimers=True):
+def _statement_page(
+    data,
+    styles,
+    mp_mode=False,
+    theme=DEFAULT_SC_FAC_THEME,
+    show_disclaimers=True,
+    with_internal_signature=False,
+):
     gap = 8 * mm if theme == 'classic' and not mp_mode else 3 * mm
     hdr = _header_block(data, styles, theme=theme)
     story = hdr if isinstance(hdr, list) else [hdr]
@@ -1351,6 +1395,8 @@ def _statement_page(data, styles, mp_mode=False, theme=DEFAULT_SC_FAC_THEME, sho
         for t in _disclaimers(styles):
             story.append(_p(t, styles, 'small'))
             story.append(Spacer(1, 1.5 * mm))
+    elif with_internal_signature:
+        _append_internal_signature(story)
     return story
 
 
@@ -1375,37 +1421,33 @@ def generate_sc_fac_pdf(
     buf = BytesIO()
 
     pw, ph = PAGE_P
-    lw, lh = PAGE_L
     doc = BaseDocTemplate(buf, pagesize=PAGE_P, title=f"SC FAC {data.get('header', {}).get('sc_no', '')}")
     doc.addPageTemplates([
         PageTemplate(
             id='portrait_p1',
-            frames=[_frame(pw, ph, SIG_FOOTER_ZONE, TOP_LOGO_ZONE)],
+            frames=[_frame(pw, ph, 0, TOP_LOGO_ZONE)],
             pagesize=PAGE_P,
-            onPage=_on_page_p1,
-        ),
-        PageTemplate(
-            id='landscape_footer',
-            frames=[_frame(lw, lh, FOOTER_ZONE, TOP_LOGO_ZONE)],
-            pagesize=PAGE_L,
-            onPage=_on_page_dual,
+            onPage=_on_page_logo_only,
         ),
         PageTemplate(
             id='portrait_footer',
-            frames=[_frame(pw, ph, FOOTER_ZONE, TOP_LOGO_ZONE)],
+            frames=[_frame(pw, ph, 0, TOP_LOGO_ZONE)],
             pagesize=PAGE_P,
-            onPage=_on_page_dual,
+            onPage=_on_page_logo_only,
         ),
     ])
 
     story = []
     story.append(NextPageTemplate('portrait_p1'))
-    story.extend(_statement_page(data, p1_styles, mp_mode=False, theme=theme, show_disclaimers=False))
+    story.extend(_statement_page(
+        data, p1_styles, mp_mode=False, theme=theme,
+        show_disclaimers=False, with_internal_signature=True,
+    ))
     story.append(NextPageTemplate('portrait_footer'))
     story.append(PageBreak())
     story.extend(_statement_page2(data, p1_styles, theme=theme))
     if include_vo:
-        story.append(NextPageTemplate('landscape_footer'))
+        story.append(NextPageTemplate('portrait_footer'))
         story.append(PageBreak())
         story.extend(_variations_page(data, apx_styles, theme=theme))
     if include_contra:

@@ -4,12 +4,14 @@ const IpPeriod = {
   _data: null,
   _editable: false,
   _matrixView: 'by-ip',
-  _pendingReceiptFile: null,
   _pendingIpCertFile: null,
   _pendingIpAppFile: null,
   _searchQuery: '',
   _reconcileData: null,
   _bankSelectReady: false,
+  _receiptRows: [],
+  _bankDropdownIdx: null,
+  _receiptUploadIdx: null,
 
   _formatReceiptPreview(method, chequeNo, bank, date, note) {
     const fmtD = (iso) => {
@@ -34,24 +36,60 @@ const IpPeriod = {
   },
 
   _receiptCellHtml(r) {
-    const display = r.receipt_display;
-    const attach = r.receipt_attachment;
-    const attachName = escHtml(r.receipt_attachment_name || '支票附件');
-    const safePath = (attach || '').replace(/'/g, "\\'");
-    const clipIcon = attach
-      ? `<button type="button" class="ip-receipt-clip" title="已上傳支票附件：${attachName}"
-          onclick="event.stopPropagation(); DocViewer.open('${safePath}', '${attachName}')"
-          aria-label="預覽支票附件">📎</button>`
-      : '';
-    const text = display
-      ? `<span class="ip-receipt-text" title="${escHtml(this._receiptTooltip(r))}">${escHtml(display)}</span>`
-      : (attach ? '' : '<span class="td-muted">—</span>');
+    const records = (r.receipt_records && r.receipt_records.length)
+      ? r.receipt_records
+      : (r.receipt_display || r.receipt_attachment
+        ? [{
+          method: r.receipt_method,
+          cheque_no: r.receipt_cheque_no,
+          bank: r.receipt_bank,
+          date: r.receipt_date,
+          note: r.receipt_note,
+          attachment: r.receipt_attachment,
+          attachment_name: r.receipt_attachment_name,
+        }]
+        : []);
+    if (!records.length) {
+      return `<td class="ip-receipt-cell" onclick="event.stopPropagation()"><span class="td-muted">—</span></td>`;
+    }
+    const lines = records.map((rec, i) => {
+      const display = this._formatReceiptPreview(
+        rec.method || rec.receipt_method,
+        rec.cheque_no || rec.receipt_cheque_no,
+        rec.bank || rec.receipt_bank,
+        rec.date || rec.receipt_date,
+        rec.note || rec.receipt_note,
+      );
+      const attach = rec.attachment || rec.receipt_attachment;
+      const attachName = escHtml(rec.attachment_name || rec.receipt_attachment_name || '支票附件');
+      const safePath = (attach || '').replace(/'/g, "\\'");
+      const clipIcon = attach
+        ? `<button type="button" class="ip-receipt-clip" title="附件：${attachName}"
+            onclick="event.stopPropagation(); DocViewer.open('${safePath}', '${attachName}')"
+            aria-label="預覽支票附件">📎</button>`
+        : '';
+      const text = display
+        ? `<span class="ip-receipt-text">${escHtml(display)}</span>`
+        : (attach ? '' : '<span class="td-muted">—</span>');
+      return `<div class="ip-receipt-line">${text}${clipIcon}</div>`;
+    }).join('');
+    const tooltip = escHtml(this._receiptTooltip(r));
     return `<td class="ip-receipt-cell" onclick="event.stopPropagation()">
-      <div class="ip-receipt-cell-inner">${text}${clipIcon}</div>
+      <div class="ip-receipt-cell-inner ip-receipt-cell-lines" title="${tooltip}">${lines}</div>
     </td>`;
   },
 
   _receiptTooltip(row) {
+    const records = row.receipt_records || [];
+    if (records.length > 1) {
+      return records.map((rec, i) => {
+        const d = this._formatReceiptPreview(
+          rec.method, rec.cheque_no, rec.bank, rec.date, rec.note,
+        );
+        const extra = rec.attachment_name ? ` · 附件：${rec.attachment_name}` : '';
+        return `${i + 1}. ${d || '—'}${extra}`;
+      }).join('\n');
+    }
     const parts = [];
     if (row.receipt_display) parts.push(row.receipt_display);
     if (row.receipt_bank && typeof hkBankShortName === 'function') {
@@ -75,11 +113,16 @@ const IpPeriod = {
       row.certificate_date,
       row.receipt_date,
       row.subcon_cert_date,
+      row.receipt_display,
+      ...(row.receipt_records || []).flatMap(rec => [
+        rec.method, rec.cheque_no, rec.bank, rec.note, rec.date,
+        rec.attachment_name,
+        this._formatReceiptPreview(rec.method, rec.cheque_no, rec.bank, rec.date, rec.note),
+      ]),
       row.receipt_method,
       row.receipt_cheque_no,
       row.receipt_bank,
       row.receipt_note,
-      row.receipt_display,
       row.receipt_attachment_name,
       row.ip_cert_attachment_name,
       row.ip_application_attachment_name,
@@ -210,39 +253,44 @@ const IpPeriod = {
     if (!this._bankDropdownBound) {
       this._bankDropdownBound = true;
       document.addEventListener('click', (e) => {
-        const combo = document.getElementById('ipReceiptBankCombo');
-        if (combo && !combo.contains(e.target)) this.closeBankDropdown();
+        const panel = document.getElementById('ipReceiptBankDropdown');
+        if (!panel || panel.hidden) return;
+        if (panel.contains(e.target)) return;
+        if (e.target.closest('.ip-receipt-bank-trigger')) return;
+        this.closeBankDropdown();
       });
     }
   },
 
-  toggleBankDropdown(event) {
+  toggleBankDropdown(event, idx) {
     event?.stopPropagation();
     const panel = document.getElementById('ipReceiptBankDropdown');
-    const trigger = document.getElementById('ipReceiptBankTrigger');
+    const trigger = document.querySelector(`.ip-receipt-bank-trigger[data-idx="${idx}"]`);
     if (!panel) return;
-    const open = panel.hidden;
-    if (open) {
-      this.initBankSelect();
-      panel.hidden = false;
-      document.getElementById('ipReceiptBankCombo')?.classList.add('is-open');
-      document.querySelector('#ipModal .modal-body')?.classList.add('ip-bank-dropdown-open');
-      if (trigger) trigger.setAttribute('aria-expanded', 'true');
-      this._positionBankDropdown();
-      this._bindBankDropdownReposition();
-      const search = document.getElementById('ipReceiptBankSearch');
-      if (search) {
-        search.value = '';
-        this.filterBankSelect('');
-        setTimeout(() => search.focus(), 0);
-      }
-    } else {
+    if (!panel.hidden && this._bankDropdownIdx === idx) {
       this.closeBankDropdown();
+      return;
+    }
+    this.syncReceiptRowFromDom(idx);
+    this._bankDropdownIdx = idx;
+    this.initBankSelect();
+    panel.hidden = false;
+    document.querySelector(`.ip-receipt-bank-combo[data-idx="${idx}"]`)?.classList.add('is-open');
+    document.querySelector('#ipModal .modal-body')?.classList.add('ip-bank-dropdown-open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    this._positionBankDropdown();
+    this._bindBankDropdownReposition();
+    const search = document.getElementById('ipReceiptBankSearch');
+    if (search) {
+      search.value = '';
+      this.filterBankSelect('');
+      setTimeout(() => search.focus(), 0);
     }
   },
 
   _positionBankDropdown() {
-    const trigger = document.getElementById('ipReceiptBankTrigger');
+    const idx = this._bankDropdownIdx;
+    const trigger = document.querySelector(`.ip-receipt-bank-trigger[data-idx="${idx}"]`);
     const panel = document.getElementById('ipReceiptBankDropdown');
     const list = document.getElementById('ipReceiptBankList');
     if (!trigger || !panel || !list) return;
@@ -299,20 +347,27 @@ const IpPeriod = {
 
   closeBankDropdown() {
     const panel = document.getElementById('ipReceiptBankDropdown');
-    const trigger = document.getElementById('ipReceiptBankTrigger');
+    const idx = this._bankDropdownIdx;
+    const trigger = idx != null
+      ? document.querySelector(`.ip-receipt-bank-trigger[data-idx="${idx}"]`)
+      : null;
     if (panel) panel.hidden = true;
     this._unbindBankDropdownReposition();
-    document.getElementById('ipReceiptBankCombo')?.classList.remove('is-open');
+    document.querySelectorAll('.ip-receipt-bank-combo.is-open').forEach(el => el.classList.remove('is-open'));
     document.querySelector('#ipModal .modal-body')?.classList.remove('ip-bank-dropdown-open');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    this._bankDropdownIdx = null;
   },
 
   selectBank(code) {
-    const customEl = document.getElementById('ipReceiptBankCustom');
+    const idx = this._bankDropdownIdx;
+    if (idx == null) return;
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const customEl = card?.querySelector('.ip-receipt-bank-custom');
     if (customEl) customEl.value = '';
-    this._setBankSelectValue(code || '');
+    this._setBankSelectValue(idx, code || '');
     this.closeBankDropdown();
-    this._updateReceiptPreview();
+    this._updateReceiptPreview(idx);
   },
 
   _normalizeBankCode(raw) {
@@ -326,37 +381,42 @@ const IpPeriod = {
     return !!(c && typeof HK_MAINSTREAM_BY_CODE !== 'undefined' && HK_MAINSTREAM_BY_CODE[c]);
   },
 
-  _applyCustomBankCode(code) {
+  _applyCustomBankCode(idx, code) {
     const c = this._normalizeBankCode(code);
-    const hidden = document.getElementById('ipReceiptBank');
-    const labelEl = document.getElementById('ipReceiptBankLabel');
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const hidden = card?.querySelector('.ip-receipt-bank-value');
+    const labelEl = card?.querySelector('.ip-bank-combo-label');
     if (hidden) hidden.value = c;
+    if (this._receiptRows[idx]) this._receiptRows[idx].bank = c;
     if (labelEl) {
       labelEl.textContent = c ? `${c} — 自填銀行代碼` : '— 請選擇銀行 —';
     }
-    this._updateBankHint(c);
+    this._updateBankHint(idx, c);
   },
 
-  onBankCustomInput() {
-    const el = document.getElementById('ipReceiptBankCustom');
+  onBankCustomInput(idx) {
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const el = card?.querySelector('.ip-receipt-bank-custom');
     if (!el) return;
     const digits = el.value.replace(/\D/g, '').slice(0, 3);
     if (el.value !== digits) el.value = digits;
     if (digits) {
-      this._applyCustomBankCode(digits);
-    } else if (!this._isMainstreamBankCode(document.getElementById('ipReceiptBank')?.value)) {
-      this._setBankSelectValue('');
+      this._applyCustomBankCode(idx, digits);
+    } else if (!this._isMainstreamBankCode(card?.querySelector('.ip-receipt-bank-value')?.value)) {
+      this._setBankSelectValue(idx, '');
     }
-    this._updateReceiptPreview();
+    this._updateReceiptPreview(idx);
   },
 
   filterBankSelect(presetQuery) {
     const qEl = document.getElementById('ipReceiptBankSearch');
     const q = (presetQuery != null ? presetQuery : (qEl?.value || '')).trim().toLowerCase();
     const list = document.getElementById('ipReceiptBankList');
-    const hidden = document.getElementById('ipReceiptBank');
+    const idx = this._bankDropdownIdx;
+    const card = idx != null ? document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`) : null;
+    const hidden = card?.querySelector('.ip-receipt-bank-value');
     if (!list || typeof HK_BANKS_MAINSTREAM === 'undefined') return;
-    const current = hidden?.value || '';
+    const current = hidden?.value || this._receiptRows[idx]?.bank || '';
     const items = [];
     items.push(`<li><button type="button" class="ip-bank-option${!current ? ' active' : ''}" data-code=""
       onclick="IpPeriod.selectBank('')">— 請選擇銀行 —</button></li>`);
@@ -386,26 +446,33 @@ const IpPeriod = {
     return `${c} — （已存／未在清單）`;
   },
 
-  _setBankSelectValue(code, opts = {}) {
-    const hidden = document.getElementById('ipReceiptBank');
-    const labelEl = document.getElementById('ipReceiptBankLabel');
-    const customEl = document.getElementById('ipReceiptBankCustom');
-    if (!hidden) return;
+  _setBankSelectValue(idx, code, opts = {}) {
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const hidden = card?.querySelector('.ip-receipt-bank-value');
+    const labelEl = card?.querySelector('.ip-bank-combo-label');
+    const customEl = card?.querySelector('.ip-receipt-bank-custom');
+    if (!hidden) {
+      if (this._receiptRows[idx]) this._receiptRows[idx].bank = code ? this._normalizeBankCode(code) : '';
+      return;
+    }
     if (!code) {
       hidden.value = '';
+      if (this._receiptRows[idx]) this._receiptRows[idx].bank = '';
       if (labelEl) labelEl.textContent = '— 請選擇銀行 —';
-      if (!opts.skipHint) this._updateBankHint('');
+      if (!opts.skipHint) this._updateBankHint(idx, '');
       return;
     }
     const c = this._normalizeBankCode(code);
     hidden.value = c;
+    if (this._receiptRows[idx]) this._receiptRows[idx].bank = c;
     if (customEl && !opts.keepCustom) customEl.value = '';
     if (labelEl) labelEl.textContent = this._bankLabelForCode(c);
-    if (!opts.skipHint) this._updateBankHint(c);
+    if (!opts.skipHint) this._updateBankHint(idx, c);
   },
 
-  _updateBankHint(code) {
-    const hint = document.getElementById('ipReceiptBankHint');
+  _updateBankHint(idx, code) {
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const hint = card?.querySelector('.ip-receipt-bank-hint');
     if (!hint) return;
     if (!code) {
       hint.textContent = '主流本地銀行，或自填 3 位代碼';
@@ -415,10 +482,13 @@ const IpPeriod = {
     hint.textContent = name ? `已選：${code} — ${name}` : `已選：${code}`;
   },
 
-  _getSelectedBankCode() {
-    const custom = document.getElementById('ipReceiptBankCustom')?.value?.trim();
+  _getSelectedBankCode(idx) {
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const custom = card?.querySelector('.ip-receipt-bank-custom')?.value?.trim();
     if (custom) return this._normalizeBankCode(custom);
-    return document.getElementById('ipReceiptBank')?.value?.trim() || '';
+    return card?.querySelector('.ip-receipt-bank-value')?.value?.trim()
+      || this._receiptRows[idx]?.bank
+      || '';
   },
 
   _mergeIpProject(ip, project) {
@@ -886,9 +956,9 @@ const IpPeriod = {
   openAdd() {
     const p = App.currentProject;
     if (!p) { toast('請先選擇項目', 'warning'); return; }
-    this._pendingReceiptFile = null;
     this._pendingIpCertFile = null;
     this._pendingIpAppFile = null;
+    this._receiptRows = [this._emptyReceiptRow()];
     document.getElementById('ipModalTitle').textContent = '新增糧期';
     document.getElementById('ipModalId').value = '';
     document.getElementById('ipNo').value = this._suggestIpNo(this._data?.items);
@@ -904,114 +974,236 @@ const IpPeriod = {
     this._renderIpCertAttach({});
     document.getElementById('ipPctHint').textContent = '儲存後依承建金額自動計算批款 %';
     document.getElementById('ipModal').classList.add('open');
+    AmountInput.init(document.getElementById('ipModal'));
+  },
+
+  _emptyReceiptRow() {
+    return {
+      method: '',
+      cheque_no: '',
+      bank: '',
+      date: '',
+      note: '',
+      attachment: null,
+      attachment_name: null,
+      pendingFile: null,
+    };
+  },
+
+  _normalizeReceiptRow(r) {
+    return {
+      method: r?.method || r?.receipt_method || '',
+      cheque_no: r?.cheque_no || r?.receipt_cheque_no || '',
+      bank: r?.bank || r?.receipt_bank || '',
+      date: r?.date || r?.receipt_date || '',
+      note: r?.note || r?.receipt_note || '',
+      attachment: r?.attachment || r?.receipt_attachment || null,
+      attachment_name: r?.attachment_name || r?.receipt_attachment_name || null,
+      pendingFile: null,
+    };
+  },
+
+  syncReceiptRowFromDom(idx) {
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    if (!card || !this._receiptRows[idx]) return;
+    const row = this._receiptRows[idx];
+    row.method = card.querySelector('.ip-receipt-method')?.value || '';
+    row.date = card.querySelector('.ip-receipt-date')?.value || '';
+    row.cheque_no = card.querySelector('.ip-receipt-cheque-no')?.value?.trim() || '';
+    row.note = card.querySelector('.ip-receipt-note')?.value?.trim() || '';
+    row.bank = this._getSelectedBankCode(idx);
+  },
+
+  syncAllReceiptRowsFromDom() {
+    (this._receiptRows || []).forEach((_, idx) => this.syncReceiptRowFromDom(idx));
+  },
+
+  addReceiptRow() {
+    this.syncAllReceiptRowsFromDom();
+    this._receiptRows.push(this._emptyReceiptRow());
+    this.renderReceiptRows();
+  },
+
+  removeReceiptRow(idx) {
+    if (this._receiptRows.length <= 1) return;
+    this.syncAllReceiptRowsFromDom();
+    this._receiptRows.splice(idx, 1);
+    this.renderReceiptRows();
+  },
+
+  _receiptAttachHtml(idx, row) {
+    if (row.pendingFile) {
+      return `<div class="ip-receipt-attach-item"><span>待上傳：${escHtml(row.pendingFile.name)}</span></div>`;
+    }
+    if (row.attachment) {
+      const name = escHtml(row.attachment_name || '支票附件');
+      const path = (row.attachment || '').replace(/"/g, '&quot;');
+      return `<div class="ip-receipt-attach-item">
+        <button type="button" class="btn btn-link btn-sm" onclick="DocViewer.open('${path}', '${name}')">${name}</button>
+        <button type="button" class="btn btn-icon btn-danger btn-sm" title="刪除附件"
+          onclick="IpPeriod.deleteReceiptAttachment(${idx})">🗑️</button>
+      </div>`;
+    }
+    return '';
+  },
+
+  _receiptCardHtml(idx, row) {
+    const method = row.method || '';
+    const showCheque = method === 'cheque';
+    const showTransfer = method === 'transfer';
+    const bankCode = row.bank || '';
+    const bankLabel = bankCode ? this._bankLabelForCode(bankCode) : '— 請選擇銀行 —';
+    const customBank = bankCode && !this._isMainstreamBankCode(bankCode)
+      ? (bankCode.replace(/^0+/, '') || bankCode)
+      : '';
+    const removeBtn = this._receiptRows.length > 1
+      ? `<button type="button" class="btn-ip-receipt-remove" onclick="IpPeriod.removeReceiptRow(${idx})" title="移除此筆">×</button>`
+      : '';
+    return `<div class="ip-receipt-card" data-receipt-idx="${idx}">
+      <div class="ip-receipt-card-head">
+        <span>第 ${idx + 1} 筆</span>
+        ${removeBtn}
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">方式</label>
+          <select class="form-input ip-receipt-method" onchange="IpPeriod.onReceiptMethodChange(${idx})">
+            <option value=""${method === '' ? ' selected' : ''}>— 未填 —</option>
+            <option value="cheque"${method === 'cheque' ? ' selected' : ''}>支票</option>
+            <option value="transfer"${method === 'transfer' ? ' selected' : ''}>過數</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">收款日期</label>
+          <input type="date" class="form-input ip-receipt-date" value="${escHtml(row.date || '')}"
+            onchange="IpPeriod._updateReceiptPreview(${idx})">
+        </div>
+      </div>
+      <div class="form-row ip-receipt-cheque-fields" style="display:${showCheque ? '' : 'none'}">
+        <div class="form-group">
+          <label class="form-label">支票號碼</label>
+          <input type="text" class="form-input ip-receipt-cheque-no" placeholder="#828310"
+            value="${escHtml(row.cheque_no || '')}" oninput="IpPeriod._updateReceiptPreview(${idx})">
+        </div>
+        <div class="form-group">
+          <label class="form-label">銀行</label>
+          <div class="ip-bank-combo ip-receipt-bank-combo" data-idx="${idx}">
+            <button type="button" class="form-input ip-bank-combo-trigger ip-receipt-bank-trigger" data-idx="${idx}"
+              onclick="IpPeriod.toggleBankDropdown(event, ${idx})" aria-haspopup="listbox" aria-expanded="false">
+              <span class="ip-bank-combo-label">${escHtml(bankLabel)}</span>
+              <span class="ip-bank-chevron" aria-hidden="true">▾</span>
+            </button>
+            <input type="hidden" class="ip-receipt-bank-value" value="${escHtml(bankCode)}">
+          </div>
+          <div class="ip-bank-custom-row">
+            <span class="ip-bank-custom-label">或自填</span>
+            <input type="text" class="form-input ip-bank-custom ip-receipt-bank-custom" data-idx="${idx}"
+              inputmode="numeric" maxlength="3" placeholder="3 位代碼，如 061"
+              value="${escHtml(customBank)}" oninput="IpPeriod.onBankCustomInput(${idx})">
+          </div>
+          <div class="form-hint ip-receipt-bank-hint">主流本地銀行，或自填 3 位代碼</div>
+        </div>
+      </div>
+      <div class="form-group ip-receipt-transfer-fields" style="display:${showTransfer ? '' : 'none'}">
+        <label class="form-label">過數備註</label>
+        <input type="text" class="form-input ip-receipt-note" placeholder="轉帳參考／備註"
+          value="${escHtml(row.note || '')}" oninput="IpPeriod._updateReceiptPreview(${idx})">
+      </div>
+      <div class="form-hint ip-receipt-preview"></div>
+      <div class="ip-receipt-attach-row">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickReceiptFile(${idx})">📎 上傳支票附件</button>
+        <span class="form-hint ip-receipt-attach-hint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</span>
+      </div>
+      <div class="ip-receipt-attach-list">${this._receiptAttachHtml(idx, row)}</div>
+    </div>`;
+  },
+
+  renderReceiptRows() {
+    const list = document.getElementById('ipReceiptRowsList');
+    if (!list) return;
+    if (!this._receiptRows.length) this._receiptRows = [this._emptyReceiptRow()];
+    list.innerHTML = `<div class="ip-receipt-rows">${this._receiptRows.map((row, idx) => this._receiptCardHtml(idx, row)).join('')}</div>`;
+    this._receiptRows.forEach((_, idx) => this._updateReceiptPreview(idx));
   },
 
   _fillReceiptForm(row) {
-    document.getElementById('ipReceiptMethod').value = row.receipt_method || '';
-    document.getElementById('ipReceiptChequeNo').value = row.receipt_cheque_no || '';
     const bankSearch = document.getElementById('ipReceiptBankSearch');
     if (bankSearch) bankSearch.value = '';
-    const customEl = document.getElementById('ipReceiptBankCustom');
-    if (customEl) customEl.value = '';
     this.initBankSelect();
-    const bankCode = row.receipt_bank || '';
-    if (bankCode && !this._isMainstreamBankCode(bankCode)) {
-      this._setBankSelectValue('', { skipHint: true });
-      if (customEl) customEl.value = bankCode.replace(/^0+/, '') || bankCode;
-      this._applyCustomBankCode(bankCode);
-    } else {
-      this._setBankSelectValue(bankCode);
+    const records = (row.receipt_records && row.receipt_records.length)
+      ? row.receipt_records.map(r => this._normalizeReceiptRow(r))
+      : [];
+    if (!records.length && (row.receipt_method || row.receipt_cheque_no || row.receipt_bank
+      || row.receipt_date || row.receipt_note || row.receipt_attachment)) {
+      records.push(this._normalizeReceiptRow(row));
     }
-    document.getElementById('ipReceiptDate').value = row.receipt_date || '';
-    document.getElementById('ipReceiptNote').value = row.receipt_note || '';
-    this.onReceiptMethodChange();
-    this._renderReceiptAttach(row);
-    this._updateReceiptPreview();
+    this._receiptRows = records.length ? records : [this._emptyReceiptRow()];
+    this.renderReceiptRows();
   },
 
-  onReceiptMethodChange() {
-    const method = document.getElementById('ipReceiptMethod').value;
-    document.getElementById('ipReceiptChequeFields').style.display = method === 'cheque' ? '' : 'none';
-    document.getElementById('ipReceiptTransferFields').style.display = method === 'transfer' ? '' : 'none';
-    this._updateReceiptPreview();
+  onReceiptMethodChange(idx) {
+    this.syncReceiptRowFromDom(idx);
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    if (!card) return;
+    const method = card.querySelector('.ip-receipt-method')?.value || '';
+    this._receiptRows[idx].method = method;
+    card.querySelector('.ip-receipt-cheque-fields').style.display = method === 'cheque' ? '' : 'none';
+    card.querySelector('.ip-receipt-transfer-fields').style.display = method === 'transfer' ? '' : 'none';
+    this._updateReceiptPreview(idx);
   },
 
-  _updateReceiptPreview() {
-    const el = document.getElementById('ipReceiptPreview');
-    if (!el) return;
+  _updateReceiptPreview(idx) {
+    this.syncReceiptRowFromDom(idx);
+    const card = document.querySelector(`.ip-receipt-card[data-receipt-idx="${idx}"]`);
+    const el = card?.querySelector('.ip-receipt-preview');
+    if (!el || !this._receiptRows[idx]) return;
+    const row = this._receiptRows[idx];
     const preview = this._formatReceiptPreview(
-      document.getElementById('ipReceiptMethod').value,
-      document.getElementById('ipReceiptChequeNo').value,
-      this._getSelectedBankCode(),
-      document.getElementById('ipReceiptDate').value,
-      document.getElementById('ipReceiptNote').value,
+      row.method, row.cheque_no, row.bank, row.date, row.note,
     );
-    const bankCode = this._getSelectedBankCode();
-    const bankName = bankCode && typeof hkBankShortName === 'function' ? hkBankShortName(bankCode) : '';
+    const bankName = row.bank && typeof hkBankShortName === 'function' ? hkBankShortName(row.bank) : '';
     el.textContent = preview
       ? `預覽：${preview}${bankName ? `（${bankName}）` : ''}`
       : '';
-    this._updateBankHint(bankCode);
+    this._updateBankHint(idx, row.bank);
   },
 
-  _renderReceiptAttach(row) {
-    const el = document.getElementById('ipReceiptAttachList');
-    const hint = document.getElementById('ipReceiptAttachHint');
-    if (!el) return;
-    const pending = this._pendingReceiptFile;
-    if (pending) {
-      el.innerHTML = `<div class="ip-receipt-attach-item"><span>待上傳：${escHtml(pending.name)}</span></div>`;
-      if (hint) hint.textContent = '儲存後會一併上傳';
-      return;
-    }
-    if (row.receipt_attachment) {
-      const name = escHtml(row.receipt_attachment_name || '支票附件');
-      const path = (row.receipt_attachment || '').replace(/"/g, '&quot;');
-      el.innerHTML = `
-        <div class="ip-receipt-attach-item">
-          <button type="button" class="btn btn-link btn-sm" onclick="DocViewer.open('${path}', '${name}')">${name}</button>
-          <button type="button" class="btn btn-icon btn-danger btn-sm" title="刪除附件" onclick="IpPeriod.deleteReceiptAttachment()">🗑️</button>
-        </div>`;
-      if (hint) hint.textContent = '已上傳附件';
-    } else {
-      el.innerHTML = '';
-      if (hint) hint.textContent = 'PDF / PNG / JPG · 新增記錄需先儲存再上傳';
-    }
-  },
-
-  pickReceiptFile() {
+  pickReceiptFile(idx) {
+    this._receiptUploadIdx = idx;
     document.getElementById('ipReceiptFileInput')?.click();
   },
 
   onReceiptFileSelected(event) {
     const file = event.target?.files?.[0];
-    if (!file) return;
+    const idx = this._receiptUploadIdx;
+    if (!file || idx == null) return;
     const id = document.getElementById('ipModalId').value;
     if (id) {
-      this._uploadReceiptFile(id, file);
-    } else {
-      this._pendingReceiptFile = file;
-      this._renderReceiptAttach({});
+      this._uploadReceiptFile(id, file, idx);
+    } else if (this._receiptRows[idx]) {
+      this._receiptRows[idx].pendingFile = file;
+      this.renderReceiptRows();
     }
+    this._receiptUploadIdx = null;
     if (event.target) event.target.value = '';
   },
 
-  async _uploadReceiptFile(ipId, file) {
+  async _uploadReceiptFile(ipId, file, recordIndex = 0) {
     showLoading('上傳附件…');
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('record_index', String(recordIndex));
       const res = await fetch(`${API}/interim-payments/${ipId}/receipt-attachment`, { method: 'POST', body: fd });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || '上傳失敗');
       toast('支票附件已上傳', 'success');
-      this._pendingReceiptFile = null;
       if (json.data?.summary) {
         this._data = json.data.summary;
         if (this._containerId) this.render(this._containerId, this._data, { editable: this._editable });
       }
       const row = await api('GET', `/interim-payments/${ipId}`);
-      if (row) this._renderReceiptAttach(row);
+      if (row) this._fillReceiptForm(row);
     } catch (e) {
       toast(e.message || '上傳失敗', 'error');
     } finally {
@@ -1019,15 +1211,15 @@ const IpPeriod = {
     }
   },
 
-  async deleteReceiptAttachment() {
+  async deleteReceiptAttachment(idx) {
     const id = document.getElementById('ipModalId').value;
     if (!id) return;
     if (!confirm('刪除此支票附件？')) return;
     try {
-      await api('DELETE', `/interim-payments/${id}/receipt-attachment`);
+      await api('DELETE', `/interim-payments/${id}/receipt-attachment?record_index=${idx}`);
       toast('附件已刪除', 'success');
       const row = await api('GET', `/interim-payments/${id}`);
-      if (row) this._renderReceiptAttach(row);
+      if (row) this._fillReceiptForm(row);
       await this.refresh();
     } catch (e) {}
   },
@@ -1189,26 +1381,33 @@ const IpPeriod = {
   },
 
   _readReceiptFormData() {
-    const method = document.getElementById('ipReceiptMethod').value || null;
+    this.syncAllReceiptRowsFromDom();
+    const records = this._receiptRows.map((row) => {
+      const method = row.method || null;
+      return {
+        method,
+        cheque_no: method === 'cheque' ? (row.cheque_no?.trim() || null) : null,
+        bank: method === 'cheque' ? (row.bank?.trim() || null) : null,
+        date: row.date || null,
+        note: method === 'transfer' ? (row.note?.trim() || null) : null,
+        attachment: row.attachment || null,
+        attachment_name: row.attachment_name || null,
+      };
+    }).filter(r => r.method || r.cheque_no || r.bank || r.date || r.note || r.attachment);
+    const first = records[0] || {};
     return {
-      receipt_method: method,
-      receipt_cheque_no: method === 'cheque'
-        ? (document.getElementById('ipReceiptChequeNo').value.trim() || null)
-        : null,
-      receipt_bank: method === 'cheque'
-        ? (this._getSelectedBankCode() || null)
-        : null,
-      receipt_date: document.getElementById('ipReceiptDate').value || null,
-      receipt_note: method === 'transfer'
-        ? (document.getElementById('ipReceiptNote').value.trim() || null)
-        : null,
+      receipt_records: records,
+      receipt_method: first.method || null,
+      receipt_cheque_no: first.cheque_no || null,
+      receipt_bank: first.bank || null,
+      receipt_date: first.date || null,
+      receipt_note: first.note || null,
     };
   },
 
   async openEdit(id) {
     const row = await api('GET', `/interim-payments/${id}`);
     if (!row) return;
-    this._pendingReceiptFile = null;
     this._pendingIpCertFile = null;
     this._pendingIpAppFile = null;
     document.getElementById('ipModalTitle').textContent = `編輯 ${row.ip_no}`;
@@ -1229,6 +1428,7 @@ const IpPeriod = {
     document.getElementById('ipPctHint').textContent = pctParts.length
       ? `目前累計：${pctParts.join(' · ')}（儲存後重算）` : '';
     document.getElementById('ipModal').classList.add('open');
+    AmountInput.init(document.getElementById('ipModal'));
   },
 
   closeModal() {
@@ -1246,6 +1446,7 @@ const IpPeriod = {
     document.getElementById('ipMetaExpenditure').value = fmtInputNum(Math.abs(parseFloat(t.total_expenditure) || 0));
     document.getElementById('ipMetaAdvance').value = fmtInputNum(t.advance);
     document.getElementById('ipMetaModal').classList.add('open');
+    AmountInput.init(document.getElementById('ipMetaModal'));
   },
 
   closeMetaModal() {
@@ -1264,10 +1465,10 @@ const IpPeriod = {
       ip_no: ipNo.toUpperCase(),
       seq_no: parseInt(document.getElementById('ipSeqNo').value, 10) || 0,
       applied_date: document.getElementById('ipAppliedDate').value || null,
-      application_amount: parseFloat(document.getElementById('ipAppAmt').value) || 0,
-      certified_income: parseFloat(document.getElementById('ipCertAmt').value) || 0,
+      application_amount: parseAmtOrZero(document.getElementById('ipAppAmt').value),
+      certified_income: parseAmtOrZero(document.getElementById('ipCertAmt').value),
       certificate_date: document.getElementById('ipCertDate').value || null,
-      subcon_paid: parseFloat(document.getElementById('ipSubconPaid').value) || 0,
+      subcon_paid: parseAmtOrZero(document.getElementById('ipSubconPaid').value),
       subcon_cert_date: document.getElementById('ipSubconCertDate').value || null,
       ...this._readReceiptFormData(),
     };
@@ -1282,8 +1483,11 @@ const IpPeriod = {
         newId = res?.id;
         toast('糧期已新增', 'success');
       }
-      if (this._pendingReceiptFile && newId) {
-        await this._uploadReceiptFile(newId, this._pendingReceiptFile);
+      if (newId) {
+        for (let i = 0; i < this._receiptRows.length; i += 1) {
+          const pf = this._receiptRows[i]?.pendingFile;
+          if (pf) await this._uploadReceiptFile(newId, pf, i);
+        }
       }
       if (this._pendingIpCertFile && newId) {
         await this._uploadIpCertFile(newId, this._pendingIpCertFile);
@@ -1301,9 +1505,9 @@ const IpPeriod = {
     if (!p) { toast('請先選擇項目', 'warning'); return; }
     const data = {
       site_period_text: document.getElementById('ipMetaPeriod').value.trim() || null,
-      ip_total_income: parseFloat(document.getElementById('ipMetaIncome').value) || 0,
-      ip_total_expenditure: parseFloat(document.getElementById('ipMetaExpenditure').value) || 0,
-      ip_advance: parseFloat(document.getElementById('ipMetaAdvance').value) || 0,
+      ip_total_income: parseAmtOrZero(document.getElementById('ipMetaIncome').value),
+      ip_total_expenditure: parseAmtOrZero(document.getElementById('ipMetaExpenditure').value),
+      ip_advance: parseAmtOrZero(document.getElementById('ipMetaAdvance').value),
     };
     try {
       await api('PUT', `/projects/${p.id}/interim-payments/meta`, data);

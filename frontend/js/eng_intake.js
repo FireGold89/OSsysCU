@@ -445,7 +445,7 @@ const EngIntake = {
       quotation_no: this._val('eiQuotationNo'),
       project_name: this._val('eiProjectName'),
       client_name: this._val('eiClientName'),
-      amount: amt === '' ? null : Number(String(amt).replace(/,/g, '')),
+      amount: parseAmtOrNull(amt),
       contract_start_date: this._val('eiContractStartDate') || null,
       contract_end_date: this._val('eiContractEndDate') || null,
       expected_period: this._parsePeriodMonths(periodRaw),
@@ -646,7 +646,7 @@ const EngIntake = {
           <input type="text" class="form-input" id="eiTenderNo" readonly tabindex="-1" value="${escHtml(it.quotation_no || '')}" title="同項目編號，出表自動帶入">
         </label>
         <label class="ei-span-2">合約總價 (HKD)
-          <input type="number" class="form-input" id="eiAmount" step="0.01" value="${escHtml(String(amt))}">
+          <input type="number" class="form-input" id="eiAmount" step="0.01" value="${escHtml(amt !== '' && amt != null ? fmtInputNum(amt) : '')}">
         </label>
         <label>合約年期（起）
           <input type="date" class="form-input" id="eiContractStartDate" value="${escHtml(it.contract_start_date || '')}">
@@ -694,6 +694,7 @@ const EngIntake = {
     this._dirty = false;
     this._updateEditorStatus();
     this._updateDateHints();
+    AmountInput.init(el);
   },
 
   async preview() {

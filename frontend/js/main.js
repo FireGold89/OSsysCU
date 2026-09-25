@@ -449,13 +449,75 @@ function fmtNumPlain(num, decimals = FMT_DECIMALS) {
   return n.toLocaleString('en-HK', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-/** 表單輸入框用（無千分位） */
+/** 解析表單金額（支援 3,657.30） */
+function parseAmt(val) {
+  if (val == null || val === '') return NaN;
+  const s = String(val).replace(/,/g, '').trim();
+  if (s === '' || s === '-' || s === '.') return NaN;
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function parseAmtOrZero(val) {
+  const n = parseAmt(val);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+function parseAmtOrNull(val) {
+  if (val == null || val === '') return null;
+  const n = parseAmt(val);
+  return Number.isNaN(n) ? null : n;
+}
+
+/** 表單輸入框顯示（含千分位，例 3,657.30） */
 function fmtInputNum(num, decimals = FMT_DECIMALS) {
   if (num == null || num === '') return '';
-  const n = parseFloat(num);
-  if (isNaN(n)) return '';
-  return n.toFixed(decimals);
+  const n = typeof num === 'number' ? num : parseAmt(num);
+  if (Number.isNaN(n)) return '';
+  return n.toLocaleString('en-HK', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
+
+/** 金額輸入框：type=number step=0.01 → text + 千分位；讀值用 parseAmt / parseAmtOrZero */
+const AmountInput = {
+  _selector: 'input[type=number][step="0.01"], input.amt-input, input.iso-amt-input',
+
+  init(root = document) {
+    if (!root?.querySelectorAll) return;
+    root.querySelectorAll(this._selector).forEach((el) => this.enhance(el));
+  },
+
+  enhance(el) {
+    if (!el || el.dataset.amtBound === '1') return;
+    el.dataset.amtBound = '1';
+    if (el.type === 'number') {
+      el.type = 'text';
+      el.inputMode = 'decimal';
+    }
+    el.classList.add('amt-input');
+    if (el.value !== '') {
+      const n = parseAmt(el.value);
+      el.value = Number.isNaN(n) ? el.value : fmtInputNum(n);
+    }
+    el.addEventListener('focus', () => {
+      if (el.readOnly || el.disabled) return;
+      const n = parseAmt(el.value);
+      if (!Number.isNaN(n)) el.value = n === 0 ? '' : String(n);
+    });
+    el.addEventListener('blur', () => {
+      if (el.value === '') return;
+      const n = parseAmt(el.value);
+      el.value = Number.isNaN(n) ? el.value : fmtInputNum(n);
+    });
+  },
+
+  read(el) {
+    return parseAmtOrZero(el?.value);
+  },
+
+  set(el, num) {
+    if (el) el.value = fmtInputNum(num);
+  },
+};
 
 /** 支出金額：會計括號格式 (HK$1,500.00)，零值不加括號 */
 function fmtExpense(val, decimals = FMT_DECIMALS) {
@@ -828,6 +890,25 @@ function showContentLoading(text = '載入項目資料…') {
 
 function hideContentLoading() {
   document.querySelector('.content')?.classList.remove('content-loading');
+}
+
+async function downloadExcelExport(apiPath, filename) {
+  showContentLoading('匯出 Excel…');
+  try {
+    const r = await fetch(`${API}${apiPath}`, { credentials: 'include' });
+    if (!r.ok) throw new Error('匯出失敗');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('已下載 Excel', 'success');
+  } catch (e) {
+    toast(e.message || '匯出失敗', 'error');
+  } finally {
+    hideContentLoading();
+  }
 }
 
 function toast(msg, type = 'info') {
@@ -1248,6 +1329,13 @@ const App = {
     Theme.init();
     Sidebar.init();
     ModalA11y.init();
+    AmountInput.init();
+    document.addEventListener('focusin', (e) => {
+      const el = e.target;
+      if (el?.matches?.('input[type=number][step="0.01"], input.iso-amt-input')) {
+        AmountInput.enhance(el);
+      }
+    });
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-view-pdf');
       if (!btn) return;

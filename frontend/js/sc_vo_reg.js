@@ -500,7 +500,7 @@ const ScVoReg = {
     const scNo = isMain ? this.MAIN_SC_NO : document.getElementById('svrScNo').value;
     const sc = isMain ? null : (App.scList || []).find(s => s.sc_no === scNo);
     const t = this._regType();
-    const amount = parseFloat(document.getElementById('svrAmount').value) || 0;
+    const amount = parseAmtOrZero(document.getElementById('svrAmount').value);
     return {
       scope: isMain ? 'main' : 'subcontractor',
       sc_no: scNo,
@@ -617,6 +617,7 @@ const ScVoReg = {
     const voRadio = document.querySelector('input[name="svrRegType"][value="vo"]');
     if (voRadio) voRadio.checked = true;
     document.getElementById('svrModal').classList.add('open');
+    AmountInput.init(document.getElementById('svrModal'));
     this.onTypeChange();
     if (this._isMainModal()) this.suggestRefNo();
   },
@@ -644,6 +645,7 @@ const ScVoReg = {
     }
     this._fillForm(r);
     document.getElementById('svrModal').classList.add('open');
+    AmountInput.init(document.getElementById('svrModal'));
     this.onTypeChange();
   },
 

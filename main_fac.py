@@ -55,6 +55,8 @@ def _fval(v, default=0.0):
     if v is None or v == '':
         return default
     try:
+        if isinstance(v, str):
+            v = v.replace(',', '').strip()
         return float(v)
     except (TypeError, ValueError):
         return default

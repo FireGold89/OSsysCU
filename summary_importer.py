@@ -5,8 +5,11 @@ summary_importer.py — Ref/Summary.xlsx 匯入工程項目主檔
 """
 import os
 import re
+from io import BytesIO
 
 import openpyxl
+from openpyxl.styles import Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 from config import BASE_DIR
 from project_cover import derive_mp_contract_code
@@ -214,3 +217,95 @@ def sync_summary_import(filepath=None, update_existing=True):
         'skipped': skipped,
         'details': details,
     }
+
+
+SUMMARY_EXPORT_HEADERS = (
+    'MP合約編號', '會計編號', '主合約名稱', '客方', '工程分類', 'MP承建金額',
+    '客方二', '主承判商', '負責人', '項目編號', '報價編號', '狀態', '利潤率%', '分判數',
+)
+
+
+def _summary_export_styles():
+    fill = PatternFill('solid', fgColor='1F4E79')
+    font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
+    side = Side(style='thin', color='B0B0B0')
+    border = Border(left=side, right=side, top=side, bottom=side)
+    return fill, font, border
+
+
+def _summary_autosize(ws, cols):
+    for i in range(1, cols + 1):
+        letter = get_column_letter(i)
+        maxlen = 10
+        for cell in ws[letter]:
+            v = cell.value
+            if v is None:
+                continue
+            maxlen = max(maxlen, min(len(str(v)), 40))
+        ws.column_dimensions[letter].width = maxlen + 2
+
+
+def _summary_category(row):
+    return row.get('category_l2_label') or row.get('category_l2_code') or row.get('work_type')
+
+
+def _summary_export_rows(items):
+    """每項目一行；額外 MP 合約編號以續行輸出（可再匯入）"""
+    out = []
+    for row in items:
+        codes = list(row.get('mp_contract_codes') or [])
+        primary = row.get('mp_contract_code')
+        if primary and primary not in codes:
+            codes.insert(0, primary)
+        elif not codes and primary:
+            codes = [primary]
+        main_mp = codes[0] if codes else None
+        out.append([
+            main_mp,
+            row.get('account_code'),
+            row.get('main_contract_title') or row.get('main_contract_title_en'),
+            row.get('client'),
+            _summary_category(row),
+            row.get('contract_amount'),
+            row.get('client_secondary'),
+            row.get('main_contractor'),
+            row.get('person_in_charge'),
+            row.get('project_code'),
+            row.get('quotation_no'),
+            row.get('status'),
+            row.get('current_profit_pct'),
+            row.get('sc_count'),
+        ])
+        for extra_mp in codes[1:]:
+            out.append([extra_mp, None, None, None, None, None, None, None, None, None, None, None, None, None])
+    return out
+
+
+def export_summary_bytes():
+    """匯出工程項目 Summary（對齊 Ref/Summary.xlsx 主欄 + 列表常用欄）"""
+    import database as db
+
+    items = db.get_company_summary()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Summary'
+    header_fill, header_font, header_border = _summary_export_styles()
+    body_font = Font(name='Calibri', size=10)
+    for idx, title in enumerate(SUMMARY_EXPORT_HEADERS, start=1):
+        cell = ws.cell(1, idx, title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = header_border
+    export_rows = _summary_export_rows(items)
+    for r_i, vals in enumerate(export_rows, start=2):
+        for c_i, val in enumerate(vals, start=1):
+            cell = ws.cell(r_i, c_i, val)
+            cell.font = body_font
+            cell.border = header_border
+    _summary_autosize(ws, len(SUMMARY_EXPORT_HEADERS))
+    last_row = max(1, 1 + len(export_rows))
+    ws.auto_filter.ref = f'A1:{get_column_letter(len(SUMMARY_EXPORT_HEADERS))}{last_row}'
+    ws.freeze_panes = 'B2'
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

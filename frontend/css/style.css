@@ -1088,6 +1088,16 @@ strong.negative,
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 .form-input::placeholder { color: var(--text-muted); }
+
+input.amt-input,
+input.iso-amt-input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+table input.amt-input {
+  width: 100%;
+  min-width: 5.5rem;
+}
 select.form-input {
   cursor: pointer;
   appearance: none;
@@ -2272,6 +2282,92 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
+  position: relative;
+}
+.ip-receipt-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ip-receipt-section-head .form-label {
+  margin: 0;
+}
+.btn-ip-receipt-add {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--primary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+.btn-ip-receipt-add:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  transform: scale(1.05);
+}
+.ip-receipt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ip-receipt-card {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+}
+.ip-receipt-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.btn-ip-receipt-remove {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.btn-ip-receipt-remove:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.ip-receipt-preview {
+  min-height: 1.2em;
+  margin-top: 4px;
+}
+.ip-receipt-cell-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.ip-receipt-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ip-bank-dropdown-shared {
+  min-width: 280px;
 }
 .ip-cert-section {
   margin-top: 12px;

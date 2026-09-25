@@ -266,6 +266,18 @@ def company_summary():
     return resp(db.get_company_summary())
 
 
+@app.route('/api/company-summary/export', methods=['GET'])
+def company_summary_export_api():
+    from summary_importer import export_summary_bytes
+    raw = export_summary_bytes()
+    return send_file(
+        BytesIO(raw),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='工程項目_Summary.xlsx',
+    )
+
+
 @app.route('/api/portfolio/progress', methods=['GET'])
 def portfolio_progress_api():
     """進行中項目 11 欄 view"""
@@ -607,6 +619,30 @@ def main_con_fac_pdf_api(project_id):
 def sc_contract_registry_status_api():
     from sc_contract_ref import ref_status
     return resp(ref_status())
+
+
+@app.route('/api/sc-contract-registry/export', methods=['GET'])
+def sc_contract_registry_export_api():
+    from sc_contract_ref import export_registry_bytes
+    q = request.args.get('q')
+    project_core = request.args.get('project_core')
+    sheet = request.args.get('year') or request.args.get('sheet')
+    person = request.args.get('person')
+    company = request.args.get('company')
+    raw = export_registry_bytes(
+        q=q,
+        project_core=project_core,
+        sheet=sheet,
+        person=person,
+        company=company,
+    )
+    year_tag = f'_{sheet}' if sheet else ''
+    return send_file(
+        BytesIO(raw),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'分判合約編號{year_tag}.xlsx',
+    )
 
 
 @app.route('/api/sc-contract-registry', methods=['GET'])
@@ -1661,6 +1697,8 @@ def create_interim_payment():
         data.setdefault(f, 0)
     for f in ['receipt_method', 'receipt_cheque_no', 'receipt_bank', 'receipt_note']:
         data.setdefault(f, None)
+    if 'receipt_records' not in data:
+        data['receipt_records'] = None
     data.setdefault('seq_no', 0)
     ip_id = db.upsert_interim_payment(data)
     return resp({'id': ip_id, 'summary': db.get_ip_period_summary(data['project_id'])}, status=201)
@@ -1691,6 +1729,8 @@ def update_interim_payment(ip_id):
     for f in ['receipt_method', 'receipt_cheque_no', 'receipt_bank', 'receipt_note']:
         if f not in data:
             data[f] = existing.get(f)
+    if 'receipt_records' not in data:
+        data['receipt_records'] = existing.get('receipt_records')
     db.upsert_interim_payment(data)
     return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
 
@@ -1711,10 +1751,18 @@ def upload_ip_receipt_attachment(ip_id):
     unique_name = f"{uuid.uuid4().hex}.{ext}"
     save_path = os.path.join(UPLOAD_DIR, unique_name)
     file.save(save_path)
-    db.set_ip_receipt_attachment(ip_id, unique_name, file.filename)
+    record_index = request.form.get('record_index', request.args.get('record_index', 0))
+    try:
+        record_index = int(record_index or 0)
+    except (TypeError, ValueError):
+        record_index = 0
+    db.set_ip_receipt_attachment(ip_id, unique_name, file.filename, record_index=record_index)
+    row = db.get_interim_payment(ip_id)
+    rec = (row.get('receipt_records') or [{}])[record_index] if row else {}
     return resp({
-        'receipt_attachment': unique_name,
-        'receipt_attachment_name': file.filename,
+        'receipt_attachment': rec.get('attachment'),
+        'receipt_attachment_name': rec.get('attachment_name'),
+        'receipt_records': row.get('receipt_records') if row else [],
         'summary': db.get_ip_period_summary(existing['project_id']),
     })
 
@@ -1724,7 +1772,12 @@ def delete_ip_receipt_attachment(ip_id):
     existing = db.get_interim_payment(ip_id)
     if not existing:
         return resp(error='糧期記錄不存在', status=404)
-    old_path = db.clear_ip_receipt_attachment(ip_id)
+    record_index = request.args.get('record_index', 0)
+    try:
+        record_index = int(record_index or 0)
+    except (TypeError, ValueError):
+        record_index = 0
+    old_path = db.clear_ip_receipt_attachment(ip_id, record_index=record_index)
     if old_path:
         full = os.path.join(UPLOAD_DIR, old_path)
         if os.path.isfile(full):
@@ -2101,6 +2154,40 @@ def master_item_suggest():
         return resp(error='缺少 quotation_no', status=400)
     result = db.suggest_project_for_quotation(qno)
     return resp(result or {})
+
+
+@app.route('/api/master/export', methods=['GET'])
+def master_list_export_api():
+    from master_list_importer import export_master_list_bytes
+    q = request.args.get('q', '').strip()
+    awarded_only = request.args.get('awarded') == '1'
+    unlinked_only = request.args.get('unlinked') == '1'
+    source_year = request.args.get('year', type=int)
+    person_in_charge = request.args.get('person', '').strip() or None
+    sort_by = request.args.get('sort', '').strip() or None
+    sort_dir = request.args.get('dir', 'desc').strip().lower()
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+    doc_type = request.args.get('doc_type', '').strip() or None
+    if doc_type not in (None, '報價', '標書'):
+        doc_type = None
+    raw = export_master_list_bytes(
+        q=q or None,
+        awarded_only=awarded_only,
+        unlinked_only=unlinked_only,
+        source_year=source_year,
+        person_in_charge=person_in_charge,
+        doc_type=doc_type,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    year_tag = f'_{source_year}' if source_year else ''
+    return send_file(
+        BytesIO(raw),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'Master_List{year_tag}.xlsx',
+    )
 
 
 @app.route('/api/master/quotations', methods=['GET'])

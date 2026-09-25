@@ -221,7 +221,6 @@ const MainConFac = {
     const worksMain = nameZh || nameEn || h.contract_works || '—';
     const worksSub = nameZh && nameEn ? nameEn : '';
     const showTesting = this._showTestingCommission(h, kd);
-    const dlpDaysVal = ed.fac_dlp_days ?? kd.fac_dlp_days ?? kd.dlp_days ?? '';
     const dlpExpiryVal = ed.fac_dlp_expiry_date ?? kd.fac_dlp_expiry_date ?? '';
     const testingRow = showTesting
       ? this._rowInputPlain(
@@ -294,10 +293,9 @@ const MainConFac = {
                 ${this._dateRow('實際完工日期 Date of Practical Completion', kd.pc_cert_date)}
                 ${retentionRows}
                 ${this._dateRow('保修期開始日期 Commencement of DLP', kd.dlp_commencement_date)}
-                ${this._rowInputPlain('保修期 DLP (days)', 'fac_dlp_days', dlpDaysVal, { integer: true })}
                 ${this._rowInputPlain('保修期到期日 DLP Expiry Date', 'fac_dlp_expiry_date', dlpExpiryVal, { date: true })}
                 ${testingRow}
-                ${this._rowInputPlain('修補缺陷完工日期 Make Good Defect', 'fac_make_good_date', ed.fac_make_good_date ?? kd.make_good_date, { date: true })}
+                ${this._rowInputPlain('修補缺陷完工日期 Defect Correction Date', 'fac_make_good_date', ed.fac_make_good_date ?? kd.make_good_date, { date: true })}
                 ${this._dateRow('MP 工程帳目總結算日 MP FAC Signed', kd.mp_fac_signed_date)}
               </tbody>
             </table>
@@ -321,6 +319,7 @@ const MainConFac = {
           <button type="submit" class="btn btn-primary">💾 儲存</button>
         </div>
       </form>`;
+    AmountInput.init(document.getElementById('mcfForm'));
   },
 
   _row(code, label, amount, opts = {}) {
@@ -373,8 +372,23 @@ const MainConFac = {
     const form = document.getElementById('mcfForm');
     if (!form) return {};
     const fd = new FormData(form);
+    const moneyFields = [
+      'fac_remeasurement_b', 'fac_variations_d_override', 'fac_provisional_qty_e',
+      'fac_provisional_sums_f', 'fac_fluctuations_g', 'fac_total_paid_i_override',
+      'fac_contra_charge_j_override', 'fac_lad_rate', 'fac_lad_max',
+    ];
     const data = {};
-    fd.forEach((v, k) => { data[k] = v; });
+    fd.forEach((v, k) => {
+      if (moneyFields.includes(k)) {
+        if (v === '') data[k] = '';
+        else {
+          const n = parseAmt(v);
+          data[k] = Number.isNaN(n) ? v : String(n);
+        }
+      } else {
+        data[k] = v;
+      }
+    });
     return data;
   },
 

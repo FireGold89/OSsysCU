@@ -412,14 +412,14 @@ const Payments = {
       await this.loadScVoPickList();
       await this.calcInterimAmounts();
     } else {
-      document.getElementById('fContractAmt').value = sc.contract_amount || 0;
+      document.getElementById('fContractAmt').value = fmtInputNum(sc.contract_amount || 0);
       this.calcRemainder();
     }
   },
 
   calcRemainder() {
-    const ca = parseFloat(document.getElementById('fContractAmt').value) || 0;
-    const pa = parseFloat(document.getElementById('fPaidAmt').value) || 0;
+    const ca = parseAmtOrZero(document.getElementById('fContractAmt').value);
+    const pa = parseAmtOrZero(document.getElementById('fPaidAmt').value);
     document.getElementById('fRemAmt').value = fmtInputNum(ca - pa);
   },
 
@@ -443,7 +443,7 @@ const Payments = {
     const out = {};
     this._getSelectedStandardCodes().forEach(code => {
       const inp = document.querySelector(`#fScVoPickList .std-amt-input[data-code="${code}"]`);
-      const v = inp ? parseFloat(inp.value) : 0;
+      const v = inp ? parseAmtOrZero(inp.value) : 0;
       out[code] = Number.isNaN(v) ? 0 : v;
     });
     return out;
@@ -511,8 +511,8 @@ const Payments = {
 
   _getNetCertTotal() {
     const el = document.getElementById('fNetCertTotal');
-    if (el && el.value !== '') return parseFloat(el.value) || 0;
-    const paid = parseFloat(document.getElementById('fPaidAmt')?.value) || 0;
+    if (el && el.value !== '') return parseAmtOrZero(el.value);
+    const paid = parseAmtOrZero(document.getElementById('fPaidAmt')?.value);
     return paid;
   },
 
@@ -970,15 +970,15 @@ const Payments = {
       company_name_en: document.getElementById('fCompanyEn').value || null,
       company_name_zh: document.getElementById('fCompanyZh').value || null,
       description: document.getElementById('fDesc').value || null,
-      contract_amount: parseFloat(document.getElementById('fContractAmt').value) || 0,
-      paid_amount: parseFloat(document.getElementById('fPaidAmt').value) || 0,
-      remainder_amount: parseFloat(document.getElementById('fRemAmt').value) || 0,
+      contract_amount: parseAmtOrZero(document.getElementById('fContractAmt').value),
+      paid_amount: parseAmtOrZero(document.getElementById('fPaidAmt').value),
+      remainder_amount: parseAmtOrZero(document.getElementById('fRemAmt').value),
       oa_ref: document.getElementById('fOaRef').value || null,
       oa_no: document.getElementById('fOaNo').value || null,
       mc_ip_no: null,
       bc_to_sub: document.getElementById('fBcToSub').value || null,
       sub_ip_no: null,
-      backcharge_amount: parseFloat(document.getElementById('fBackchargeAmt').value) || 0,
+      backcharge_amount: parseAmtOrZero(document.getElementById('fBackchargeAmt').value),
       remark: document.getElementById('fRemark').value || null,
       pdf_path: document.getElementById('fPdfPath').value || null,
     };
@@ -1538,6 +1538,7 @@ const Payments = {
     document.getElementById('fScNo').value = '';
     this.populateScSelect();
     document.getElementById('payModal').classList.add('open');
+    AmountInput.init(document.getElementById('payModal'));
   },
 
   async openEdit(id) {
@@ -1601,6 +1602,7 @@ const Payments = {
     }
     this._setPdfUi(r.pdf_path || null);
     document.getElementById('payModal').classList.add('open');
+    AmountInput.init(document.getElementById('payModal'));
   },
 
   closeModal() {
