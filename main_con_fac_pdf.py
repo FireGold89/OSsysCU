@@ -41,7 +41,7 @@ from sc_fac_pdf import (
     _frame,
     _grid_style,
     _hdr_fields_row_style,
-    _on_page_p1,
+    _on_page_logo_only,
     _p,
     _p_html,
     _styles,
@@ -418,7 +418,7 @@ def generate_main_con_fac_pdf(fac: dict, theme: str | None = None) -> bytes:
             id='portrait_p1',
             frames=[_frame(pw, ph, SIG_FOOTER_ZONE, TOP_LOGO_ZONE)],
             pagesize=PAGE_P,
-            onPage=_on_page_p1,
+            onPage=_on_page_logo_only,
         ),
         PageTemplate(
             id='portrait_dates',

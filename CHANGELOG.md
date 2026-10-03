@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261003-main-con-fac-pdf` · 分支 `v2/portfolio`
+
+### 修正
+- **主合約 FAC PDF**：改用 `sc_fac_pdf._on_page_logo_only`，修復匯出 ImportError
+
 `APP_VERSION`: `v2-20260925-ghcr` · 分支 `v2/portfolio`
 
 ### 改善
