@@ -902,11 +902,44 @@ def add_project_document(project_id):
         data.get('original_filename'),
         data.get('notes'),
     )
+    from project_cover import project_doc_iso_mapping
+    iso_map = project_doc_iso_mapping(category)
+    if iso_map:
+        scope, doc_slot = iso_map
+        try:
+            db.insert_iso_document(
+                project_id,
+                scope,
+                doc_slot,
+                file_path,
+                data.get('original_filename'),
+            )
+        except ValueError:
+            pass
     return resp({'id': doc_id}, status=201)
 
 
 @app.route('/api/project-documents/<int:doc_id>', methods=['DELETE'])
 def delete_project_document(doc_id):
+    row = db.get_project_document(doc_id)
+    if row:
+        from project_cover import project_doc_iso_mapping
+        iso_map = project_doc_iso_mapping(row.get('doc_category'))
+        if iso_map:
+            scope, doc_slot = iso_map
+            path = (row.get('file_path') or '').strip()
+            conn = db.get_conn()
+            try:
+                iso_row = conn.execute(
+                    """SELECT id FROM iso_document_files
+                       WHERE project_id=? AND scope=? AND doc_slot=?
+                         AND IFNULL(subcontractor_id, 0)=0 AND file_path=?""",
+                    (row['project_id'], scope, doc_slot, path),
+                ).fetchone()
+                if iso_row:
+                    db.delete_iso_document(iso_row['id'])
+            finally:
+                conn.close()
     db.delete_project_document(doc_id)
     return resp({'message': '已刪除'})
 
@@ -988,7 +1021,7 @@ def upload_iso_document(project_id):
     file.save(save_path)
 
     try:
-        row = db.upsert_iso_document(
+        row = db.insert_iso_document(
             project_id, scope, doc_slot, rel_path, file.filename, subcontractor_id,
             storage_type='file',
         )
@@ -1016,7 +1049,7 @@ def iso_document_link(project_id):
     if not scope or not doc_slot or not external_url:
         return resp(error='缺少 scope、doc_slot 或 external_url', status=400)
     try:
-        row = db.upsert_iso_document(
+        row = db.insert_iso_document(
             project_id, scope, doc_slot, '',
             data.get('link_label') or data.get('original_filename'),
             subcontractor_id,

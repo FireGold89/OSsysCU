@@ -265,17 +265,30 @@ def generate_boss_qs_report_docx(summary: dict, sc_list: list | None = None,
     for line in _attention_items(summary, sc_list):
         _add_para(doc, f'• {line}', size=9, space_after=2)
 
-    _section_heading(doc, '三、合約金額結算 (A–E)')
-    _add_table(doc, [
+    _section_heading(doc, '三、合約金額結算 (A–F)')
+    mat_c = calc.get('material_other_c', calc.get('excluded_c'))
+    labour_note = (
+        '暫定 HOLD' if calc.get('labour_hold')
+        else _money(calc.get('labour_allocation'))
+    )
+    calc_rows = [
         ['項目', '金額 (HK$)'],
         ['(A) 承建金額', _money(calc.get('main_contract_amount'))],
-        ['(B) 分判及代支小計', _money(calc.get('sub_total_b'))],
-        ['(C) 除外合約收費項目', _money(calc.get('excluded_c'))],
-        ['財務會作調撥（人工分攤）', _money(calc.get('labour_allocation'))],
+    ]
+    for ln in calc.get('subcontract_lines') or []:
+        calc_rows.append([
+            f"  ({ln.get('seq')}) {_plain(ln.get('label'), 50)}",
+            _money(ln.get('amount')),
+        ])
+    calc_rows.extend([
+        ['(B) 分判承包商小計', _money(calc.get('sub_total_b'))],
+        ['(C) 物料及其他支出', _money(mat_c)],
+        ['財務會作調撥（人工分攤）', labour_note],
         ['(D) = (B)+(C)+調撥', _money(calc.get('total_d'))],
-        ['(E) = (A)−(D) 預計利潤', _money(calc.get('profit_e'))],
-        ['預計利潤率', _pct(calc.get('profit_rate'))],
-    ], [110, 58], dark_header_rows=(0,), right_cols=(1,))
+        ['(E) = (A)−(D) 現時利潤', _money(calc.get('profit_e'))],
+        ['(F) = (E)/(A) 預計利潤率', _pct(calc.get('profit_rate'))],
+    ])
+    _add_table(doc, calc_rows, [110, 58], dark_header_rows=(0,), right_cols=(1,))
 
     _section_heading(doc, '四、費用類別概覽')
     _add_table(doc, _category_rows(sc_list), [35, 45, 45, 43], dark_header_rows=(0,), right_cols=(1, 2, 3))

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime
 from typing import Any
 
 from openpyxl import Workbook
@@ -32,6 +31,15 @@ META_W_MM = [45, 77.5, 32, 31.5]
 AMT_W_MM = [45, 25, 27.5, 25, 63.5]
 HDR_FILL = 'E2E8F0'
 HDR_TEXT = '1E293B'
+
+
+def _display_date(val) -> str:
+    if val is None:
+        return ''
+    s = str(val).strip()
+    if not s or s.lower() == 'none':
+        return ''
+    return s[:10]
 
 
 def _f(val, default=0.0) -> float:
@@ -393,8 +401,8 @@ def build_interim_cert_model(cert: dict) -> dict:
             '備註',
         ],
         'lines': lines,
-        'prepared_by': cert.get('prepared_by') or project.get('person_in_charge') or '',
-        'signature_date': cert.get('invoice_date') or datetime.now().strftime('%Y-%m-%d'),
+        'prepared_by': (cert.get('prepared_by') or '').strip(),
+        'signature_date': cert.get('signature_date') or '',
         'vo_items': vo_items,
         'vo_remarks': vo_remarks,
         'b_expand_vo': cert.get('b_expand_vo', True),
@@ -540,7 +548,7 @@ def generate_interim_cert_pdf(cert: dict) -> bytes:
         [_p('承判人/公司名稱(英) :', styles['label']), _p(model['company_en'], styles['cell']),
          _p('申請期數 :', styles['label_r']), _p(model['application_no'], styles['cell_r'])],
         [_p('工作期間 :', styles['label']), _p(model['work_period'], styles['cell']),
-         _p('日期 :', styles['label_r']), _p(str(model['signature_date'])[:10], styles['cell_r'])],
+         _p('日期 :', styles['label_r']), _p(_display_date(model.get('invoice_date')), styles['cell_r'])],
     ], colWidths=META_W)
     hdr.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
@@ -607,7 +615,7 @@ def generate_interim_cert_pdf(cert: dict) -> bytes:
          _p('QS', styles['cell_c']), _p('PM', styles['cell_c']), _p('General Manager', styles['cell_c'])],
         [_p('簽署', styles['cell_c']), _p(model['prepared_by'], styles['cell_c']), _p('', styles['cell']),
          _p('', styles['cell']), _p('', styles['cell'])],
-        [_p('日期', styles['cell_c']), _p(str(model['signature_date'])[:10], styles['cell_c']),
+        [_p('日期', styles['cell_c']), _p(_display_date(model.get('signature_date')), styles['cell_c']),
          _p('', styles['cell']), _p('', styles['cell']), _p('', styles['cell'])],
     ], colWidths=SIG_W, rowHeights=[8 * mm, 13 * mm, 8 * mm])
     sig.setStyle(TableStyle([
@@ -661,7 +669,7 @@ def generate_interim_cert_xlsx(cert: dict) -> bytes:
     ws['A5'], ws['B5'] = '承判人/公司名稱(英) :', model['company_en']
     ws['E5'], ws['F5'] = '申請期數 :', model['application_no']
     ws['A6'], ws['B6'] = '工作期間 :', model['work_period']
-    ws['E6'], ws['F6'] = '日期 :', str(model['signature_date'])[:10]
+    ws['E6'], ws['F6'] = '日期 :', _display_date(model.get('invoice_date'))
 
     ws['A8'], ws['B8'] = '工程編號:', model['project_code']
     _xlsx_num(ws['F8'], model['sc_contract_sum'])
@@ -703,7 +711,7 @@ def generate_interim_cert_xlsx(cert: dict) -> bytes:
     ws.cell(row=sig_row + 1, column=1, value='簽署')
     ws.cell(row=sig_row + 1, column=2, value=model['prepared_by'])
     ws.cell(row=sig_row + 2, column=1, value='日期')
-    ws.cell(row=sig_row + 2, column=2, value=str(model['signature_date'])[:10])
+    ws.cell(row=sig_row + 2, column=2, value=_display_date(model.get('signature_date')))
 
     ws.column_dimensions['A'].width = 32
     for col in 'BCDE':
@@ -876,7 +884,7 @@ def generate_interim_cert_docx(cert: dict) -> bytes:
     _docx_meta_table(doc, [
         ('承判人/公司名稱(中) :', model['company_zh'], '發票號碼 :', model['invoice_no']),
         ('承判人/公司名稱(英) :', model['company_en'], '申請期數 :', model['application_no']),
-        ('工作期間 :', model['work_period'], '日期 :', str(model['signature_date'])[:10]),
+        ('工作期間 :', model['work_period'], '日期 :', _display_date(model.get('invoice_date'))),
     ], META_W_MM, right_cols=(2, 3))
     _docx_add_para(doc, '', size=6, space_after=4)
 
@@ -925,7 +933,7 @@ def generate_interim_cert_docx(cert: dict) -> bytes:
     sig.rows[1].height = Mm(13)
     sig.rows[1].height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
     _docx_cell(sig.rows[2].cells[0], '日期', size=8, align='center', fill='F8FAFC')
-    _docx_cell(sig.rows[2].cells[1], str(model['signature_date'])[:10], size=8, align='center')
+    _docx_cell(sig.rows[2].cells[1], _display_date(model.get('signature_date')), size=8, align='center')
     for i in range(2, 5):
         _docx_cell(sig.rows[2].cells[i], '', size=8)
 

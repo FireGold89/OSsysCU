@@ -502,17 +502,29 @@ def generate_boss_qs_report(summary: dict, sc_list: list | None = None,
     story.append(Spacer(1, 4 * mm))
 
     # ── 合約金額結算 A–E ──
-    story.append(Paragraph('三、合約金額結算 (A–E)', styles['h2']))
+    story.append(Paragraph('三、合約金額結算 (A–F)', styles['h2']))
+    mat_c = calc.get('material_other_c', calc.get('excluded_c'))
+    labour_note = (
+        '暫定 HOLD' if calc.get('labour_hold')
+        else _money_num(calc.get('labour_allocation'))
+    )
     calc_rows = [
         _table_row(['項目', '金額 (HK$)'], styles, {0: 'cell_w', 1: 'cell_w'}),
         _table_row(['(A) 承建金額', _money_num(calc.get('main_contract_amount'))], styles, {1: 'cell_r'}),
-        _table_row(['(B) 分判及代支小計', _money_num(calc.get('sub_total_b'))], styles, {1: 'cell_r'}),
-        _table_row(['(C) 除外合約收費項目', _money_num(calc.get('excluded_c'))], styles, {1: 'cell_r'}),
-        _table_row(['財務會作調撥（人工分攤）', _money_num(calc.get('labour_allocation'))], styles, {1: 'cell_r'}),
-        _table_row(['(D) = (B)+(C)+調撥', _money_num(calc.get('total_d'))], styles, {1: 'cell_r'}),
-        _table_row(['(E) = (A) - (D) 預計利潤', _money_num(calc.get('profit_e'))], styles, {1: 'cell_r'}),
-        _table_row(['預計利潤率', _pct(calc.get('profit_rate'))], styles, {1: 'cell_r'}),
     ]
+    for ln in calc.get('subcontract_lines') or []:
+        calc_rows.append(_table_row(
+            [f"  ({ln.get('seq')}) {_plain(ln.get('label'), 50)}", _money_num(ln.get('amount'))],
+            styles, {1: 'cell_r'},
+        ))
+    calc_rows.extend([
+        _table_row(['(B) 分判承包商小計', _money_num(calc.get('sub_total_b'))], styles, {1: 'cell_r'}),
+        _table_row(['(C) 物料及其他支出', _money_num(mat_c)], styles, {1: 'cell_r'}),
+        _table_row(['財務會作調撥（人工分攤）', labour_note], styles, {1: 'cell_r'}),
+        _table_row(['(D) = (B)+(C)+調撥', _money_num(calc.get('total_d'))], styles, {1: 'cell_r'}),
+        _table_row(['(E) = (A) − (D) 現時利潤', _money_num(calc.get('profit_e'))], styles, {1: 'cell_r'}),
+        _table_row(['(F) = (E)/(A) 預計利潤率', _pct(calc.get('profit_rate'))], styles, {1: 'cell_r'}),
+    ])
     calc_tbl = Table(calc_rows, colWidths=_cols_mm([110, 58]))
     calc_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), _HDR),

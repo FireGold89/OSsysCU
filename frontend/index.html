@@ -27,7 +27,7 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=v2-20260925-ip-receipts">
+    <link rel="stylesheet" href="css/style.css?v=v2-20261005-iso-multi">
   <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -81,31 +81,61 @@
     </div>
 
     <nav class="sidebar-nav">
-      <div class="nav-section-title sidebar-expand-only">主要功能</div>
-      <div class="nav-item active" data-page="dashboard" onclick="App.navigate('dashboard')" title="項目概覽">
-        <span class="nav-icon">📊</span><span class="nav-label">項目概覽</span>
+      <div class="nav-section-title sidebar-expand-only nav-section-head">
+        <span>主要功能</span>
+        <div class="nav-layout-edit-tools">
+          <button type="button" class="nav-layout-btn nav-layout-btn-edit" id="navLayoutEditMain"
+            title="編輯順序" aria-label="編輯主要功能順序">
+            <span class="nav-layout-icon nav-layout-icon-lines" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="nav-layout-btn nav-layout-btn-done" id="navLayoutDoneMain"
+            title="完成並固定" aria-label="完成並固定順序" hidden>
+            <span class="nav-layout-icon nav-layout-icon-done" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="nav-layout-btn nav-layout-btn-reset" id="navLayoutResetMain"
+            title="還原預設順序" aria-label="還原預設順序" hidden>
+            <span class="nav-layout-icon nav-layout-icon-reset" aria-hidden="true"></span>
+          </button>
+        </div>
       </div>
-      <div class="nav-item" data-page="iso-docs" onclick="App.navigate('iso-docs')" title="ISO 文件">
-        <span class="nav-icon">📑</span><span class="nav-label">ISO 文件</span>
+      <div class="nav-sortable" id="navSortableMain" data-nav-section="main">
+        <div class="nav-item active" data-page="dashboard" draggable="false" title="項目概覽">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">📊</span><span class="nav-label">項目概覽</span>
+        </div>
+        <div class="nav-item" data-page="iso-docs" draggable="false" title="ISO 文件">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">📑</span><span class="nav-label">ISO 文件</span>
+        </div>
+        <div class="nav-item" data-page="payments" draggable="false" title="分判付款登記">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">💰</span><span class="nav-label">分判付款登記</span>
+          <span class="nav-badge" id="payBadge">0</span>
+        </div>
+        <div class="nav-item" data-page="sc-vo-reg" draggable="false" title="變更以及扣款登記">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">📋</span><span class="nav-label">變更以及扣款登記</span>
+        </div>
+        <div class="nav-item" data-page="ip-period" draggable="false" title="糧期狀況">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">🏗️</span><span class="nav-label">糧期狀況</span>
+        </div>
+        <div class="nav-item" data-page="main-con-fac" draggable="false" title="主合約最終結算">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">📑</span><span class="nav-label">主合約最終結算</span>
+        </div>
+        <div class="nav-item" data-page="sc-fac" draggable="false" title="分判最終結算">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">📋</span><span class="nav-label">分判最終結算</span>
+        </div>
+        <div class="nav-item" data-page="reports" draggable="false" title="財務報表">
+          <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
+          <span class="nav-icon">📈</span><span class="nav-label">財務報表</span>
+        </div>
       </div>
-      <div class="nav-item" data-page="payments" onclick="App.navigate('payments')" title="分判付款登記">
-        <span class="nav-icon">💰</span><span class="nav-label">分判付款登記</span>
-        <span class="nav-badge" id="payBadge">0</span>
-      </div>
-      <div class="nav-item" data-page="sc-vo-reg" onclick="App.navigate('sc-vo-reg')" title="變更以及扣款登記">
-        <span class="nav-icon">📋</span><span class="nav-label">變更以及扣款登記</span>
-      </div>
-      <div class="nav-item" data-page="ip-period" onclick="App.navigate('ip-period')" title="糧期狀況">
-        <span class="nav-icon">🏗️</span><span class="nav-label">糧期狀況</span>
-      </div>
-      <div class="nav-item" data-page="main-con-fac" onclick="App.navigate('main-con-fac')" title="主合約最終結算">
-        <span class="nav-icon">📑</span><span class="nav-label">主合約最終結算</span>
-      </div>
-      <div class="nav-item" data-page="sc-fac" onclick="App.navigate('sc-fac')" title="分判最終結算">
-        <span class="nav-icon">📋</span><span class="nav-label">分判最終結算</span>
-      </div>
-      <div class="nav-item" data-page="reports" onclick="App.navigate('reports')" title="財務報表">
-        <span class="nav-icon">📈</span><span class="nav-label">財務報表</span>
+
+      <div class="nav-item" data-page="project-lens" onclick="App.navigate('project-lens')" title="項目視角 · 財務 KPI 與糧期">
+        <span class="nav-icon">🔭</span><span class="nav-label">項目視角</span>
       </div>
 
       <div class="nav-section-title sidebar-expand-only" style="margin-top:12px">全公司總表</div>
@@ -198,8 +228,191 @@
         <span id="contentLoadingHint">載入項目資料…</span>
       </div>
 
-      <!-- ─── 項目概覽 ────────────────────────── -->
+      <!-- ─── 項目概覽（項目資料唯讀） ─────────── -->
       <div class="page active" id="page-dashboard">
+        <div id="dashboardNoProject" class="empty-state" style="display:none">
+          <div class="empty-icon">📁</div>
+          <div class="empty-title">請先選擇項目</div>
+          <div class="empty-sub">在左側選擇一個項目，或前往「工程項目」新增地盤</div>
+          <br>
+          <button class="btn btn-primary" onclick="App.navigate('projects')">管理項目</button>
+        </div>
+        <div class="card proj-dash-readonly" id="projectDashCard" style="display:none">
+          <div class="card-header proj-dash-readonly-head">
+            <div>
+              <div class="card-title" id="projectDashTitle">項目資料</div>
+              <div class="form-hint">QS 項目資料 · 與工程項目表單相同欄位</div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(App.currentProject.id)">✏️ 編輯項目</button>
+          </div>
+          <div class="card-body proj-form-ppt proj-dash-qs-view" id="projectDashBody">
+            <div class="form-row">
+              <div class="form-group" style="flex:1">
+                <label class="form-label">項目代碼</label>
+                <div class="proj-dash-field" id="pdCode">—</div>
+                <div class="form-hint">對應 Master List 報價編號</div>
+              </div>
+              <div class="form-group" style="min-width:140px">
+                <label class="form-label">狀態</label>
+                <div class="proj-dash-field" id="pdStatus">—</div>
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">主承建商</label>
+                <div class="proj-dash-field" id="pdMc">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">客方</label>
+                <div class="proj-dash-field" id="pdClient">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">第二客方</label>
+                <div class="proj-dash-field" id="pdClient2">—</div>
+              </div>
+            </div>
+            <div class="proj-form-divider"></div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">主合約名稱（中文）</label>
+                <div class="proj-amt-sot-row">
+                  <div class="proj-dash-field proj-field-clip-grow" id="pdNameZh">—</div>
+                  <div class="proj-amt-sot-docs proj-dash-field proj-dash-field-docs" id="pdDocsMainLoa">—</div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">MP合約編號</label>
+                <div class="proj-dash-field proj-dash-mp" id="pdMpCodes">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">工程編號 Job No.</label>
+                <div class="proj-dash-field" id="pdJobNo">—</div>
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">主合約名稱（英文）</label>
+                <div class="proj-dash-field" id="pdNameEn">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">工程分類</label>
+                <div class="proj-dash-field" id="pdCategory">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">會計編號</label>
+                <div class="proj-dash-field" id="pdAccountCode">—</div>
+              </div>
+            </div>
+            <!-- 概覽：會簽／電郵／相關 ISO 三欄暫不顯示（編輯項目 modal 仍保留） -->
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">MP投標價 (HK$)</label>
+                <div class="proj-dash-field" id="pdTenderSum">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">(A) MP承建金額 (HK$)</label>
+                <div class="proj-amt-sot-row">
+                  <div class="proj-dash-field proj-amt-sot-value" id="pdAmt">—</div>
+                  <div class="proj-amt-sot-docs proj-dash-field proj-dash-field-docs" id="pdDocsSotSor">—</div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">預計利潤率 (%)</label>
+                <div class="proj-dash-field" id="pdAnticipatedProfitPct">—</div>
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">主合約開工日</label>
+                <div class="proj-dash-field" id="pdMcCommence">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">預計完工日</label>
+                <div class="proj-dash-field" id="pdCompletionDate">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label proj-label-tip" title="主合約最終結算 · 唯讀">實際完工 PC Cert.</label>
+                <div class="proj-dash-field proj-dash-fac-date" id="pdPcCertDate">—</div>
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">MP開工日</label>
+                <div class="proj-dash-field" id="pdMpCommence">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label proj-label-tip" title="MP 開工日 + 工期 · 主合約最終結算 · 唯讀">延遲完工日</label>
+                <div class="proj-dash-field proj-dash-fac-date" id="pdExtendedCompletion">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">保修期（月）</label>
+                <div class="proj-dash-field" id="pdDlpMonths">—</div>
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">項目負責人</label>
+                <div class="proj-dash-field" id="pdPerson">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">負責 QS</label>
+                <div class="proj-dash-field" id="pdQs">—</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">工期（日數）</label>
+                <div class="proj-dash-field" id="pdConstructionDays">—</div>
+              </div>
+            </div>
+            <div class="proj-form-divider"></div>
+            <div class="form-group" id="projSectionRetentionDash">
+              <label class="form-label">保固金</label>
+              <div class="proj-dash-field" id="pdRetentionSummary">—</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">保固金退還</label>
+              <div class="proj-dash-field proj-dash-retention-refund" id="pdRetentionRefund">—</div>
+            </div>
+            <div class="proj-form-divider"></div>
+            <div class="form-row">
+              <div class="form-group" style="max-width:240px">
+                <label class="form-label proj-label-tip" title="主合約最終結算 · 唯讀">保修完成日</label>
+                <div class="proj-dash-field proj-dash-fac-date" id="pdDlpCertDate">—</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="max-width:240px">
+                <label class="form-label proj-label-tip" title="主合約最終結算 · 唯讀">MP工程帳目總結算日</label>
+                <div class="proj-dash-field proj-dash-fac-date" id="pdMpFacDate">—</div>
+              </div>
+            </div>
+            <div class="proj-form-divider"></div>
+            <div class="section-title">待辦</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">財務會作調撥（人工分攤）(HK$)</label>
+                <div class="proj-dash-field" id="pdLabour">—</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">備注</label>
+              <div class="proj-dash-field proj-dash-notes" id="pdNotes">—</div>
+            </div>
+
+            <div class="proj-form-divider"></div>
+            <div class="proj-dash-contract-calc-head">
+              <div class="section-title" style="margin:0;border:none;padding:0">合約金額結算</div>
+              <span class="form-hint">參考 Excel Project Summary</span>
+              <button type="button" class="btn btn-primary btn-sm" onclick="Reports.previewBossPdf()" title="預覽 A4 QS 匯報表">👁 預覽</button>
+            </div>
+            <div id="pdContractCalc" class="proj-dash-contract-calc">
+              <div class="empty-state" style="padding:16px">載入中…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 項目視角（財務 KPI · 原項目概覽） ── -->
+      <div class="page" id="page-project-lens">
         <div class="dash-fac-company-wrap" id="dashFacCompanyWrap">
           <div class="stats-block dash-fac-company">
             <div class="stats-block-title dash-fac-company-head">
@@ -225,14 +438,39 @@
             </div>
           </div>
         </div>
-        <div id="dashboardNoProject" class="empty-state" style="display:none">
+        <div id="projectLensNoProject" class="empty-state" style="display:none">
           <div class="empty-icon">📁</div>
           <div class="empty-title">請先選擇項目</div>
           <div class="empty-sub">在左側選擇一個項目，或前往「工程項目」新增地盤</div>
           <br>
           <button class="btn btn-primary" onclick="App.navigate('projects')">管理項目</button>
         </div>
-        <div id="dashboardContent">
+        <div class="card nav-launcher-card" id="dashNavLauncher">
+          <div class="card-header nav-launcher-head">
+            <div>
+              <div class="card-title">🧭 主要功能</div>
+              <div class="form-hint nav-launcher-sub">點擊進入模組；按「編輯」可調整順序</div>
+            </div>
+            <div class="nav-layout-edit-tools">
+              <button type="button" class="nav-layout-btn nav-layout-btn-edit" id="dashNavLayoutEdit"
+                title="編輯順序" aria-label="編輯主要功能順序">
+                <span class="nav-layout-icon nav-layout-icon-lines" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="nav-layout-btn nav-layout-btn-done" id="dashNavLayoutDone"
+                title="完成並固定" aria-label="完成並固定順序" hidden>
+                <span class="nav-layout-icon nav-layout-icon-done" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="nav-layout-btn nav-layout-btn-reset" id="dashNavLayoutReset"
+                title="還原預設順序" aria-label="還原預設順序" hidden>
+                <span class="nav-layout-icon nav-layout-icon-reset" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="nav-launcher-grid" id="dashNavLauncherGrid" role="list"></div>
+          </div>
+        </div>
+        <div id="projectLensContent">
           <!-- 項目標題區 -->
           <div class="dash-project-hero" id="dashProjectHero">
             <div class="dash-hero-top">
@@ -449,7 +687,7 @@
             </div>
           </div>
         </div>
-        <input type="file" id="isoDocFileInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden
+        <input type="file" id="isoDocFileInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" multiple hidden
           onchange="IsoDocs.onFileSelected(event)">
       </div>
 
@@ -1775,6 +2013,23 @@
             oninput="Payments.onLineRemarkInput('C')">
           <div class="form-hint ic-line-remark-hint" id="fLineRemarkCHint"></div>
         </div>
+        <div class="section-title" style="margin-top:12px">內部使用</div>
+        <div class="form-hint" style="margin-bottom:8px">計算書底部 Prepared by · 簽署／日期（可與發票日期不同）</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Prepared by · 簽署</label>
+            <select class="form-input" id="fIcPreparedBySelect" onchange="Payments.onIcPreparedByChange()">
+              <option value="">— 選擇項目負責人 —</option>
+            </select>
+            <input type="text" class="form-input" id="fIcPreparedByCustom" placeholder="自填姓名"
+              style="display:none;margin-top:6px" oninput="Payments.onIcPreparedByCustomInput()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">日期</label>
+            <input type="date" class="form-input" id="fIcSignatureDate">
+            <div class="form-hint">預設當日；可留空，計算書內部使用列日期留空</div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">備注</label>
@@ -2069,8 +2324,34 @@
 
         <div class="form-row-3">
           <div class="form-group">
-            <label class="form-label">主合約名稱（中文）</label>
-            <input type="text" class="form-input" id="pNameZh" placeholder="港鐵九龍灣站健身室擴展工程">
+            <label class="form-label">主承建商</label>
+            <input type="text" class="form-input" id="pMc" placeholder="Mepork Engineering...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">客方</label>
+            <input type="text" class="form-input" id="pClient" placeholder="MTR">
+          </div>
+          <div class="form-group">
+            <label class="form-label">第二客方</label>
+            <input type="text" class="form-input" id="pClient2" placeholder="聯營客方（如有）">
+          </div>
+        </div>
+
+        <div class="proj-form-divider"></div>
+
+        <div class="form-row-3">
+          <div class="form-group proj-contract-names-stack">
+            <div class="proj-name-block">
+              <label class="form-label">主合約名稱（中文）</label>
+              <div class="proj-amt-sot-row">
+                <input type="text" class="form-input proj-field-clip-grow" id="pNameZh" placeholder="港鐵九龍灣站健身室擴展工程">
+                <div class="proj-amt-sot-docs proj-doc-filelist proj-iso-readonly" id="projDocList_main_loa"></div>
+              </div>
+            </div>
+            <div class="proj-name-block">
+              <label class="form-label">主合約名稱（英文）</label>
+              <input type="text" class="form-input" id="pNameEn" placeholder="MTR C9644-24C Extension of Fitness Room...">
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">MP合約編號</label>
@@ -2090,11 +2371,7 @@
           </div>
         </div>
 
-        <div class="form-row-3">
-          <div class="form-group">
-            <label class="form-label">主合約名稱（英文）</label>
-            <input type="text" class="form-input" id="pNameEn" placeholder="MTR C9644-24C Extension of Fitness Room...">
-          </div>
+        <div class="form-row-3 proj-row-cat-account">
           <div class="form-group">
             <label class="form-label">工程分類</label>
             <select class="form-input" id="pCatL1" onchange="Projects.onCategoryL1Change()">
@@ -2111,71 +2388,25 @@
           </div>
         </div>
 
-        <div class="form-row-4 proj-doc-row" hidden><!-- 附件上傳暫隱藏 -->
-          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_main_contract">
-            <label class="form-label">上傳附件（主合約 · LOA）</label>
-            <div class="proj-doc-actions" id="projDoc_main_loa">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_main_contract')">📎 主合約</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_loa')">📎 LOA</button>
-            </div>
-            <div class="proj-doc-filelist" id="projDocList_main_loa"></div>
-          </div>
-          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_signoff">
-            <label class="form-label">上傳附件（投標會簽表）</label>
-            <div class="proj-doc-actions" id="projDoc_signoff">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_signoff')">📎 上傳</button>
-            </div>
-            <div class="proj-doc-filelist" id="projDocList_signoff"></div>
-          </div>
-          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_email">
-            <label class="form-label">電郵記錄</label>
-            <div class="proj-doc-actions" id="projDoc_email">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_email')">📎 上傳</button>
-            </div>
-            <div class="proj-doc-filelist" id="projDocList_email"></div>
-          </div>
-          <div class="form-group proj-doc-slot" data-doc-cat="attachment1_related">
-            <label class="form-label">相關文件</label>
-            <div class="proj-doc-actions" id="projDoc_related">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.pickProjDoc('attachment1_related')">📎 上傳</button>
-            </div>
-            <div class="proj-doc-filelist" id="projDocList_related"></div>
-          </div>
-        </div>
-        <input type="file" id="projDocFileInput" accept=".pdf,.png,.jpg,.jpeg" hidden onchange="Projects.onProjDocFile(this)">
+        <!-- 編輯項目：會簽／電郵／相關 ISO 三欄暫不顯示（LOA、SOT 仍於欄位旁 📎） -->
 
         <div class="form-row-3">
           <div class="form-group">
-            <label class="form-label">主承建商</label>
-            <input type="text" class="form-input" id="pMc" placeholder="Mepork Engineering...">
-          </div>
-          <div class="form-group">
-            <label class="form-label">客方</label>
-            <input type="text" class="form-input" id="pClient" placeholder="MTR">
-          </div>
-          <div class="form-group">
-            <label class="form-label">第二客方</label>
-            <input type="text" class="form-input" id="pClient2" placeholder="聯營客方（如有）">
-          </div>
-        </div>
-
-        <div class="form-row-3">
-          <div class="form-group">
-            <label class="form-label">MP落標價 (HK$)</label>
+            <label class="form-label">MP投標價 (HK$)</label>
             <input type="number" class="form-input" id="pTenderSum" placeholder="0" step="0.01">
-            <div class="proj-doc-filelist" id="projDoc_sot_sor" hidden></div>
           </div>
           <div class="form-group">
             <label class="form-label">(A) MP承建金額 (HK$)</label>
-            <input type="number" class="form-input" id="pAmt" placeholder="0" step="0.01">
+            <div class="proj-amt-sot-row">
+              <input type="number" class="form-input proj-amt-sot-input" id="pAmt" placeholder="0" step="0.01">
+              <div class="proj-amt-sot-docs proj-doc-filelist proj-iso-readonly" id="projDoc_sot_sor"></div>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">預計利潤率 (%)</label>
             <input type="number" class="form-input" id="pAnticipatedProfitPct" placeholder="" step="0.01">
           </div>
         </div>
-
-        <div class="proj-form-divider"></div>
 
         <div class="form-row-3">
           <div class="form-group">
@@ -2186,19 +2417,15 @@
             <label class="form-label">預計完工日</label>
             <input type="date" class="form-input" id="pCompletionDate">
           </div>
-          <div class="form-group">
-            <label class="form-label">實際完工 PC Cert.</label>
-            <input type="date" class="form-input" id="pPcCertDate">
-          </div>
         </div>
         <div class="form-row-3">
           <div class="form-group">
             <label class="form-label">MP開工日</label>
-            <input type="date" class="form-input" id="pMpCommence">
+            <input type="date" class="form-input" id="pMpCommence" onchange="Projects.updateExtendedCompletionPreview()">
           </div>
           <div class="form-group">
-            <label class="form-label">延遲完工日</label>
-            <input type="date" class="form-input" id="pExtendedCompletion">
+            <label class="form-label proj-label-tip" title="由主合約最終結算計算（MP 開工日 + 工期）">延遲完工日</label>
+            <div class="form-input proj-dash-field" id="pExtendedCompletionDisplay" style="border:none;padding-left:0">—</div>
           </div>
           <div class="form-group">
             <label class="form-label">保修期（月）</label>
@@ -2220,11 +2447,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">工期（日數）</label>
-            <input type="text" class="form-input" id="pConstructionDays" placeholder="390 或 12/2024 - 01/2026 (390天)">
+            <input type="number" class="form-input" id="pConstructionDays" placeholder="390" step="1" min="0"
+              oninput="Projects.updateExtendedCompletionPreview()" onchange="Projects.updateExtendedCompletionPreview()">
           </div>
         </div>
 
-        <div id="projRetentionBlock" hidden><!-- 保證金／保固金暫隱藏 -->
         <div class="proj-form-divider"></div>
 
         <div class="form-row-3" id="projSectionRetention">
@@ -2268,18 +2495,11 @@
             </label>
           </div>
         </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group" style="max-width:240px">
-            <label class="form-label">保修完成日</label>
-            <input type="date" class="form-input" id="pDlpCertDate">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group" style="max-width:240px">
-            <label class="form-label">MP工程帳目總結算日</label>
-            <input type="date" class="form-input" id="pMpFacDate">
-          </div>
+
+        <div class="form-hint" style="margin:8px 0 0">
+          實際完工 PC Cert.、保修完成日、MP 工程帳目總結算日請於
+          <button type="button" class="btn-link" onclick="Projects.closeModal();App.navigate('main-con-fac')">主合約最終結算</button>
+          維護
         </div>
 
         <div class="proj-form-divider"></div>
@@ -3325,14 +3545,17 @@
 <input type="file" id="pfImportFile" accept=".xlsx,.xls" style="display:none" onchange="PortfolioCommon.onImportFile(event)">
 
 <!-- Scripts -->
-<script src="js/main.js?v=v2-20260925-excel-export"></script>
+<script src="js/main.js?v=v2-20261005-contract-calc-v4"></script>
+<script src="js/nav_layout.js?v=v2-20261003-proj-dash"></script>
 <script src="js/col_picker.js?v=v2-20260828-p3"></script>
-<script src="js/iso_docs.js?v=v2-20260924-amt-fmt"></script>
-<script src="js/payments.js?v=v2-20260924-amt-fmt"></script>
+<script src="js/iso_docs.js?v=v2-20261005-iso-multi"></script>
+<script src="js/payments.js?v=v2-20261005-ic-sign-v2"></script>
 <script src="js/sc_vo_reg.js?v=v2-20260924-amt-fmt"></script>
-<script src="js/main_con_fac.js?v=v2-20260925-mcf-dates"></script>
 <script src="js/sc_fac.js?v=20260911-sc-fac-p2"></script>
-<script src="js/projects.js?v=v2-20260925-excel-export"></script>
+<script src="js/proj_iso_attach.js?v=v2-20261005-iso-multi"></script>
+<script src="js/projects.js?v=v2-20261005-period-num"></script>
+<script src="js/project_dashboard.js?v=v2-20261005-contract-calc-v2"></script>
+<script src="js/main_con_fac.js?v=v2-20261005-contract-calc"></script>
 <script src="js/hk_banks.js?v=20260805c"></script>
 <script src="js/ip_period.js?v=v2-20260925-ip-receipts"></script>
 <script src="js/ocr.js?v=v2-20260924-amt-fmt"></script>

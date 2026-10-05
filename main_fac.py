@@ -1,6 +1,9 @@
 """
 main_fac.py — 主合約最終結算（PPT 第19頁 Main Con Final Account）
 """
+import re
+from datetime import datetime, timedelta
+
 from project_cover import (
     derive_mp_contract_code,
     retention_release_label,
@@ -38,7 +41,50 @@ MAIN_FAC_WRITABLE = [
     'fac_total_paid_i_override', 'fac_paid_as_at_date',
     'fac_lad_rate', 'fac_lad_max', 'fac_testing_commission_date', 'fac_make_good_date',
     'fac_dlp_days', 'fac_dlp_expiry_date',
+    'pc_cert_date', 'mp_fac_signed_date',
 ]
+
+
+def _add_calendar_days(iso_date, days):
+    if not iso_date or days is None or days == '':
+        return None
+    try:
+        base = datetime.strptime(str(iso_date)[:10], '%Y-%m-%d').date()
+        return (base + timedelta(days=int(days))).isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
+def _construction_days_from_project(project):
+    if not project:
+        return None
+    raw = project.get('construction_period_days')
+    if raw is not None and raw != '':
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            pass
+    text = str(project.get('site_period_text') or '').strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return int(text)
+    m = re.search(r'(\d+)\s*天', text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def extended_completion_date(project):
+    """延遲完工日：MP 開工日 + 工期（日數）。"""
+    if not project:
+        return None
+    commence = project.get('mp_commencement_date') or project.get('start_date')
+    days = _construction_days_from_project(project)
+    computed = _add_calendar_days(commence, days)
+    if computed:
+        return computed
+    return project.get('extended_completion_date')
 
 
 def is_n21_stonecutters_project(project):
@@ -169,6 +215,7 @@ def build_main_con_fac(project, vo_totals=None, interim_items=None):
             'lad_rate': project.get('fac_lad_rate'),
             'lad_max': project.get('fac_lad_max'),
             'pc_cert_date': project.get('pc_cert_date'),
+            'extended_completion_date': extended_completion_date(project),
             'dlp_commencement_date': project.get('dlp_cert_date'),
             'fac_dlp_days': project.get('fac_dlp_days'),
             'fac_dlp_expiry_date': project.get('fac_dlp_expiry_date'),

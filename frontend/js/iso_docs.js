@@ -136,10 +136,19 @@ const IsoDocs = {
     if (this._board) this._renderMainGrid(this._board);
   },
 
-  _hasFile(file) {
+  _fileList(fileOrList) {
+    if (!fileOrList) return [];
+    return Array.isArray(fileOrList) ? fileOrList : [fileOrList];
+  },
+
+  _singleHasFile(file) {
     if (!file) return false;
     if (file.storage_type === 'link') return !!(file.external_url || '').trim();
     return !!(file.file_path || '').trim();
+  },
+
+  _hasFile(fileOrList) {
+    return this._fileList(fileOrList).some(f => this._singleHasFile(f));
   },
 
   _computeStats(b) {
@@ -525,13 +534,13 @@ const IsoDocs = {
       if (!tile) return;
       e.preventDefault();
       tile.classList.remove('iso-drop-hover');
-      const file = e.dataTransfer?.files?.[0];
-      if (!file) return;
+      const files = [...(e.dataTransfer?.files || [])];
+      if (!files.length) return;
       const scope = tile.dataset.isoScope;
       const slot = tile.dataset.isoSlot;
       const scRaw = tile.dataset.isoScId;
       const scId = scRaw ? parseInt(scRaw, 10) : null;
-      this.uploadFile(file, { scope, slot, scId: Number.isFinite(scId) ? scId : null });
+      this.uploadFiles(files, { scope, slot, scId: Number.isFinite(scId) ? scId : null });
     };
     ['isoMainGrid', 'isoScCards'].forEach(id => {
       const root = document.getElementById(id);
@@ -650,70 +659,93 @@ const IsoDocs = {
     return ' iso-file-cell-missing';
   },
 
-  async uploadFile(file, ctx) {
-    if (!file || !ctx) return;
+  async uploadFiles(files, ctx) {
+    const list = (files || []).filter(Boolean);
+    if (!list.length || !ctx) return;
     const pid = App.currentProject?.id;
     if (!pid) {
       toast('請先選擇項目', 'warning');
       return;
     }
-    const okExt = /\.(pdf|png|jpe?g|gif|webp)$/i.test(file.name);
-    if (!okExt) {
+    const valid = list.filter(f => /\.(pdf|png|jpe?g|gif|webp)$/i.test(f.name));
+    if (!valid.length) {
       toast('只支援 PDF 或圖片格式', 'warning');
       return;
     }
+    if (valid.length < list.length) {
+      toast('部分檔案格式不支援，已略過', 'warning');
+    }
 
-    showLoading('上傳 ISO 文件…');
+    showLoading(valid.length > 1 ? `上傳 ISO 文件（0/${valid.length}）…` : '上傳 ISO 文件…');
+    let ok = 0;
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('scope', ctx.scope);
-      fd.append('doc_slot', ctx.slot);
-      if (ctx.scId) fd.append('subcontractor_id', String(ctx.scId));
-
-      const res = await fetch(`${API}/projects/${pid}/iso-documents/upload`, { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || '上傳失敗');
-      toast('文件已上傳', 'success');
+      for (const file of valid) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('scope', ctx.scope);
+        fd.append('doc_slot', ctx.slot);
+        if (ctx.scId) fd.append('subcontractor_id', String(ctx.scId));
+        const res = await fetch(`${API}/projects/${pid}/iso-documents/upload`, { method: 'POST', body: fd });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || '上傳失敗');
+        ok += 1;
+        if (valid.length > 1) showLoading(`上傳 ISO 文件（${ok}/${valid.length}）…`);
+      }
+      toast(ok > 1 ? `已上傳 ${ok} 個文件` : '文件已上傳', 'success');
       await this.load();
     } catch (e) {
       toast(e.message || '上傳失敗', 'error');
+      if (ok > 0) await this.load();
     } finally {
       hideLoading();
     }
   },
 
-  _fileCell(scope, scId, slot, file, pending, optional) {
-    if (pending && !file) {
+  async uploadFile(file, ctx) {
+    await this.uploadFiles([file], ctx);
+  },
+
+  _fileItemHtml(file, scope, slot, scId) {
+    const isLink = file.storage_type === 'link';
+    const name = escHtml(file.link_label || file.original_filename || (isLink ? '外部連結' : file.file_path));
+    const date = this._formatUploadDate(file.updated_at || file.created_at);
+    const dateHtml = date ? `<span class="iso-file-date">${escHtml(date)}</span>` : '';
+    let linkHtml;
+    if (isLink) {
+      const href = this._safeHref(file.external_url);
+      linkHtml = href
+        ? `<a class="iso-file-link" href="${href}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 ${name}</a>`
+        : `<span class="iso-file-link">${name}</span>`;
+    } else {
+      const path = (file.file_path || '').replace(/"/g, '&quot;');
+      linkHtml = `<button type="button" class="iso-file-link" onclick="event.stopPropagation(); DocViewer.open('${path}', '${name}')">📄 ${name}</button>`;
+    }
+    return `<div class="iso-file-item iso-file-item-done">
+      ${linkHtml}
+      ${dateHtml}
+      <div class="iso-file-actions">
+        <button type="button" class="iso-file-action iso-file-del" title="刪除" onclick="event.stopPropagation(); IsoDocs.deleteFile(${file.id})">×</button>
+      </div>
+    </div>`;
+  },
+
+  _fileCell(scope, scId, slot, fileOrList, pending, optional) {
+    if (pending && !this._hasFile(fileOrList)) {
       return '<span class="iso-file-placeholder">…</span>';
     }
-    if (this._hasFile(file)) {
-      const isLink = file.storage_type === 'link';
-      const name = escHtml(file.link_label || file.original_filename || (isLink ? '外部連結' : file.file_path));
-      const date = this._formatUploadDate(file.updated_at || file.created_at);
-      const dateHtml = date ? `<span class="iso-file-date">${escHtml(date)}</span>` : '';
-      const verCount = file.version_count || 0;
+    const files = this._fileList(fileOrList).filter(f => this._singleHasFile(f));
+    if (files.length) {
+      const verCount = files.reduce((n, f) => n + (f.version_count || 0), 0);
       const verBtn = verCount > 0
-        ? `<button type="button" class="iso-file-action" title="歷史版本 (${verCount})" onclick="event.stopPropagation(); IsoDocs.showVersions('${scope}', '${slot}', ${scId || 'null'})">📚</button>`
+        ? `<button type="button" class="iso-file-action iso-file-ver" title="歷史版本 (${verCount})" onclick="event.stopPropagation(); IsoDocs.showVersions('${scope}', '${slot}', ${scId || 'null'})">📚</button>`
         : '';
-      let linkHtml;
-      if (isLink) {
-        const href = this._safeHref(file.external_url);
-        linkHtml = href
-          ? `<a class="iso-file-link" href="${href}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 ${name}</a>`
-          : `<span class="iso-file-link">${name}</span>`;
-      } else {
-        const path = (file.file_path || '').replace(/"/g, '&quot;');
-        linkHtml = `<button type="button" class="iso-file-link" onclick="event.stopPropagation(); DocViewer.open('${path}', '${name}')">📄 ${name}</button>`;
-      }
-      return `<div class="iso-file-item iso-file-item-done">
-        ${linkHtml}
-        ${dateHtml}
-        <div class="iso-file-actions">
+      const items = files.map(f => this._fileItemHtml(f, scope, slot, scId)).join('');
+      return `<div class="iso-file-stack">
+        ${items}
+        <div class="iso-file-stack-actions">
           ${verBtn}
-          <button type="button" class="iso-file-action" title="更換" onclick="event.stopPropagation(); IsoDocs.pickUpload('${scope}', '${slot}', ${scId || 'null'})">↻</button>
+          <button type="button" class="iso-file-action" title="新增文件" onclick="event.stopPropagation(); IsoDocs.pickUpload('${scope}', '${slot}', ${scId || 'null'})">＋</button>
           <button type="button" class="iso-file-action" title="填連結" onclick="event.stopPropagation(); IsoDocs.openLinkModal('${scope}', '${slot}', ${scId || 'null'})">🔗</button>
-          <button type="button" class="iso-file-action iso-file-del" title="刪除" onclick="event.stopPropagation(); IsoDocs.deleteFile(${file.id})">×</button>
         </div>
       </div>`;
     }
@@ -734,12 +766,12 @@ const IsoDocs = {
   },
 
   async onFileSelected(event) {
-    const file = event.target?.files?.[0];
+    const files = [...(event.target?.files || [])];
     if (event.target) event.target.value = '';
     const ctx = this._uploadCtx;
     this._uploadCtx = null;
-    if (!file || !ctx) return;
-    await this.uploadFile(file, ctx);
+    if (!files.length || !ctx) return;
+    await this.uploadFiles(files, ctx);
   },
 
   async deleteFile(docId) {

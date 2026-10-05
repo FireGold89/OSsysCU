@@ -47,7 +47,7 @@ const Theme = {
     if (persist) localStorage.setItem(this.STORAGE_KEY, next);
     this._syncToggleUI();
     if (typeof Dashboard !== 'undefined' && Dashboard.charts && App.currentProject) {
-      const page = document.getElementById('page-dashboard');
+      const page = document.getElementById('page-project-lens');
       if (page?.classList.contains('active') && Dashboard._lastScStats) {
         Dashboard.renderCharts(Dashboard._lastScStats);
       }
@@ -743,19 +743,135 @@ function updateDashIpTotals(ip) {
   }
 }
 
+function _calcDetailLine(label, amount, opts = {}) {
+  const muted = opts.muted !== false;
+  const amt = amount != null && amount !== ''
+    ? `<span class="calc-inline-amt ${muted ? 'calc-inline-amt-muted' : ''}">${fmtAcct(amount)}</span>`
+    : '';
+  return `<div class="calc-detail-line ${opts.vo ? 'calc-vo-line' : ''}"><span class="calc-detail-text">${label}</span>${amt}</div>`;
+}
+
 function contractCalcTableHtml(calc) {
   if (!calc) return '';
-  const rateClass = calc.profit_rate < 0 ? 'negative' : 'positive';
+  const a = parseFloat(calc.main_contract_amount) || 0;
+  const b = parseFloat(calc.sub_total_b) || 0;
+  const c = parseFloat(calc.material_other_c ?? calc.excluded_c) || 0;
+  const labour = parseFloat(calc.labour_allocation) || 0;
+  const labourHold = calc.labour_hold === true;
+  const d = parseFloat(calc.total_d);
+  const totalD = Number.isFinite(d) ? d : b + c + (labourHold ? 0 : labour);
+  const e = parseFloat(calc.profit_e);
+  const profitE = Number.isFinite(e) ? e : a - totalD;
+  const f = parseFloat(calc.profit_rate);
+  const profitRate = Number.isFinite(f) ? f : (a ? (profitE / a * 100) : 0);
+  const rateClass = profitRate < 0 ? 'negative' : 'positive';
+
+  const groups = calc.subcontract_groups || [];
+  let subDetail = '';
+  if (groups.length) {
+    const detailBlocks = groups.map((g) => {
+      const ms = g.sub_contract_no
+        ? `<span class="calc-ms-no">${escHtml(g.sub_contract_no)}</span>`
+        : '';
+      const headLabel = `<strong>(${g.seq}) ${escHtml(g.label || '—')}</strong> ${ms}`;
+      const headAmt = (g.vo_lines || []).length ? g.base_amount : g.amount;
+      let block = _calcDetailLine(headLabel, headAmt, { muted: false, vo: false });
+      (g.vo_lines || []).forEach((vo) => {
+        block += _calcDetailLine(escHtml(vo.label || 'VO'), vo.amount || 0, { vo: true });
+      });
+      return block;
+    }).join('');
+    subDetail = `
+        <tr class="calc-sub-block-row">
+          <td></td>
+          <td class="calc-detail calc-detail-stack">${detailBlocks}</td>
+          <td class="calc-amt-empty"></td>
+          <td class="calc-code"></td>
+        </tr>`;
+  } else {
+    const lines = calc.subcontract_lines || [];
+    if (lines.length) {
+      const detailBlocks = lines.map((ln) => {
+        const prefix = ln.kind === 'vo' ? '' : `(${ln.seq}) `;
+        return _calcDetailLine(`${prefix}${escHtml(ln.label || '—')}`, ln.amount, { vo: ln.kind === 'vo' });
+      }).join('');
+      subDetail = `
+        <tr class="calc-sub-block-row">
+          <td></td>
+          <td class="calc-detail calc-detail-stack">${detailBlocks}</td>
+          <td class="calc-amt-empty"></td>
+          <td class="calc-code"></td>
+        </tr>`;
+    } else {
+      subDetail = `<tr class="calc-sub-row"><td></td><td class="calc-detail form-hint" colspan="2">尚無分判資料（請維護判項 SC 或「分判合約編號」）</td><td></td></tr>`;
+    }
+  }
+
+  const labourAmt = labourHold
+    ? '<span class="calc-hold">暫定 HOLD</span>'
+    : `<span class="${amtClass(labour, 'expense')}">${fmtExpense(labour)}</span>`;
+  const labourFormula = labourHold ? '（暫不計入 D）' : '';
+
   return `
-    <table class="contract-calc-table">
+    <table class="contract-calc-table contract-calc-full">
+      <thead>
+        <tr>
+          <th class="calc-th-label">項目</th>
+          <th class="calc-th-detail">明細 / 公式</th>
+          <th class="calc-th-amt">金額 (HK$)</th>
+          <th class="calc-th-code"></th>
+        </tr>
+      </thead>
       <tbody>
-        <tr><td class="calc-label">(A) 承建金額</td><td class="calc-value">${fmtAcct(calc.main_contract_amount)}</td></tr>
-        <tr><td class="calc-label">(B) 分判及代支小計</td><td class="calc-value ${amtClass(calc.sub_total_b, 'expense')}">${fmtExpense(calc.sub_total_b)}</td></tr>
-        <tr><td class="calc-label">(C) 除外合約收費項目</td><td class="calc-value ${amtClass(calc.excluded_c, 'expense')}">${fmtExpense(calc.excluded_c)}</td></tr>
-        <tr><td class="calc-label">財務會作調撥（人工分攤）</td><td class="calc-value ${amtClass(calc.labour_allocation, 'expense')}">${fmtExpense(calc.labour_allocation)}</td></tr>
-        <tr class="calc-total"><td class="calc-label">(D) = (B)+(C)+調撥</td><td class="calc-value ${amtClass(calc.total_d, 'expense')}">${fmtExpense(calc.total_d)}</td></tr>
-        <tr><td class="calc-label">(E) = (A) - (D) 預計利潤</td><td class="calc-value ${rateClass}">${fmtAcct(calc.profit_e)}</td></tr>
-        <tr><td class="calc-label">預計利潤率</td><td class="calc-value ${rateClass}">${fmtPct(calc.profit_rate)}</td></tr>
+        <tr>
+          <td class="calc-label">承建金額</td>
+          <td class="calc-formula"></td>
+          <td class="calc-value">${fmtAcct(a)}</td>
+          <td class="calc-code">(A)</td>
+        </tr>
+        <tr class="calc-section-head">
+          <td class="calc-label">分判承包商</td>
+          <td class="calc-formula form-hint">分判合約編號 · 分判合約金額</td>
+          <td></td>
+          <td></td>
+        </tr>
+        ${subDetail}
+        <tr class="calc-row-total">
+          <td></td>
+          <td class="calc-formula"></td>
+          <td class="calc-value ${amtClass(b, 'expense')}">${fmtExpense(b)}</td>
+          <td class="calc-code">(B)</td>
+        </tr>
+        <tr>
+          <td class="calc-label">物料及其他支出</td>
+          <td class="calc-formula form-hint">分判付款登記 · 非分判 (SC) 支出加總</td>
+          <td class="calc-value ${amtClass(c, 'expense')}">${fmtExpense(c)}</td>
+          <td class="calc-code">(C)</td>
+        </tr>
+        <tr>
+          <td class="calc-label">財務會作調撥（人工分攤）</td>
+          <td class="calc-formula">${labourFormula}</td>
+          <td class="calc-value">${labourAmt}</td>
+          <td class="calc-code"></td>
+        </tr>
+        <tr class="calc-row-total">
+          <td class="calc-label">成本小計</td>
+          <td class="calc-formula">(D) = (B)+(C)+調撥</td>
+          <td class="calc-value ${amtClass(totalD, 'expense')}">${fmtExpense(totalD)}</td>
+          <td class="calc-code">(D)</td>
+        </tr>
+        <tr>
+          <td class="calc-label">現時利潤</td>
+          <td class="calc-formula">(E) = (A) − (D)</td>
+          <td class="calc-value ${rateClass}">${fmtAcct(profitE)}</td>
+          <td class="calc-code">(E)</td>
+        </tr>
+        <tr class="calc-row-total">
+          <td class="calc-label">預計利潤率</td>
+          <td class="calc-formula">(F) = (E) ÷ (A) × 100%</td>
+          <td class="calc-value ${rateClass}">${fmtPct(profitRate)}</td>
+          <td class="calc-code">(F)</td>
+        </tr>
       </tbody>
     </table>`;
 }
@@ -1053,6 +1169,7 @@ const Sidebar = {
       el.setAttribute('aria-label', label);
       el.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     });
+    if (typeof NavLayout !== 'undefined') NavLayout.onSidebarCollapse(collapsed);
   },
 };
 
@@ -1328,6 +1445,7 @@ const App = {
     VaultEntry.playIfNeeded();
     Theme.init();
     Sidebar.init();
+    if (typeof NavLayout !== 'undefined') NavLayout.init();
     ModalA11y.init();
     AmountInput.init();
     document.addEventListener('focusin', (e) => {
@@ -1446,6 +1564,7 @@ const App = {
       if (switchSeq !== this._projectSwitchSeq) return;
 
       await this._refreshProjectViews(switchSeq);
+      if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
     } finally {
       if (switchSeq === this._projectSwitchSeq) hideContentLoading();
     }
@@ -1512,7 +1631,8 @@ const App = {
     OCR.populateScOptions();
 
     const loaders = {
-      dashboard: () => Dashboard.load(switchSeq),
+      dashboard: () => ProjectDashboard.load(switchSeq),
+      'project-lens': () => Dashboard.load(switchSeq),
       payments: () => Payments.load(switchSeq),
       'ip-period': () => IpPeriod.load(switchSeq),
       reports: () => Reports.load(switchSeq),
@@ -1522,12 +1642,13 @@ const App = {
     if (loaders[active]) {
       await loaders[active]();
     } else if (active === 'dashboard' || !this.currentProject) {
-      await Dashboard.load(switchSeq);
+      await ProjectDashboard.load(switchSeq);
     }
     if (switchSeq !== this._projectSwitchSeq) return;
 
     const bgLoads = [];
-    if (active !== 'dashboard') bgLoads.push(Dashboard.load(switchSeq));
+    if (active !== 'project-lens') bgLoads.push(Dashboard.load(switchSeq));
+    if (active !== 'dashboard') bgLoads.push(ProjectDashboard.load(switchSeq));
     if (active !== 'payments') bgLoads.push(Payments.load(switchSeq));
     bgLoads.push(SC.load(switchSeq));
     if (active !== 'ip-period') bgLoads.push(IpPeriod.load(switchSeq));
@@ -1572,7 +1693,8 @@ const App = {
 
     // 更新頁面標題
     const titles = {
-      dashboard: ['項目概覽', '項目財務總覽'],
+      dashboard: ['項目概覽', 'QS 項目資料 · 與工程項目表單一致'],
+      'project-lens': ['項目視角', '財務 KPI · 糧期 · 主要功能'],
       'iso-docs': ['ISO文件登記', 'ISO 文件上傳 · 主合約及分判招標合約附件'],
       payments: ['分判付款登記', '發票／中期糧款計算書登記'],
       'sc-vo-reg': ['變更以及扣款登記', '主合約及分判 · 變更工程及扣款 · 模板快速新增'],
@@ -1597,7 +1719,8 @@ const App = {
     this._syncQuickAddBtn();
 
     // 載入頁面數據
-    if (page === 'dashboard' && !options?.skipLoad) Dashboard.load();
+    if (page === 'dashboard' && !options?.skipLoad) ProjectDashboard.load();
+    else if (page === 'project-lens' && !options?.skipLoad) Dashboard.load();
     else if (page === 'iso-docs') IsoDocs.load();
     else if (page === 'payments') {
       if (options?.tab) Payments._pendingTab = options.tab;
@@ -1765,6 +1888,7 @@ const Dashboard = {
     const payCount = summary.payment_count ?? (summary.recent_payments || []).length;
     document.getElementById('dashPayCount').textContent = payCount;
     document.getElementById('payBadge').textContent = payCount;
+    if (typeof NavLayout !== 'undefined') NavLayout.refreshBadges();
     document.getElementById('dashScCount').textContent = App.scList?.length || 0;
 
     renderContractCalc(summary.contract_calc, 'dashContractCalc');
@@ -1795,14 +1919,16 @@ const Dashboard = {
   async load(switchSeq) {
     const p = App.currentProject;
     if (!p) {
-      document.getElementById('dashboardNoProject').style.display = '';
-      document.getElementById('dashboardContent').style.display = 'none';
+      document.getElementById('projectLensNoProject').style.display = '';
+      document.getElementById('projectLensContent').style.display = 'none';
       document.getElementById('dashFacProject')?.setAttribute('hidden', '');
+      if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
       return;
     }
     const projectId = p.id;
-    document.getElementById('dashboardNoProject').style.display = 'none';
-    document.getElementById('dashboardContent').style.display = '';
+    document.getElementById('projectLensNoProject').style.display = 'none';
+    document.getElementById('projectLensContent').style.display = '';
+    if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
 
     const statsP = this.loadCompanyFacStats();
     const summaryP = api('GET', `/reports/summary/${projectId}`, null, { silent: true });

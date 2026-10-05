@@ -222,61 +222,29 @@ const Projects = {
     this._renderMpCodes();
   },
 
-  pickProjDoc(category) {
-    const id = document.getElementById('projModalId')?.value;
-    if (!id) {
-      toast('請先儲存項目，再上傳附件', 'warning');
-      return;
-    }
-    this._projDocCategory = category;
-    document.getElementById('projDocFileInput')?.click();
-  },
-
-  async onProjDocFile(input) {
-    const file = input?.files?.[0];
-    if (!file) return;
-    const pid = document.getElementById('projModalId')?.value;
-    const cat = this._projDocCategory;
-    if (!pid || !cat) {
-      if (input) input.value = '';
-      return;
-    }
-    showLoading('上傳附件…');
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const up = await fetch(`${API}/files/upload`, { method: 'POST', body: fd });
-      const upJson = await up.json();
-      if (!upJson.success) throw new Error(upJson.error || '上傳失敗');
-      await api('POST', `/projects/${pid}/documents`, {
-        doc_category: cat,
-        file_path: upJson.data.pdf_path,
-        original_filename: upJson.data.filename || file.name,
-      });
-      toast('附件已上傳', 'success');
-      await this._loadProjDocuments(pid);
-    } catch (e) {
-      toast(e.message || '上傳失敗', 'error');
-    } finally {
-      hideLoading();
-      if (input) input.value = '';
-      this._projDocCategory = null;
-    }
-  },
-
-  async deleteProjDoc(docId, event) {
-    if (event) event.stopPropagation();
-    if (!confirm('刪除此附件？')) return;
-    await api('DELETE', `/project-documents/${docId}`);
-    const pid = document.getElementById('projModalId')?.value;
-    if (pid) await this._loadProjDocuments(pid);
-    toast('已刪除附件', 'success');
-  },
-
   async _loadProjDocuments(projectId) {
-    this._projDocs = projectId
-      ? (await api('GET', `/projects/${projectId}/documents`) || [])
-      : [];
+    if (!projectId) {
+      this._projDocs = [];
+      this._renderProjDocLists();
+      return;
+    }
+    let mainFiles = {};
+    try {
+      const board = await api('GET', `/projects/${projectId}/iso-documents`, null, { silent: true });
+      mainFiles = board?.main_files || {};
+    } catch (_) {
+      mainFiles = {};
+    }
+    let legacySot = [];
+    try {
+      const legacy = (await api('GET', `/projects/${projectId}/documents`, null, { silent: true })) || [];
+      legacySot = legacy.filter((d) => d.doc_category === 'attachment3_sot_sor');
+    } catch (_) {
+      legacySot = [];
+    }
+    this._projDocs = typeof ProjIsoAttach !== 'undefined'
+      ? ProjIsoAttach.mergeDocs(legacySot, mainFiles, { isoOnly: true })
+      : legacySot;
     this._renderProjDocLists();
   },
 
@@ -285,38 +253,26 @@ const Projects = {
   },
 
   _renderProjDocLists() {
-    const render = (elId, cats) => {
+    const renderGroup = (elId, groupKey) => {
       const el = document.getElementById(elId);
       if (!el) return;
-      const docs = (this._projDocs || []).filter(d => cats.includes(d.doc_category));
-      if (!docs.length) {
-        el.innerHTML = '';
-        return;
-      }
-      el.innerHTML = docs.map(d => {
-        const rawName = d.original_filename || d.file_path || '附件';
-        const name = escHtml(rawName);
-        const path = (d.file_path || '').replace(/"/g, '&quot;');
-        const viewBtn = path
-          ? `<button type="button" class="btn btn-icon btn-secondary btn-sm btn-view-pdf proj-doc-view"
-              title="預覽" data-pdf-path="${path}" data-doc-title="${name}">👁</button>`
-          : '';
-        const nameBtn = path
-          ? `<button type="button" class="proj-doc-file-name btn-view-pdf" data-pdf-path="${path}"
-              data-doc-title="${name}" title="點擊預覽">📄 ${name}</button>`
-          : `<span class="proj-doc-file-name">📄 ${name}</span>`;
-        return `<div class="proj-doc-file">
-          ${nameBtn}
-          ${viewBtn}
-          <button type="button" class="proj-doc-del" title="刪除" onclick="Projects.deleteProjDoc(${d.id}, event)">×</button>
-        </div>`;
-      }).join('');
+      const docs = typeof ProjIsoAttach !== 'undefined'
+        ? ProjIsoAttach.docsForGroup(this._projDocs, groupKey)
+        : [];
+      el.innerHTML = typeof ProjIsoAttach !== 'undefined'
+        ? ProjIsoAttach.modalListHtml(docs)
+        : '';
     };
-    render('projDocList_main_loa', ['attachment1_main_contract', 'attachment1_loa']);
-    render('projDocList_signoff', ['attachment1_signoff']);
-    render('projDocList_email', ['attachment1_email']);
-    render('projDocList_related', ['attachment1_related']);
-    render('projDoc_sot_sor', ['attachment3_sot_sor']);
+    renderGroup('projDocList_main_loa', 'mainLoa');
+    const sotEl = document.getElementById('projDoc_sot_sor');
+    if (sotEl) {
+      const sot = typeof ProjIsoAttach !== 'undefined'
+        ? ProjIsoAttach.docsForGroup(this._projDocs, 'sotSor')
+        : (this._projDocs || []).filter((d) => d.doc_category === 'attachment3_sot_sor');
+      sotEl.innerHTML = typeof ProjIsoAttach !== 'undefined'
+        ? ProjIsoAttach.modalListHtml(sot)
+        : '';
+    }
   },
 
   initView() {
@@ -730,12 +686,18 @@ const Projects = {
   },
 
   _constructionPeriodDisplay(p) {
-    const proj = p || {};
-    if (proj.site_period_text) return proj.site_period_text;
-    if (proj.construction_period_days != null && proj.construction_period_days !== '') {
-      return String(proj.construction_period_days);
-    }
-    return '';
+    const days = this._constructionDaysFromProject(p);
+    if (days == null) return '—';
+    return String(days);
+  },
+
+  _readConstructionPeriodFields() {
+    const raw = this._num('pConstructionDays');
+    const days = raw != null ? Math.trunc(raw) : null;
+    return {
+      construction_period_days: days,
+      site_period_text: days != null ? `${days}天` : null,
+    };
   },
 
   _parseConstructionPeriod(raw) {
@@ -750,6 +712,43 @@ const Projects = {
     return { site_period_text: s, construction_period_days: days };
   },
 
+  _addCalendarDaysIso(isoDate, days) {
+    if (!isoDate || days == null || days === '') return null;
+    const n = parseInt(days, 10);
+    if (Number.isNaN(n)) return null;
+    const m = String(isoDate).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  },
+
+  _constructionDaysFromProject(p) {
+    const proj = p || {};
+    if (proj.construction_period_days != null && proj.construction_period_days !== '') {
+      const n = parseInt(proj.construction_period_days, 10);
+      if (!Number.isNaN(n)) return n;
+    }
+    return this._parseConstructionPeriod(proj.site_period_text || '').construction_period_days;
+  },
+
+  computedExtendedCompletionDate(p) {
+    const proj = p || {};
+    const commence = proj.mp_commencement_date || proj.start_date;
+    const days = this._constructionDaysFromProject(proj);
+    return this._addCalendarDaysIso(commence, days) || proj.extended_completion_date || null;
+  },
+
+  updateExtendedCompletionPreview() {
+    const el = document.getElementById('pExtendedCompletionDisplay');
+    if (!el) return;
+    const commence = this._val('pMpCommence');
+    const raw = this._num('pConstructionDays');
+    const days = raw != null ? Math.trunc(raw) : null;
+    const iso = this._addCalendarDaysIso(commence, days);
+    el.textContent = iso ? (fmtDate(iso) || iso) : '—';
+  },
+
   _set(id, val) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -759,6 +758,9 @@ const Projects = {
     }
     if (el.matches?.('input[type=number][step="0.01"], input.amt-input, input.iso-amt-input')) {
       el.value = fmtInputNum(val);
+    } else if (el.matches?.('input[type=number][step="1"]')) {
+      const n = parseInt(val, 10);
+      el.value = Number.isNaN(n) ? '' : String(n);
     } else {
       el.value = val;
     }
@@ -780,6 +782,60 @@ const Projects = {
     if (!oneOff && !firstOn && secondOn) return 'second_half';
     if (!oneOff && firstOn && secondOn) return 'two_half';
     return 'multi';
+  },
+
+  /** QS 概覽 · (n% ; MAX. n%) */
+  retentionPctSummaryDisplay(p) {
+    const fmt = (val) => {
+      if (val == null || val === '') return null;
+      const n = parseFloat(val);
+      if (Number.isNaN(n)) return null;
+      const text = n.toFixed(4).replace(/\.?0+$/, '');
+      return `${text}%`;
+    };
+    const pct = fmt(p?.retention_pct);
+    const maxPct = fmt(p?.retention_max_pct);
+    if (!pct && !maxPct) return '—';
+    return `(${pct || '—'} ; MAX. ${maxPct || '—'})`;
+  },
+
+  /** 項目概覽 · 保固金退還（唯讀） */
+  retentionRefundDisplay(p) {
+    const proj = p || {};
+    const mode = (proj.retention_release_mode || 'na').toLowerCase();
+    let dOne = proj.retention_release_date || null;
+    let dFirst = proj.retention_release_date_first || null;
+    let dSecond = proj.retention_release_date_second || null;
+    if (!dFirst && mode === 'first_half') dFirst = proj.retention_release_date;
+    if (!dSecond && mode === 'second_half') dSecond = proj.retention_release_date;
+
+    let oneOff = !!dOne;
+    let firstOn = !!dFirst;
+    let secondOn = !!dSecond;
+    if (!oneOff && !firstOn && !secondOn) {
+      if (mode === 'one_off') oneOff = true;
+      else if (mode === 'first_half') firstOn = true;
+      else if (mode === 'second_half') secondOn = true;
+      else if (mode === 'two_half') {
+        firstOn = true;
+        secondOn = true;
+      }
+    }
+    const naOn = !oneOff && !firstOn && !secondOn;
+    if (naOn || mode === 'na') return '不適用';
+
+    const fmtD = (d) => (d ? (fmtDate(d) || d) : '');
+    const lines = [];
+    if (oneOff) {
+      lines.push(`一次性退還保證金${dOne ? ` · ${fmtD(dOne)}` : ''}`);
+    }
+    if (firstOn) {
+      lines.push(`退還第一期保證金${dFirst ? ` · ${fmtD(dFirst)}` : ''}`);
+    }
+    if (secondOn) {
+      lines.push(`退還第二期保證金${dSecond ? ` · ${fmtD(dSecond)}` : ''}`);
+    }
+    return lines.length ? lines.join('\n') : '—';
   },
 
   _setRetentionFields(p) {
@@ -912,17 +968,26 @@ const Projects = {
     this._set('pMcCommence', p.main_contract_commencement_date);
     this._set('pMpCommence', p.mp_commencement_date || p.start_date);
     this._set('pCompletionDate', p.project_completion_date);
-    this._set('pPcCertDate', p.pc_cert_date);
-    this._set('pExtendedCompletion', p.extended_completion_date);
-    this._set('pConstructionDays', this._constructionPeriodDisplay(p));
+    const periodDays = this._constructionDaysFromProject(p);
+    this._set('pConstructionDays', periodDays != null ? periodDays : '');
     this._set('pDlpMonths', p.dlp_period_months ?? '');
     await this._loadQsField(p.qs_in_charge || p.person_in_charge || '');
     this._setRetentionFields(p);
     this._set('pRetentionPct', p.retention_pct ?? '');
     this._set('pRetentionMaxPct', p.retention_max_pct ?? '');
     this._set('pRetentionMaxAmt', p.retention_max_amount ?? '');
-    this._set('pDlpCertDate', p.dlp_cert_date);
-    this._set('pMpFacDate', p.mp_fac_signed_date);
+    await this._refreshFacDerivedDisplay(p);
+  },
+
+  async _refreshFacDerivedDisplay(p) {
+    if (document.getElementById('pExtendedCompletionDisplay')) {
+      this.updateExtendedCompletionPreview();
+      return;
+    }
+    if (!p?.id) return;
+    const d = this.computedExtendedCompletionDate(p);
+    const el = document.getElementById('pdExtendedCompletion');
+    if (el) el.textContent = d ? (fmtDate(d) || d) : '—';
   },
 
   _readCoverFields() {
@@ -938,17 +1003,13 @@ const Projects = {
       main_contract_commencement_date: this._val('pMcCommence') || null,
       mp_commencement_date: this._val('pMpCommence') || null,
       project_completion_date: this._val('pCompletionDate') || null,
-      pc_cert_date: this._val('pPcCertDate') || null,
-      extended_completion_date: this._val('pExtendedCompletion') || null,
-      ...this._parseConstructionPeriod(this._val('pConstructionDays')),
+      ...this._readConstructionPeriodFields(),
       dlp_period_months: this._num('pDlpMonths'),
       qs_in_charge: this._val('pQsSelect') || null,
       retention_pct: this._num('pRetentionPct'),
       retention_max_pct: this._num('pRetentionMaxPct'),
       retention_max_amount: this._num('pRetentionMaxAmt'),
       ...this._readRetentionFields(),
-      dlp_cert_date: this._val('pDlpCertDate') || null,
-      mp_fac_signed_date: this._val('pMpFacDate') || null,
     };
   },
 
@@ -985,11 +1046,12 @@ const Projects = {
     document.getElementById('projModalId').value = '';
     ['pCode','pNameEn','pNameZh','pClient','pClient2','pMc','pNotes','pQuotationNo',
       'pAccountCode','pJobNo','pTenderSum','pAnticipatedProfitPct',
-      'pMcCommence','pMpCommence','pCompletionDate','pPcCertDate','pExtendedCompletion',
+      'pMcCommence','pMpCommence','pCompletionDate',
       'pConstructionDays','pDlpMonths',
       'pRetentionPct','pRetentionMaxPct','pRetentionMaxAmt',
-      'pRetentionDateOneOff','pRetentionDateFirstHalf','pRetentionDateSecondHalf',
-      'pDlpCertDate','pMpFacDate'].forEach(id => this._set(id, ''));
+      'pRetentionDateOneOff','pRetentionDateFirstHalf','pRetentionDateSecondHalf'].forEach(id => this._set(id, ''));
+    const extDisp = document.getElementById('pExtendedCompletionDisplay');
+    if (extDisp) extDisp.textContent = '—';
     this._loadPersonFields(null, '');
     await this._loadQsField('');
     this._set('pAmt', '');

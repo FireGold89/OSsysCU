@@ -662,6 +662,7 @@ def _migrate_db(conn):
     _migrate_iso_documents(conn)
     _migrate_iso_documents_v2(conn)
     _migrate_iso_documents_v3(conn)
+    _migrate_iso_documents_v4(conn)
     _migrate_portfolio_tables(conn)
 
 
@@ -797,6 +798,16 @@ def _migrate_iso_documents_v3(conn):
     conn.commit()
 
 
+def _migrate_iso_documents_v4(conn):
+    """同一 ISO 槽位可有多個附件（取消 UNIQUE）"""
+    conn.execute("DROP INDEX IF EXISTS idx_iso_doc_unique_slot")
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_iso_doc_slot_list
+        ON iso_document_files(project_id, scope, IFNULL(subcontractor_id, 0), doc_slot)
+    """)
+    conn.commit()
+
+
 def _merge_iso_mou_nda_slot(conn):
     """main 范围：mou / nda → mou_nda（保留 mou；nda 归档后删除）"""
     groups = conn.execute("""
@@ -858,12 +869,7 @@ def iso_safe_project_code(project_code):
     return (s[:80] or 'project')
 
 
-def _archive_iso_slot(conn, project_id, scope, doc_slot, subcontractor_id):
-    row = conn.execute("""
-        SELECT file_path, original_filename, external_url, storage_type
-        FROM iso_document_files
-        WHERE project_id=? AND scope=? AND IFNULL(subcontractor_id, 0)=IFNULL(?, 0) AND doc_slot=?
-    """, (project_id, scope, subcontractor_id, doc_slot)).fetchone()
+def _archive_iso_file_row(conn, row):
     if not row:
         return
     d = dict(row)
@@ -875,10 +881,20 @@ def _archive_iso_slot(conn, project_id, scope, doc_slot, subcontractor_id):
              external_url, storage_type)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        project_id, scope, subcontractor_id, doc_slot,
+        d['project_id'], d['scope'], d.get('subcontractor_id'), d['doc_slot'],
         d.get('file_path'), d.get('original_filename'),
         d.get('external_url'), d.get('storage_type') or 'file',
     ))
+
+
+def _archive_iso_slot(conn, project_id, scope, doc_slot, subcontractor_id):
+    """舊版替換槽位時歸檔（保留相容）"""
+    row = conn.execute("""
+        SELECT * FROM iso_document_files
+        WHERE project_id=? AND scope=? AND IFNULL(subcontractor_id, 0)=IFNULL(?, 0) AND doc_slot=?
+        ORDER BY updated_at DESC LIMIT 1
+    """, (project_id, scope, subcontractor_id, doc_slot)).fetchone()
+    _archive_iso_file_row(conn, row)
 
 
 ISO_MAIN_SLOTS = (
@@ -2526,6 +2542,17 @@ def add_project_document(project_id, doc_category, file_path, original_filename=
     return doc_id
 
 
+def get_project_document(doc_id):
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT id, project_id, doc_category, file_path, original_filename, notes, created_at
+           FROM project_documents WHERE id=?""",
+        (doc_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def delete_project_document(doc_id):
     conn = get_conn()
     conn.execute("DELETE FROM project_documents WHERE id=?", (doc_id,))
@@ -2608,9 +2635,15 @@ def get_iso_documents_board(project_id):
         d = _enrich(dict(r))
         slot = d['doc_slot']
         if d['scope'] == 'main':
-            main_files[slot] = d
+            main_files.setdefault(slot, []).append(d)
         elif d['scope'] == 'subcontractor' and d.get('subcontractor_id'):
-            sc_files.setdefault(d['subcontractor_id'], {})[slot] = d
+            sc_files.setdefault(d['subcontractor_id'], {}).setdefault(slot, []).append(d)
+
+    for slot_list in main_files.values():
+        slot_list.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+    for sc_map in sc_files.values():
+        for slot_list in sc_map.values():
+            slot_list.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
 
     sc_rows = []
     for sc in sc_list:
@@ -2646,9 +2679,78 @@ def get_iso_slot_file_path(project_id, scope, doc_slot, subcontractor_id=None):
     row = conn.execute("""
         SELECT file_path FROM iso_document_files
         WHERE project_id=? AND scope=? AND IFNULL(subcontractor_id, 0)=IFNULL(?, 0) AND doc_slot=?
+          AND file_path IS NOT NULL AND TRIM(file_path) != ''
+        ORDER BY updated_at DESC, id DESC LIMIT 1
     """, (project_id, scope, subcontractor_id, doc_slot)).fetchone()
     conn.close()
     return row['file_path'] if row else None
+
+
+def insert_iso_document(
+    project_id, scope, doc_slot, file_path, original_filename=None, subcontractor_id=None,
+    external_url=None, storage_type='file', link_label=None,
+):
+    """新增 ISO 附件（同槽位可有多筆，不覆蓋既有）"""
+    if scope == 'main':
+        if doc_slot not in ISO_MAIN_SLOTS:
+            raise ValueError('無效的 doc_slot')
+        subcontractor_id = None
+    elif scope == 'subcontractor':
+        if doc_slot not in ISO_SC_SLOTS:
+            raise ValueError('無效的 doc_slot')
+        if not subcontractor_id:
+            raise ValueError('缺少 subcontractor_id')
+        sc = get_subcontractor(subcontractor_id)
+        if not sc or sc.get('project_id') != project_id:
+            raise ValueError('分判不存在')
+    else:
+        raise ValueError('無效的 scope')
+
+    storage_type = (storage_type or 'file').strip().lower()
+    if storage_type == 'link':
+        external_url = (external_url or '').strip()
+        if not external_url:
+            raise ValueError('缺少連結 URL')
+        if not external_url.lower().startswith(('http://', 'https://')):
+            raise ValueError('連結須以 http:// 或 https:// 開頭')
+        file_path = ''
+        link_label = (link_label or original_filename or '').strip() or None
+        original_filename = link_label
+    else:
+        storage_type = 'file'
+        file_path = (file_path or '').strip()
+        if not file_path:
+            raise ValueError('缺少 file_path')
+        external_url = None
+        link_label = None
+
+    conn = get_conn()
+    cur = conn.execute("""
+        INSERT INTO iso_document_files
+            (project_id, scope, subcontractor_id, doc_slot, file_path, original_filename,
+             storage_type, external_url, link_label, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    """, (
+        project_id, scope, subcontractor_id, doc_slot, file_path, original_filename,
+        storage_type, external_url, link_label,
+    ))
+    doc_id = cur.lastrowid
+    row = conn.execute(
+        "SELECT id, scope, subcontractor_id, doc_slot, file_path, original_filename,"
+        " storage_type, external_url, link_label, updated_at"
+        " FROM iso_document_files WHERE id=?",
+        (doc_id,),
+    ).fetchone()
+    ver = conn.execute("""
+        SELECT COUNT(*) AS n FROM iso_document_versions
+        WHERE project_id=? AND scope=? AND IFNULL(subcontractor_id, 0)=IFNULL(?, 0) AND doc_slot=?
+    """, (project_id, scope, subcontractor_id, doc_slot)).fetchone()
+    conn.commit()
+    conn.close()
+    out = dict(row) if row else None
+    if out:
+        out['version_count'] = ver['n'] if ver else 0
+    return out
 
 
 def upsert_iso_document(
@@ -2746,13 +2848,9 @@ def get_iso_document(doc_id):
 
 def delete_iso_document(doc_id):
     conn = get_conn()
-    row = conn.execute("""
-        SELECT project_id, scope, subcontractor_id, doc_slot, file_path
-        FROM iso_document_files WHERE id=?
-    """, (doc_id,)).fetchone()
+    row = conn.execute("SELECT * FROM iso_document_files WHERE id=?", (doc_id,)).fetchone()
     if row:
-        d = dict(row)
-        _archive_iso_slot(conn, d['project_id'], d['scope'], d['doc_slot'], d.get('subcontractor_id'))
+        _archive_iso_file_row(conn, row)
     conn.execute("DELETE FROM iso_document_files WHERE id=?", (doc_id,))
     conn.commit()
     conn.close()
@@ -5258,6 +5356,175 @@ def update_ip_period_meta(project_id, meta):
 
 # ─── Reports ───────────────────────────────────────────────────────────
 
+def build_contract_calc(conn, project_id, proj):
+    """合約金額結算 A–F：B=分判(SC)+VO 明細；C=非 SC 付款加總；D 含人工分攤。"""
+    from sc_contract_ref import _project_keys
+    from sc_fac import _match_sc_no
+
+    contract_a = float(proj.get('contract_amount') or 0)
+    keys = _project_keys(proj)
+    reg_rows = []
+    registry_by_ms = {}
+    if keys:
+        ph = ','.join('?' * len(keys))
+        reg_rows = conn.execute(
+            f"""SELECT sub_contract_no, company, works, amount
+                FROM sc_contract_registry
+                WHERE project_core IN ({ph})
+                ORDER BY sub_contract_no""",
+            list(keys),
+        ).fetchall()
+        registry_by_ms = {r['sub_contract_no']: dict(r) for r in reg_rows}
+
+    vo_records = get_sc_vo_records(project_id, scope=SVR_SCOPE_SUBCONTRACTOR)
+
+    sc_rows = conn.execute("""
+        SELECT id, sc_no, sub_contract_no, company_name_en, company_name_zh,
+               description, contract_sum, contract_amount, vo_amount
+        FROM subcontractors
+        WHERE project_id=? AND NOT COALESCE(is_excluded, 0)
+        ORDER BY sc_no
+    """, (project_id,)).fetchall()
+
+    subcontract_groups = []
+    sub_total_b = 0.0
+    seq = 0
+    linked_ms = set()
+
+    for r in sc_rows:
+        sc_no = (r['sc_no'] or '').strip()
+        if not sc_no.upper().startswith('SC'):
+            continue
+        seq += 1
+        name = (r['company_name_zh'] or r['company_name_en'] or '').strip() or sc_no
+        ms_no = (r['sub_contract_no'] or '').strip()
+        reg = registry_by_ms.get(ms_no) if ms_no else None
+        if reg:
+            linked_ms.add(ms_no)
+
+        base = 0.0
+        if reg and reg.get('amount'):
+            base = float(reg['amount'] or 0)
+        if base <= 0:
+            base = float(r['contract_sum'] or 0)
+        if base <= 0 and float(r['contract_amount'] or 0) > 0:
+            base = max(0.0, float(r['contract_amount'] or 0) - float(r['vo_amount'] or 0))
+
+        vos = [
+            v for v in vo_records
+            if _match_sc_no(v.get('sc_no'), sc_no) and (v.get('record_type') or 'vo') == 'vo'
+        ]
+        deds = [
+            v for v in vo_records
+            if _match_sc_no(v.get('sc_no'), sc_no) and v.get('record_type') == 'deduction'
+        ]
+        vo_lines = []
+        for v in vos:
+            ref = (v.get('ref_no') or '').strip() or 'VO'
+            desc = (v.get('description') or v.get('service_description') or '').strip()
+            label = f'{ref} {desc}'.strip()
+            vo_lines.append({
+                'ref_no': ref,
+                'label': label,
+                'amount': float(v.get('amount') or 0),
+            })
+        vo_sum = sum(x['amount'] for x in vo_lines)
+        ded_sum = sum(float(v.get('amount') or 0) for v in deds)
+
+        ca = float(r['contract_amount'] or 0)
+        if ca > 0:
+            group_total = ca
+        else:
+            group_total = base + vo_sum - ded_sum
+
+        sub_total_b += group_total
+        subcontract_groups.append({
+            'seq': seq,
+            'sc_no': sc_no,
+            'label': name,
+            'sub_contract_no': ms_no or (reg['sub_contract_no'] if reg else ''),
+            'base_amount': base,
+            'vo_lines': vo_lines,
+            'amount': group_total,
+        })
+
+    for reg in reg_rows:
+        ms = reg['sub_contract_no']
+        if ms in linked_ms:
+            continue
+        seq += 1
+        co = (reg['company'] or '').strip()
+        works = (reg['works'] or '').strip()
+        if co and works:
+            label = f'{co} {works}'
+        elif co:
+            label = co
+        elif works:
+            label = works
+        else:
+            label = ms or '—'
+        amt = float(reg['amount'] or 0)
+        sub_total_b += amt
+        subcontract_groups.append({
+            'seq': seq,
+            'sc_no': '',
+            'label': label,
+            'sub_contract_no': ms,
+            'base_amount': amt,
+            'vo_lines': [],
+            'amount': amt,
+        })
+
+    subcontract_lines = []
+    for g in subcontract_groups:
+        subcontract_lines.append({
+            'seq': g['seq'],
+            'label': g['label'],
+            'sub_contract_no': g.get('sub_contract_no') or '',
+            'amount': g['amount'],
+            'kind': 'sc',
+        })
+        for vo in g.get('vo_lines') or []:
+            subcontract_lines.append({
+                'seq': g['seq'],
+                'label': vo['label'],
+                'amount': vo['amount'],
+                'kind': 'vo',
+            })
+
+    row_c = conn.execute("""
+        SELECT COALESCE(SUM(paid_amount), 0) AS tot
+        FROM payment_records
+        WHERE project_id=?
+          AND (revoked_at IS NULL OR revoked_at = '')
+          AND (
+            sc_no IS NULL OR TRIM(sc_no) = ''
+            OR UPPER(TRIM(sc_no)) NOT LIKE 'SC%'
+          )
+    """, (project_id,)).fetchone()
+    material_other_c = float(row_c['tot'] or 0)
+
+    labour = float(proj.get('labour_allocation') or 0)
+    labour_hold = False
+    total_d = sub_total_b + material_other_c + labour
+    profit_e = contract_a - total_d
+    profit_rate = round((profit_e / contract_a * 100), 2) if contract_a else 0.0
+
+    return {
+        'main_contract_amount': contract_a,
+        'subcontract_groups': subcontract_groups,
+        'subcontract_lines': subcontract_lines,
+        'sub_total_b': sub_total_b,
+        'material_other_c': material_other_c,
+        'excluded_c': material_other_c,
+        'labour_allocation': labour,
+        'labour_hold': labour_hold,
+        'total_d': total_d,
+        'profit_e': profit_e,
+        'profit_rate': profit_rate,
+    }
+
+
 def get_project_summary(project_id):
     conn = get_conn()
 
@@ -5292,19 +5559,9 @@ def get_project_summary(project_id):
         WHERE project_id=? AND (revoked_at IS NULL OR revoked_at = '')
     """, (project_id,)).fetchone()
 
-    # Excel Project Summary 右下角結算 (B)(C)(D)(E)
-    sc_items = conn.execute("""
-        SELECT contract_amount, is_excluded FROM subcontractors WHERE project_id=?
-    """, (project_id,)).fetchall()
-    sub_total_b = sum(r['contract_amount'] or 0 for r in sc_items if not r['is_excluded'])
-    excluded_c = -sum(r['contract_amount'] or 0 for r in sc_items if r['is_excluded'])
-    labour = dict(project).get('labour_allocation') or 0
-    total_d = sub_total_b + excluded_c + labour
-    contract_a = dict(project).get('contract_amount') or 0
-    profit_e = contract_a - total_d
-    profit_rate = (profit_e / contract_a * 100) if contract_a else 0
-
     proj = dict(project)
+    contract_calc = build_contract_calc(conn, project_id, proj)
+    contract_a = contract_calc['main_contract_amount']
     ip_rows = conn.execute("""
         SELECT * FROM interim_payments WHERE project_id=?
         ORDER BY seq_no, ip_no
@@ -5353,15 +5610,7 @@ def get_project_summary(project_id):
         'payment_count': int(payment_count or 0),
         'recent_payments': [dict(r) for r in recent_payments],
         'ip_period': ip_period,
-        'contract_calc': {
-            'main_contract_amount': contract_a,
-            'sub_total_b': sub_total_b,
-            'excluded_c': excluded_c,
-            'labour_allocation': labour,
-            'total_d': total_d,
-            'profit_e': profit_e,
-            'profit_rate': round(profit_rate, 2),
-        },
+        'contract_calc': contract_calc,
     }
 
 

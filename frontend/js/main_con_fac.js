@@ -157,6 +157,100 @@ const MainConFac = {
       </div>`;
   },
 
+  /** 項目概覽 · 合約金額結算表 A–K（唯讀） */
+  settlementOverviewHtml(facData) {
+    const s = facData?.settlement;
+    if (!s) return '<p class="form-hint">尚無結算資料</p>';
+    const row = (code, label, amount, opts = {}) => {
+      const cls = opts.total ? 'mcf-row-total' : '';
+      const val = opts.less && amount > 0 ? -Math.abs(amount) : amount;
+      const amtCls = val < 0 ? 'negative' : '';
+      const formula = opts.formula
+        ? `<span class="mcf-formula">${escHtml(opts.formula)}</span>`
+        : '';
+      const hint = opts.hint || '';
+      return `<tr class="${cls}">
+        <td class="mcf-label">${escHtml(label)} ${formula}${hint}</td>
+        <td class="mcf-code">${code}</td>
+        <td class="mcf-amt td-amount ${amtCls}">${fmtAcct(val)}</td>
+      </tr>`;
+    };
+    const iHint = this._hint(s.i_source, s.i_auto)
+      + (s.i_as_at ? ` <span class="mcf-hint">as at ${escHtml(fmtDate(String(s.i_as_at).slice(0, 10)))}</span>` : '');
+    return `
+      <div class="table-wrap mcf-table-wrap proj-dash-settlement-wrap">
+        <table class="mcf-table proj-dash-settlement">
+          <tbody>
+            ${row('A', '主合約總額', s.a_original)}
+            ${row('B', '重新測量調整', s.b_remeasurement)}
+            ${row('C', '補充合約', s.c_supplemental)}
+            ${row('D', '變更工程總額', s.d_variations, { hint: this._hint(s.d_source, s.d_auto) })}
+            ${row('E', '暫定工程量調整', s.e_provisional_qty)}
+            ${row('F', '暫定金額調整', s.f_provisional_sums)}
+            ${row('G', '物價波動調整', s.g_fluctuations)}
+            ${row('H', '結算工程總額', s.h_final_sum, { total: true, formula: '(A)+(B)+(C)+(D)+(E)+(F)+(G)' })}
+            ${row('I', '(減) 已支付工程額', s.i_total_paid, { less: true, hint: iHint })}
+            ${row('J', '(減) 扣款費用', s.j_contra_charge, { less: true, hint: this._hint(s.j_source, s.j_auto) })}
+            ${row('K', '剩餘應付工程額', s.k_outstanding, { total: true, formula: '(H)−(I)−(J)' })}
+          </tbody>
+        </table>
+      </div>`;
+  },
+
+  /** 項目概覽 · 合約金額結算表 A–K（唯讀） */
+  settlementOverviewHtml(facData) {
+    const s = facData?.settlement;
+    if (!s) return '<p class="form-hint">尚無結算資料</p>';
+    const row = (code, label, amount, opts = {}) => {
+      const cls = opts.total ? 'mcf-row-total' : '';
+      const val = opts.less && amount > 0 ? -Math.abs(amount) : amount;
+      const amtCls = val < 0 ? 'negative' : '';
+      const formula = opts.formula
+        ? `<span class="mcf-formula">${escHtml(opts.formula)}</span>`
+        : '';
+      const hint = opts.hint || '';
+      return `<tr class="${cls}">
+        <td class="mcf-label">${escHtml(label)} ${formula}${hint}</td>
+        <td class="mcf-code">${code}</td>
+        <td class="mcf-amt td-amount ${amtCls}">${fmtAcct(val)}</td>
+      </tr>`;
+    };
+    const iHint = this._hint(s.i_source, s.i_auto)
+      + (s.i_as_at ? ` <span class="mcf-hint">as at ${escHtml(fmtDate(String(s.i_as_at).slice(0, 10)))}</span>` : '');
+    return `
+      <div class="table-wrap mcf-table-wrap proj-dash-settlement-wrap">
+        <table class="mcf-table proj-dash-settlement">
+          <tbody>
+            ${row('A', '主合約總額', s.a_original)}
+            ${row('B', '重新測量調整', s.b_remeasurement)}
+            ${row('C', '補充合約', s.c_supplemental)}
+            ${row('D', '變更工程總額', s.d_variations, { hint: this._hint(s.d_source, s.d_auto) })}
+            ${row('E', '暫定工程量調整', s.e_provisional_qty)}
+            ${row('F', '暫定金額調整', s.f_provisional_sums)}
+            ${row('G', '物價波動調整', s.g_fluctuations)}
+            ${row('H', '結算工程總額', s.h_final_sum, { total: true, formula: '(A)+(B)+(C)+(D)+(E)+(F)+(G)' })}
+            ${row('I', '(減) 已支付工程額', s.i_total_paid, { less: true, hint: iHint })}
+            ${row('J', '(減) 扣款費用', s.j_contra_charge, { less: true, hint: this._hint(s.j_source, s.j_auto) })}
+            ${row('K', '剩餘應付工程額', s.k_outstanding, { total: true, formula: '(H)−(I)−(J)' })}
+          </tbody>
+        </table>
+      </div>`;
+  },
+
+  /** 項目概覽 · 主合約 FAC 關鍵日期（唯讀） */
+  overviewDates(facData, project) {
+    const kd = facData?.key_dates || {};
+    const p = project || {};
+    return {
+      pcCertDate: kd.pc_cert_date || p.pc_cert_date,
+      extendedCompletionDate: (typeof Projects !== 'undefined' && Projects.computedExtendedCompletionDate
+        ? Projects.computedExtendedCompletionDate(p)
+        : null) || kd.extended_completion_date || p.extended_completion_date,
+      warrantyCompleteDate: kd.make_good_date || p.fac_make_good_date || p.dlp_cert_date,
+      mpFacSignedDate: kd.mp_fac_signed_date || p.mp_fac_signed_date,
+    };
+  },
+
   async load() {
     const p = App.currentProject;
     const root = document.getElementById('mcfContent');
@@ -290,13 +384,14 @@ const MainConFac = {
                 ${this._dateRow('保修期 Defect Liability Period', kd.dlp_days ? `${kd.dlp_days} days` : (kd.dlp_months ? `${kd.dlp_months} months` : '—'), dlpNote)}
                 ${this._rowInputPlain('延期罰款單價 Rate of Liquidated damage', 'fac_lad_rate', ed.fac_lad_rate ?? kd.lad_rate, { money: true })}
                 ${this._rowInputPlain('延期罰款限額 Limited Amount of Liquidated damage', 'fac_lad_max', ed.fac_lad_max ?? kd.lad_max, { money: true })}
-                ${this._dateRow('實際完工日期 Date of Practical Completion', kd.pc_cert_date)}
+                ${this._dateRow('延遲完工日 Extended Completion', kd.extended_completion_date, 'MP 開工日 + 工期')}
+                ${this._rowInputPlain('實際完工日期 Date of Practical Completion', 'pc_cert_date', kd.pc_cert_date, { date: true })}
                 ${retentionRows}
                 ${this._dateRow('保修期開始日期 Commencement of DLP', kd.dlp_commencement_date)}
                 ${this._rowInputPlain('保修期到期日 DLP Expiry Date', 'fac_dlp_expiry_date', dlpExpiryVal, { date: true })}
                 ${testingRow}
                 ${this._rowInputPlain('修補缺陷完工日期 Defect Correction Date', 'fac_make_good_date', ed.fac_make_good_date ?? kd.make_good_date, { date: true })}
-                ${this._dateRow('MP 工程帳目總結算日 MP FAC Signed', kd.mp_fac_signed_date)}
+                ${this._rowInputPlain('MP 工程帳目總結算日 MP FAC Signed', 'mp_fac_signed_date', kd.mp_fac_signed_date, { date: true })}
               </tbody>
             </table>
           </div>
@@ -414,6 +509,16 @@ const MainConFac = {
       await this._upload('pc_cert', 'mcfPcCertFile');
       await this._upload('mg_cert', 'mcfMgCertFile');
       toast('已儲存', 'success');
+      if (App.currentProject?.id === p.id) {
+        try {
+          const fresh = await api('GET', `/projects/${p.id}`, null, { silent: true });
+          if (fresh) App.currentProject = fresh;
+        } catch (_) { /* ignore */ }
+        if (document.getElementById('page-dashboard')?.classList.contains('active')
+          && typeof ProjectDashboard !== 'undefined') {
+          await ProjectDashboard.load();
+        }
+      }
       await this.load();
     } catch (e) {
       toast(e.message || '儲存失敗', 'error');

@@ -984,6 +984,92 @@ const Payments = {
     };
   },
 
+  _todayIsoDate() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  },
+
+  _ensureIcPreparedByCustomOption(sel) {
+    if (!sel || sel.querySelector('option[value="__custom__"]')) return;
+    sel.insertAdjacentHTML('beforeend', '<option value="__custom__">— 自填 —</option>');
+  },
+
+  onIcPreparedByChange() {
+    const sel = document.getElementById('fIcPreparedBySelect');
+    const customEl = document.getElementById('fIcPreparedByCustom');
+    const isCustom = sel?.value === '__custom__';
+    if (customEl) {
+      customEl.style.display = isCustom ? '' : 'none';
+      if (!isCustom) customEl.value = '';
+    }
+  },
+
+  onIcPreparedByCustomInput() {
+    /* 保留供 HTML oninput 綁定 */
+  },
+
+  _readInternalSign() {
+    const sel = document.getElementById('fIcPreparedBySelect');
+    const customEl = document.getElementById('fIcPreparedByCustom');
+    let prepared_by = '';
+    if (sel?.value === '__custom__') {
+      prepared_by = customEl?.value?.trim() || '';
+    } else if (sel?.value) {
+      prepared_by = sel.value.trim();
+    }
+    const sigRaw = document.getElementById('fIcSignatureDate')?.value || '';
+    return {
+      prepared_by,
+      signature_date: sigRaw ? sigRaw.slice(0, 10) : null,
+    };
+  },
+
+  async _applyInternalSignToForm(cert) {
+    await StaffRoster.load(true);
+    const p = App.currentProject;
+    const isNew = cert == null;
+    const storedName = (cert?.prepared_by || '').trim();
+    const picDefault = isNew ? (p?.person_in_charge || '').trim() : '';
+    const sel = document.getElementById('fIcPreparedBySelect');
+    const customEl = document.getElementById('fIcPreparedByCustom');
+    if (sel) {
+      const pickName = storedName || picDefault;
+      StaffRoster.fillPersonSelect(sel, { selectedName: pickName });
+      this._ensureIcPreparedByCustomOption(sel);
+      const inRoster = pickName && StaffRoster.findByName(pickName);
+      if (storedName && !inRoster) {
+        sel.value = '__custom__';
+        if (customEl) {
+          customEl.style.display = '';
+          customEl.value = storedName;
+        }
+      } else if (pickName && inRoster) {
+        sel.value = pickName;
+        if (customEl) {
+          customEl.style.display = 'none';
+          customEl.value = '';
+        }
+      } else {
+        sel.value = '';
+        if (customEl) {
+          customEl.style.display = 'none';
+          customEl.value = '';
+        }
+      }
+    }
+    const dateEl = document.getElementById('fIcSignatureDate');
+    if (dateEl) {
+      if (cert?.signature_date) {
+        dateEl.value = String(cert.signature_date).slice(0, 10);
+      } else if (isNew) {
+        dateEl.value = this._todayIsoDate();
+      } else {
+        dateEl.value = '';
+      }
+    }
+  },
+
   async _buildInterimCertPayload() {
     const base = this._readFormBase();
     const p = App.currentProject;
@@ -1061,7 +1147,15 @@ const Payments = {
       trade_label: sc?.trade_label || sc?.description || '',
       mp_contract_sum: parseFloat(p?.contract_amount) || 0,
       work_period: p?.site_period_text || '',
-      prepared_by: p?.person_in_charge || '',
+      ...(() => {
+        const internal = this._readInternalSign();
+        return {
+          prepared_by: internal.prepared_by || oldCert.prepared_by || '',
+          signature_date: internal.signature_date != null && internal.signature_date !== ''
+            ? internal.signature_date
+            : (oldCert.signature_date || null),
+        };
+      })(),
       retention_pct: 0.05,
       standard_lines: this._readStandardLines(),
       selected_standard_codes: this._getSelectedStandardCodes(),
@@ -1126,7 +1220,7 @@ const Payments = {
         <colgroup><col class="ic-c1"><col class="ic-c2"><col class="ic-c3"><col class="ic-c4"></colgroup>
         <tr><td>承判人/公司名稱(中) :</td><td>${escHtml(model.company_zh || '')}</td><td>發票號碼 :</td><td>${escHtml(model.invoice_no || '')}</td></tr>
         <tr><td>承判人/公司名稱(英) :</td><td>${escHtml(model.company_en || '')}</td><td>申請期數 :</td><td>${escHtml(model.application_no || '')}</td></tr>
-        <tr><td>工作期間 :</td><td>${escHtml(model.work_period || '')}</td><td>日期 :</td><td>${escHtml(fmtDate(model.signature_date) || '')}</td></tr>
+        <tr><td>工作期間 :</td><td>${escHtml(model.work_period || '')}</td><td>日期 :</td><td>${escHtml(fmtDate(model.invoice_date) || '')}</td></tr>
       </table>
       <table class="ic-meta" style="margin-top:10px">
         <colgroup><col class="ic-c1"><col class="ic-c2"><col class="ic-c3"><col class="ic-c4"></colgroup>
@@ -1193,6 +1287,8 @@ const Payments = {
       standard_lines: stored.standard_lines || {},
       selected_standard_codes: stored.selected_standard_codes || [],
       a_current_provisional: stored.a_current_provisional,
+      prepared_by: stored.prepared_by,
+      signature_date: stored.signature_date,
       project: stored.project || (p ? {
         project_code: p.project_code,
         project_name: p.project_name,
@@ -1518,6 +1614,7 @@ const Payments = {
     this._pendingCertModel = null;
     this._scVoOptions = [];
     this._resetLineRemarks();
+    void this._applyInternalSignToForm(null);
   },
 
   openAdd(type = 'normal') {
@@ -1599,6 +1696,7 @@ const Payments = {
         this._prevACum = parseFloat(cert.previous_a_cum) || 0;
         this._prevACumScNo = r.sc_no || null;
       }
+      await this._applyInternalSignToForm(cert || {});
     }
     this._setPdfUi(r.pdf_path || null);
     document.getElementById('payModal').classList.add('open');

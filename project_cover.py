@@ -211,6 +211,19 @@ PROJECT_DOC_CATEGORIES = {
     'attachment3_sot_sor': '附件3 — SOT & SOR',
 }
 
+# 項目表單附件 ↔ ISO 主合約槽位（scope=main）
+PROJECT_DOC_ISO_SLOT = {
+    'attachment1_main_contract': ('main', 'main_contract_loa'),
+    'attachment1_loa': ('main', 'main_contract_loa'),
+    'attachment1_signoff': ('main', 'tender_signoff'),
+    'attachment1_related': ('main', 'other'),
+}
+
+
+def project_doc_iso_mapping(doc_category: str):
+    """若可同步至 ISO，回傳 (scope, doc_slot)；否則 None（如電郵記錄僅留 project_documents）。"""
+    return PROJECT_DOC_ISO_SLOT.get((doc_category or '').strip())
+
 
 def _mp_codes_from_serial_year(serial: str, year: str) -> list[str]:
     """178 + 25 → [Q0178_25, Q178_25]；1241 + 24 → [Q1241_24]"""
