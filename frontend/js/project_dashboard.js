@@ -1,5 +1,7 @@
 /* ─── project_dashboard.js — 項目概覽（QS 欄位 · 唯讀無框） ─────── */
 const ProjectDashboard = {
+  LAYOUT_KEY: 'qs_proj_dash_layout',
+  _layoutInited: false,
   _setText(id, val) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -47,6 +49,127 @@ const ProjectDashboard = {
     }).join(' ');
   },
 
+  initLayoutToggle() {
+    if (this._layoutInited) return;
+    this._layoutInited = true;
+    const saved = localStorage.getItem(this.LAYOUT_KEY);
+    this.setLayout(saved === 'pro' ? 'pro' : 'classic', { persist: false });
+  },
+
+  setLayout(mode, { persist = true } = {}) {
+    const isPro = mode === 'pro';
+    const classic = document.getElementById('projectDashClassic');
+    const pro = document.getElementById('projectDashPro');
+    const btnClassic = document.getElementById('projDashLayoutClassic');
+    const btnPro = document.getElementById('projDashLayoutPro');
+    const sub = document.getElementById('projectDashSubtitle');
+    if (classic) {
+      classic.style.display = isPro ? 'none' : '';
+      classic.hidden = isPro;
+    }
+    if (pro) {
+      pro.style.display = isPro ? '' : 'none';
+      pro.hidden = !isPro;
+    }
+    if (btnClassic) {
+      btnClassic.classList.toggle('active', !isPro);
+      btnClassic.setAttribute('aria-selected', isPro ? 'false' : 'true');
+    }
+    if (btnPro) {
+      btnPro.classList.toggle('active', isPro);
+      btnPro.setAttribute('aria-selected', isPro ? 'true' : 'false');
+    }
+    if (sub) {
+      sub.textContent = isPro
+        ? '專業概覽 · 重點 KPI 與分區摘要'
+        : 'QS 項目資料 · 與工程項目表單相同欄位';
+    }
+    if (persist) localStorage.setItem(this.LAYOUT_KEY, isPro ? 'pro' : 'classic');
+  },
+
+  _syncProContractCalc() {
+    const src = document.getElementById('pdContractCalc');
+    const dst = document.getElementById('pdContractCalcPro');
+    if (src && dst) dst.innerHTML = src.innerHTML;
+  },
+
+  _proHeroChipsHtml(p) {
+    const items = [];
+    const push = (label, val) => {
+      const s = val == null || val === '' ? '' : String(val).trim();
+      if (!s || s === '—') return;
+      items.push(
+        `<span class="pd-pro-chip"><span class="pd-pro-chip-k">${escHtml(label)}</span>${escHtml(s)}</span>`,
+      );
+    };
+    push('工程分類', this._categoryText(p));
+    push('Job No.', p.job_no);
+    push('會計編號', p.account_code);
+    return items.length ? items.join('') : '';
+  },
+
+  _renderProLayout(p, facDates, merged) {
+    const code = p.quotation_no || p.project_code || '—';
+    let nameZh = p.project_name_zh || '';
+    let nameEn = p.project_name_en || '';
+    if (!nameZh && !nameEn && p.project_name) {
+      const parts = projectNameParts(p);
+      nameZh = parts.zh;
+      nameEn = parts.en;
+    }
+    this._setText('pdProCode', code);
+    this._setText('pdProNameZh', nameZh || '—');
+    this._setText('pdProNameEn', nameEn || '—');
+    this._setHtml('pdProStatus', p.status ? projectStatusBadgeHtml(p.status) : '—');
+    const chipsEl = document.getElementById('pdProHeroChips');
+    if (chipsEl) {
+      const chips = this._proHeroChipsHtml(p);
+      chipsEl.innerHTML = chips;
+      chipsEl.hidden = !chips;
+    }
+    this._setText('pdProKpiContract', this._dashMoney(p.contract_amount));
+    this._setText('pdProKpiTender', this._dashMoney(p.tender_sum));
+    this._setText('pdProKpiProfit', this._dashPct(p.anticipated_profit_pct));
+    const days = Projects._constructionPeriodDisplay(p);
+    this._setText('pdProKpiDays', days !== '—' ? `${days} 日` : '—');
+    this._setText('pdProMc', p.main_contractor);
+    this._setText('pdProClient', p.client);
+    this._setText('pdProClient2', p.client_secondary);
+    this._setHtml('pdProMpCodes', this._mpCodesHtml(p));
+    this._setText('pdProMcCommence', this._dashDate(p.main_contract_commencement_date));
+    this._setText('pdProMpCommence', this._dashDate(p.mp_commencement_date || p.start_date));
+    this._setText('pdProCompletion', this._dashDate(p.project_completion_date));
+    this._setText('pdProExtended', this._dashDate(facDates.extendedCompletionDate));
+    this._setText('pdProPcCert', this._dashDate(facDates.pcCertDate));
+    this._setText('pdProDlpCert', this._dashDate(facDates.warrantyCompleteDate));
+    this._setText('pdProMpFac', this._dashDate(facDates.mpFacSignedDate));
+    this._setText('pdProDlpMonths', p.dlp_period_months != null && p.dlp_period_months !== ''
+      ? `${p.dlp_period_months} 月` : '—');
+    this._setText('pdProPerson', p.person_in_charge || p.project_manager);
+    this._setText('pdProQs', p.qs_in_charge);
+    this._setText(
+      'pdProRetention',
+      typeof Projects.retentionPctSummaryDisplay === 'function'
+        ? Projects.retentionPctSummaryDisplay(p)
+        : '—',
+    );
+    const refundText = typeof Projects.retentionRefundDisplay === 'function'
+      ? Projects.retentionRefundDisplay(p)
+      : '—';
+    this._setText('pdProRetentionRefund', refundText || '—');
+    this._setText('pdProLabour', this._dashMoney(p.labour_allocation));
+    const notes = (p.notes || '').trim();
+    const notesEl = document.getElementById('pdProNotes');
+    if (notesEl) {
+      notesEl.textContent = notes || '—';
+      notesEl.classList.toggle('is-empty', !notes);
+    }
+    if (typeof ProjIsoAttach !== 'undefined') {
+      this._setHtml('pdProDocsMainLoa', ProjIsoAttach.readonlyHtml(ProjIsoAttach.docsForGroup(merged, 'mainLoa')));
+      this._setHtml('pdProDocsSotSor', ProjIsoAttach.readonlyHtml(ProjIsoAttach.docsForGroup(merged, 'sotSor')));
+    }
+  },
+
   async render(p, switchSeq) {
     const noEl = document.getElementById('dashboardNoProject');
     const card = document.getElementById('projectDashCard');
@@ -59,6 +182,7 @@ const ProjectDashboard = {
 
     if (noEl) noEl.style.display = 'none';
     if (card) card.style.display = '';
+    this.initLayoutToggle();
 
     const code = p.quotation_no || p.project_code || '—';
     this._setText('projectDashTitle', code);
@@ -151,6 +275,7 @@ const ProjectDashboard = {
       this._setHtml('pdDocsMainLoa', ProjIsoAttach.readonlyHtml(ProjIsoAttach.docsForGroup(merged, 'mainLoa')));
       this._setHtml('pdDocsSotSor', ProjIsoAttach.readonlyHtml(ProjIsoAttach.docsForGroup(merged, 'sotSor')));
     }
+    this._renderProLayout(p, facDates, merged);
 
     const calcHost = document.getElementById('pdContractCalc');
     if (calcHost) {
@@ -169,6 +294,7 @@ const ProjectDashboard = {
         }
       }
     }
+    this._syncProContractCalc();
   },
 
   async load(switchSeq) {

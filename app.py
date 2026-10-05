@@ -445,6 +445,24 @@ def eng_intake_preview_api():
         return resp(error=f'預覽失敗: {e}', status=500)
 
 
+@app.route('/api/eng/intake/from-master', methods=['POST'])
+def eng_intake_from_master_api():
+    """Master List 單筆 → 會簽出表項目"""
+    from nn1_importer import build_eng_item_from_master
+    body = request.json or {}
+    master_id = body.get('master_id')
+    if not master_id:
+        return resp(error='缺少 master_id', status=400)
+    person_code = (body.get('person_code') or '').strip() or None
+    try:
+        item = build_eng_item_from_master(int(master_id), person_code=person_code)
+        return resp({'item': item})
+    except ValueError as e:
+        return resp(error=str(e), status=400)
+    except Exception as e:
+        return resp(error=f'建立失敗: {e}', status=500)
+
+
 @app.route('/api/eng/intake/rematch', methods=['POST'])
 def eng_intake_rematch_api():
     """NN1 編號修改後重新比對 Master"""

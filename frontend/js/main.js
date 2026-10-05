@@ -1537,6 +1537,9 @@ const App = {
         localStorage.removeItem('qs_project_id');
         document.getElementById('projectSelect').value = '';
         document.getElementById('currentProjectBadge').style.display = 'none';
+        if (this._getActivePage() === 'project-settlement') {
+          Projects._settleProjectId = null;
+        }
         this._syncQuickAddBtn();
         this._updateProjectSettlementNav();
         this._closeProjectModals();
@@ -1562,6 +1565,10 @@ const App = {
 
       this.scList = await api('GET', `/projects/${id}/subcontractors`) || [];
       if (switchSeq !== this._projectSwitchSeq) return;
+
+      if (this._getActivePage() === 'project-settlement') {
+        Projects._settleProjectId = id;
+      }
 
       await this._refreshProjectViews(switchSeq);
       if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
@@ -1636,6 +1643,7 @@ const App = {
       payments: () => Payments.load(switchSeq),
       'ip-period': () => IpPeriod.load(switchSeq),
       reports: () => Reports.load(switchSeq),
+      'project-settlement': () => Projects.loadSettlement(switchSeq),
     };
     const active = this._getActivePage();
 

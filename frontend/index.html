@@ -27,7 +27,7 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=v2-20261005-iso-multi">
+    <link rel="stylesheet" href="css/style.css?v=v2-20261005-dash-pro2">
   <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -241,11 +241,19 @@
           <div class="card-header proj-dash-readonly-head">
             <div>
               <div class="card-title" id="projectDashTitle">項目資料</div>
-              <div class="form-hint">QS 項目資料 · 與工程項目表單相同欄位</div>
+              <div class="form-hint" id="projectDashSubtitle">QS 項目資料 · 與工程項目表單相同欄位</div>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(App.currentProject.id)">✏️ 編輯項目</button>
+            <div class="proj-dash-head-actions">
+              <div class="proj-dash-layout-toggle" role="tablist" aria-label="概覽版面">
+                <button type="button" class="proj-dash-layout-btn active" id="projDashLayoutClassic" role="tab"
+                  aria-selected="true" onclick="ProjectDashboard.setLayout('classic')">原主題</button>
+                <button type="button" class="proj-dash-layout-btn" id="projDashLayoutPro" role="tab"
+                  aria-selected="false" onclick="ProjectDashboard.setLayout('pro')">專業版</button>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(App.currentProject.id)">✏️ 編輯項目</button>
+            </div>
           </div>
-          <div class="card-body proj-form-ppt proj-dash-qs-view" id="projectDashBody">
+          <div class="card-body proj-form-ppt proj-dash-qs-view" id="projectDashClassic">
             <div class="form-row">
               <div class="form-group" style="flex:1">
                 <label class="form-label">項目代碼</label>
@@ -406,6 +414,133 @@
             </div>
             <div id="pdContractCalc" class="proj-dash-contract-calc">
               <div class="empty-state" style="padding:16px">載入中…</div>
+            </div>
+          </div>
+          <div class="card-body proj-dash-pro" id="projectDashPro" style="display:none" hidden>
+            <div class="pd-pro-shell">
+            <header class="pd-pro-hero">
+              <div class="pd-pro-hero-main">
+                <div class="pd-pro-hero-top">
+                  <div class="pd-pro-code" id="pdProCode">—</div>
+                  <div class="pd-pro-hero-badge" id="pdProStatus">—</div>
+                </div>
+                <h2 class="pd-pro-title" id="pdProNameZh">—</h2>
+                <p class="pd-pro-subtitle" id="pdProNameEn">—</p>
+                <div class="pd-pro-hero-chips" id="pdProHeroChips"></div>
+              </div>
+            </header>
+
+            <div class="pd-pro-kpi-strip">
+              <div class="pd-pro-kpi pd-pro-kpi-lead">
+                <div class="pd-pro-kpi-label">(A) MP 承建金額</div>
+                <div class="pd-pro-kpi-value" id="pdProKpiContract">—</div>
+              </div>
+              <div class="pd-pro-kpi">
+                <div class="pd-pro-kpi-label">MP 投標價</div>
+                <div class="pd-pro-kpi-value" id="pdProKpiTender">—</div>
+              </div>
+              <div class="pd-pro-kpi">
+                <div class="pd-pro-kpi-label">預計利潤率</div>
+                <div class="pd-pro-kpi-value" id="pdProKpiProfit">—</div>
+              </div>
+              <div class="pd-pro-kpi pd-pro-kpi-team">
+                <div class="pd-pro-kpi-label">團隊 · 工期</div>
+                <div class="pd-pro-team-grid">
+                  <div class="pd-pro-team-cell">
+                    <span class="pd-pro-team-k">負責人</span>
+                    <span class="pd-pro-team-v" id="pdProPerson">—</span>
+                  </div>
+                  <div class="pd-pro-team-cell">
+                    <span class="pd-pro-team-k">QS</span>
+                    <span class="pd-pro-team-v" id="pdProQs">—</span>
+                  </div>
+                  <div class="pd-pro-team-cell">
+                    <span class="pd-pro-team-k">工期</span>
+                    <span class="pd-pro-team-v" id="pdProKpiDays">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pd-pro-main">
+              <div class="pd-pro-col pd-pro-col-primary">
+                <section class="pd-pro-panel">
+                  <h3 class="pd-pro-panel-title">合約主體</h3>
+                  <div class="pd-pro-table">
+                    <div class="pd-pro-tr"><span class="pd-pro-th">主承建商</span><span class="pd-pro-td" id="pdProMc">—</span></div>
+                    <div class="pd-pro-tr"><span class="pd-pro-th">客方</span><span class="pd-pro-td" id="pdProClient">—</span></div>
+                    <div class="pd-pro-tr"><span class="pd-pro-th">第二客方</span><span class="pd-pro-td" id="pdProClient2">—</span></div>
+                    <div class="pd-pro-tr"><span class="pd-pro-th">MP 合約編號</span><span class="pd-pro-td pd-pro-td-wrap" id="pdProMpCodes">—</span></div>
+                  </div>
+                </section>
+                <section class="pd-pro-panel">
+                  <h3 class="pd-pro-panel-title">合約文件</h3>
+                  <div class="pd-pro-doc-blocks">
+                    <div class="pd-pro-doc-block">
+                      <div class="pd-pro-doc-label">主合約／LOA</div>
+                      <div class="pd-pro-doc-body" id="pdProDocsMainLoa">—</div>
+                    </div>
+                    <div class="pd-pro-doc-block">
+                      <div class="pd-pro-doc-label">SOT／SOR</div>
+                      <div class="pd-pro-doc-body" id="pdProDocsSotSor">—</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <div class="pd-pro-col pd-pro-col-side">
+                <section class="pd-pro-panel pd-pro-panel-timeline">
+                  <h3 class="pd-pro-panel-title">里程碑</h3>
+                  <ol class="pd-pro-timeline">
+                    <li><span class="pd-pro-tl-label">主合約開工</span><time class="pd-pro-tl-date" id="pdProMcCommence">—</time></li>
+                    <li><span class="pd-pro-tl-label">MP 開工</span><time class="pd-pro-tl-date" id="pdProMpCommence">—</time></li>
+                    <li><span class="pd-pro-tl-label">預計完工</span><time class="pd-pro-tl-date" id="pdProCompletion">—</time></li>
+                    <li class="pd-pro-tl-fac"><span class="pd-pro-tl-label">延遲完工</span><time class="pd-pro-tl-date" id="pdProExtended">—</time></li>
+                    <li class="pd-pro-tl-fac"><span class="pd-pro-tl-label">PC Cert.</span><time class="pd-pro-tl-date" id="pdProPcCert">—</time></li>
+                    <li class="pd-pro-tl-fac"><span class="pd-pro-tl-label">保修完成</span><time class="pd-pro-tl-date" id="pdProDlpCert">—</time></li>
+                    <li class="pd-pro-tl-fac"><span class="pd-pro-tl-label">MP FAC 簽署</span><time class="pd-pro-tl-date" id="pdProMpFac">—</time></li>
+                  </ol>
+                  <div class="pd-pro-dlp-badge">
+                    <span class="pd-pro-dlp-k">保修期</span>
+                    <span class="pd-pro-dlp-v" id="pdProDlpMonths">—</span>
+                  </div>
+                </section>
+                <section class="pd-pro-panel">
+                  <h3 class="pd-pro-panel-title">保固金</h3>
+                  <div class="pd-pro-ret-block">
+                    <div class="pd-pro-ret-row">
+                      <span class="pd-pro-ret-k">比例</span>
+                      <span class="pd-pro-ret-v" id="pdProRetention">—</span>
+                    </div>
+                    <div class="pd-pro-ret-row pd-pro-ret-row-stack">
+                      <span class="pd-pro-ret-k">退還安排</span>
+                      <span class="pd-pro-ret-v pd-pro-ret-refund" id="pdProRetentionRefund">—</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <section class="pd-pro-bottom">
+              <div class="pd-pro-bottom-item">
+                <span class="pd-pro-bottom-k">財務調撥（人工分攤）</span>
+                <span class="pd-pro-bottom-v" id="pdProLabour">—</span>
+              </div>
+              <div class="pd-pro-bottom-item pd-pro-bottom-notes">
+                <span class="pd-pro-bottom-k">備註</span>
+                <span class="pd-pro-bottom-v pd-pro-notes" id="pdProNotes">—</span>
+              </div>
+            </section>
+
+            <section class="pd-pro-calc-section">
+              <div class="proj-dash-contract-calc-head">
+                <div class="section-title" style="margin:0;border:none;padding:0">合約金額結算</div>
+                <span class="form-hint">參考 Excel Project Summary</span>
+                <button type="button" class="btn btn-primary btn-sm" onclick="Reports.previewBossPdf()" title="預覽 A4 QS 匯報表">👁 預覽</button>
+              </div>
+              <div id="pdContractCalcPro" class="proj-dash-contract-calc pd-pro-calc-host">
+                <div class="empty-state" style="padding:16px">載入中…</div>
+              </div>
+            </section>
             </div>
           </div>
         </div>
@@ -1278,16 +1413,20 @@
 
       <!-- ─── 註冊及更新 · 項目金額結算（第5頁）── -->
       <div class="page" id="page-project-settlement">
-        <div class="toolbar">
-          <button type="button" class="btn btn-secondary" onclick="Projects.backToList()">← 返回工程項目</button>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:15px" id="settlePageTitle">項目金額結算</div>
-            <div style="font-size:12px;color:var(--text-muted)" id="settlePageSub">—</div>
+        <div class="settle-page-head">
+          <div class="settle-page-head__actions">
+            <button type="button" class="btn btn-secondary" onclick="Projects.backToList()">← 返回工程項目</button>
+            <div class="settle-page-head__btns">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(Projects._settleProjectId, 'cover')">✏️ 編輯 Cover Page</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToMainConFac()">📑 主合約最終結算</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToScFac()">📋 分判最終結算</button>
+              <button type="button" class="btn btn-primary" onclick="Projects.saveSettlement()">💾 儲存</button>
+            </div>
           </div>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(Projects._settleProjectId, 'cover')">✏️ 編輯 Cover Page</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToMainConFac()">📑 主合約最終結算</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToScFac()">📋 分判最終結算</button>
-          <button type="button" class="btn btn-primary" onclick="Projects.saveSettlement()">💾 儲存</button>
+          <div class="settle-page-head__project">
+            <div class="settle-page-head__title" id="settlePageTitle">項目金額結算</div>
+            <div class="settle-page-head__sub" id="settlePageSub">—</div>
+          </div>
         </div>
         <div class="card">
           <div class="card-header">
@@ -1482,12 +1621,13 @@
           <div class="card ei-list-card">
             <div class="card-header">
               <div class="card-title">NN1 項目清單</div>
-              <div class="card-sub">比對 Master List · 點列選取</div>
+              <div class="card-sub">NN1 批次或 Master 單筆 · 點列選取</div>
             </div>
             <div class="table-wrap">
               <table class="data-table ei-table">
                 <thead>
                   <tr>
+                    <th>來源</th>
                     <th>NN1 編號</th>
                     <th>Master 編號</th>
                     <th>工程名稱</th>
@@ -1499,7 +1639,7 @@
                   </tr>
                 </thead>
                 <tbody id="eiTableBody">
-                  <tr><td colspan="8"><div class="empty-state" style="padding:32px">請上傳 NN1 Excel 開始</div></td></tr>
+                  <tr><td colspan="9"><div class="empty-state" style="padding:32px">請上傳 NN1 Excel，或於 Master List 按「會簽出表」</div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -3545,7 +3685,7 @@
 <input type="file" id="pfImportFile" accept=".xlsx,.xls" style="display:none" onchange="PortfolioCommon.onImportFile(event)">
 
 <!-- Scripts -->
-<script src="js/main.js?v=v2-20261005-contract-calc-v4"></script>
+<script src="js/main.js?v=v2-20261005-settle-sync"></script>
 <script src="js/nav_layout.js?v=v2-20261003-proj-dash"></script>
 <script src="js/col_picker.js?v=v2-20260828-p3"></script>
 <script src="js/iso_docs.js?v=v2-20261005-iso-multi"></script>
@@ -3553,8 +3693,8 @@
 <script src="js/sc_vo_reg.js?v=v2-20260924-amt-fmt"></script>
 <script src="js/sc_fac.js?v=20260911-sc-fac-p2"></script>
 <script src="js/proj_iso_attach.js?v=v2-20261005-iso-multi"></script>
-<script src="js/projects.js?v=v2-20261005-period-num"></script>
-<script src="js/project_dashboard.js?v=v2-20261005-contract-calc-v2"></script>
+<script src="js/projects.js?v=v2-20261005-settle-sync"></script>
+<script src="js/project_dashboard.js?v=v2-20261005-dash-pro2"></script>
 <script src="js/main_con_fac.js?v=v2-20261005-contract-calc"></script>
 <script src="js/hk_banks.js?v=20260805c"></script>
 <script src="js/ip_period.js?v=v2-20260925-ip-receipts"></script>
@@ -3562,11 +3702,11 @@
 <script src="js/reports.js?v=20260815-layout2"></script>
 <script src="js/ip_reconcile.js?v=20260805a"></script>
 <script src="js/master_trade.js?v=20260813z"></script>
-<script src="js/master_list.js?v=v2-20260925-excel-export"></script>
+<script src="js/master_list.js?v=v2-20261005-signoff-master"></script>
 <script src="js/sc_contract_registry.js?v=v2-20260925-scr-label"></script>
 <script src="js/staff.js?v=20260827-staff2"></script>
 <script src="js/portfolio_progress.js?v=v2-20260831-pf-status"></script>
 <script src="js/portfolio_fac.js?v=v2-20260831-pf-status"></script>
-<script src="js/eng_intake.js?v=v2-20260924-amt-fmt"></script>
+<script src="js/eng_intake.js?v=v2-20261005-signoff-master"></script>
 </body>
 </html>

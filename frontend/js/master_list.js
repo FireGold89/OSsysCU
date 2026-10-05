@@ -310,6 +310,7 @@ const MasterList = {
         <td data-col="act">
           <div class="table-row-actions">
             <button type="button" class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="MasterList.openEdit(${r.id})">✏️</button>
+            <button type="button" class="btn btn-icon btn-secondary btn-sm" title="加入會簽出表" onclick="MasterList.addToSignoff(${r.id})">📋</button>
             <button type="button" class="btn btn-icon btn-secondary btn-sm" title="配對項目" onclick="MasterList.openLink(${r.id})">🔗</button>
             ${r.project_id ? `<button type="button" class="btn btn-icon btn-secondary btn-sm" title="解除配對" onclick="MasterList.unlink(${r.id})">🔓</button>` : ''}
           </div>
@@ -845,6 +846,21 @@ const MasterList = {
     await this.refreshQuotNoSuggest(true);
     document.getElementById('masterEditModal').classList.add('open');
     AmountInput.init(document.getElementById('masterEditModal'));
+  },
+
+  async addToSignoff(rowId) {
+    if (typeof EngIntake === 'undefined') {
+      toast('會簽模組未載入', 'error');
+      return;
+    }
+    try {
+      showContentLoading('加入會簽清單…');
+      await EngIntake.addFromMaster(rowId, { navigate: true });
+    } catch (e) {
+      toast(e.message || '加入失敗', 'error');
+    } finally {
+      hideContentLoading();
+    }
   },
 
   async openEdit(rowId) {

@@ -52,7 +52,22 @@ const EngIntake = {
   },
 
   _itemKey(it) {
-    return (it?.quotation_raw || it?.quotation_no || '').trim();
+    return (it?.quotation_no || it?.quotation_raw || '').trim();
+  },
+
+  _loadDraftMap() {
+    try {
+      const raw = localStorage.getItem(this._STORAGE_KEY);
+      if (!raw) return {};
+      const data = JSON.parse(raw);
+      if (data.version === 2 && data.drafts && typeof data.drafts === 'object') {
+        return data.drafts;
+      }
+      if (data.drafts && typeof data.drafts === 'object') {
+        return data.drafts;
+      }
+    } catch (_) { /* ignore */ }
+    return {};
   },
 
   _snapshotItem(it) {
@@ -68,15 +83,15 @@ const EngIntake = {
   },
 
   _persistDrafts() {
-    if (!this.sourceFile || !this.items.length) return;
-    const drafts = {};
+    if (!this.items.length) return;
+    const drafts = this._loadDraftMap();
     for (const it of this.items) {
       const id = this._itemKey(it);
       if (id) drafts[id] = this._snapshotItem(it);
     }
     try {
       localStorage.setItem(this._STORAGE_KEY, JSON.stringify({
-        source: this.sourceFile,
+        version: 2,
         saved_at: new Date().toISOString(),
         drafts,
       }));
@@ -99,20 +114,56 @@ const EngIntake = {
   },
 
   _applyDrafts() {
-    if (!this.sourceFile || !this.items.length) return;
-    try {
-      const raw = localStorage.getItem(this._STORAGE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.source !== this.sourceFile || !data.drafts) return;
-      for (const it of this.items) {
-        const id = this._itemKey(it);
-        if (id && data.drafts[id]) {
-          this._applySnapshot(it, data.drafts[id]);
-          this._sanitizeContractDates(it);
-        }
+    if (!this.items.length) return;
+    const drafts = this._loadDraftMap();
+    for (const it of this.items) {
+      const id = this._itemKey(it);
+      if (id && drafts[id]) {
+        this._applySnapshot(it, drafts[id]);
+        this._sanitizeContractDates(it);
       }
-    } catch (_) { /* ignore corrupt storage */ }
+    }
+  },
+
+  _recalcStats() {
+    this.stats = {
+      total: this.items.length,
+      master_ok: this.items.filter(i => i.master_status === 'ok').length,
+      master_partial: this.items.filter(i => i.master_status === 'partial').length,
+      master_missing: this.items.filter(i => i.master_status === 'missing').length,
+    };
+  },
+
+  async addFromMaster(masterId, { navigate = false } = {}) {
+    const pc = document.getElementById('eiPersonCode')?.value || '';
+    const data = await api('POST', '/eng/intake/from-master', {
+      master_id: masterId,
+      person_code: pc || undefined,
+    });
+    const item = data?.item;
+    if (!item) throw new Error('無法建立會簽項目');
+    const key = this._itemKey(item);
+    let idx = this.items.findIndex(it => this._itemKey(it) === key);
+    const wasExisting = idx >= 0;
+    const preserved = this._loadDraftMap()[key];
+    if (wasExisting) {
+      Object.assign(this.items[idx], item);
+    } else {
+      this.items.push(item);
+      idx = this.items.length - 1;
+    }
+    if (preserved) {
+      this._applySnapshot(this.items[idx], preserved);
+      this._sanitizeContractDates(this.items[idx]);
+    }
+    if (!this.sourceFile) this.sourceFile = 'Master List';
+    this.selectedIdx = idx;
+    this._recalcStats();
+    this._sanitizeAllItems();
+    this.render();
+    toast(wasExisting ? '已更新會簽清單中的項目（保留已存草稿）' : '已加入會簽清單', 'success');
+    if (navigate) App.navigate('eng-intake');
+    return item;
   },
 
   _markDirty() {
@@ -521,7 +572,10 @@ const EngIntake = {
 
   renderEmpty() {
     const el = document.getElementById('eiTableBody');
-    if (el) el.innerHTML = '<tr><td colspan="8" class="text-muted" style="padding:24px">請上傳 NN1 Excel 開始</td></tr>';
+    if (el) {
+      el.innerHTML = '<tr><td colspan="9" class="text-muted" style="padding:24px">'
+        + '請上傳 NN1 Excel，或於 Master List 按「會簽出表」加入項目</td></tr>';
+    }
     document.getElementById('eiStats').innerHTML = '';
     document.getElementById('eiEditor').innerHTML = '<p class="text-muted">選擇左側項目以編輯內容並出表</p>';
   },
@@ -555,7 +609,11 @@ const EngIntake = {
     tbody.innerHTML = this.items.map((it, idx) => {
       const sel = idx === this.selectedIdx ? ' ei-row-selected' : '';
       const gaps = (it.master_gaps || []).slice(0, 2).join('、');
+      const src = it.intake_source === 'master'
+        ? '<span class="badge badge-info">Master</span>'
+        : '<span class="badge badge-muted">NN1</span>';
       return `<tr class="ei-row${sel}" onclick="EngIntake.selectRow(${idx})">
+        <td>${src}</td>
         <td>${escHtml(it.quotation_raw || '—')}</td>
         <td><code>${escHtml(it.quotation_no || '—')}</code></td>
         <td>${escHtml(it.project_name || '—')}</td>
@@ -583,7 +641,7 @@ const EngIntake = {
     const showOther = cat === '其他';
     el.innerHTML = `
       <div class="ei-editor-head">
-        <div class="form-hint">Master 配對：${escHtml(it.master_matched_no || '—')} · 缺：${escHtml(gaps)}</div>
+        <div class="form-hint">來源：${it.intake_source === 'master' ? 'Master List' : 'NN1 Excel'} · Master：${escHtml(it.master_matched_no || '—')} · 缺：${escHtml(gaps)} · 分判欄只影響本次 PDF，不寫回 Master</div>
         <div id="eiEditorStatus" class="ei-editor-status">已儲存</div>
       </div>
       <div class="ei-section-title">會簽表內容（可編輯 · 次序同 Template）</div>

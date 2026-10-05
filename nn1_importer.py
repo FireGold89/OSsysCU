@@ -134,6 +134,26 @@ def build_quotation_no(raw, person_code=None):
     return q
 
 
+def ms_quotation_to_nn1_raw(quotation_no):
+    """MS/Q1073/26/dc → Q.1073/26（供 Master 直出會簽顯示 NN1 欄）。"""
+    s = _safe_str(quotation_no)
+    if not s:
+        return None
+    m = re.match(r'^MS/([^/]+)/(\d{2,4})(?:/.*)?$', s, re.I)
+    if not m:
+        return None
+    core = m.group(1)
+    year = m.group(2)
+    if len(year) == 4:
+        year = year[-2:]
+    cm = re.match(r'^([QTC])(\d+)$', core, re.I)
+    if not cm:
+        return None
+    letter = cm.group(1).upper()
+    num = int(cm.group(2))
+    return f'{letter}.{num}/{year}'
+
+
 def _quotation_candidates(raw, person_code=None):
     core = normalize_nn1_quotation(raw)
     if not core:
@@ -422,9 +442,47 @@ def parse_nn1_workbook(path):
     return rows
 
 
+def build_eng_item_from_master(master_id, person_code=None):
+    """由 Master List 單筆建立會簽項目（無需 NN1 Excel）。"""
+    master_row = db.get_quotation_by_id(master_id)
+    if not master_row:
+        raise ValueError('找不到 Master 記錄')
+    master_row = dict(master_row)
+    qno = _safe_str(master_row.get('quotation_no'))
+    if not qno:
+        raise ValueError('Master 記錄缺少報價編號')
+    raw = ms_quotation_to_nn1_raw(qno) or qno
+    pc = normalize_person_code(person_code) or normalize_person_code(master_row.get('person_code'))
+    raw_row = {
+        'quotation_raw': raw,
+        'project_name': master_row.get('description'),
+        'start_date': master_row.get('start_date'),
+        'completion_date': master_row.get('completion_date'),
+        'subcon_name': master_row.get('subcon_company'),
+    }
+    item = _merge_item(raw_row, person_code=pc)
+    item['intake_source'] = 'master'
+    item['master_id'] = master_row.get('id')
+    item['quotation_no'] = qno
+    item['master_matched_no'] = qno
+    item['master_status'] = _master_status(master_row, qno)
+    gaps = []
+    for db_key, label, pk in MASTER_COMPARE_FIELDS:
+        if db_key in ('quoted_amount', 'awarded_amount'):
+            if not _pick_amount(None, master_row):
+                gaps.append(label)
+            continue
+        if not _safe_str(master_row.get(db_key)) and not _safe_str(item.get(pk)):
+            gaps.append(label)
+    item['master_gaps'] = gaps
+    return item
+
+
 def preview_nn1_import(path, person_code=None):
     raw_rows = parse_nn1_workbook(path)
     items = [_merge_item(row, person_code=person_code) for row in raw_rows]
+    for it in items:
+        it.setdefault('intake_source', 'nn1')
     stats = {
         'total': len(items),
         'master_ok': sum(1 for i in items if i['master_status'] == 'ok'),

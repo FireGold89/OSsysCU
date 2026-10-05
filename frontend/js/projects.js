@@ -1236,10 +1236,19 @@ const Projects = {
     App.navigate('sc-fac');
   },
 
-  async loadSettlement() {
-    const pid = this._settleProjectId;
+  async loadSettlement(switchSeq) {
+    const pid = this._settleProjectId ?? App.currentProject?.id;
+    this._settleProjectId = pid || null;
     const body = document.getElementById('settleBody');
-    if (!pid || !body) return;
+    if (!body) return;
+    if (!pid) {
+      body.innerHTML = '<div class="empty-state" style="padding:40px">請先在左側選擇項目</div>';
+      const titleEl = document.getElementById('settlePageTitle');
+      const subEl = document.getElementById('settlePageSub');
+      if (titleEl) titleEl.textContent = '項目金額結算';
+      if (subEl) subEl.textContent = '—';
+      return;
+    }
     body.innerHTML = '<div class="empty-state" style="padding:40px">載入中...</div>';
 
     const [cover, scList, summary, project] = await Promise.all([
@@ -1248,6 +1257,7 @@ const Projects = {
       api('GET', `/reports/summary/${pid}`),
       api('GET', `/projects/${pid}`),
     ]);
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
     if (!cover) {
       body.innerHTML = '<div class="empty-state" style="padding:40px">項目不存在</div>';
       return;
@@ -1348,7 +1358,7 @@ const Projects = {
   },
 
   async saveSettlement() {
-    const pid = this._settleProjectId;
+    const pid = this._settleProjectId ?? App.currentProject?.id;
     if (!pid) return;
     const project = await api('GET', `/projects/${pid}`);
     if (!project) return;
