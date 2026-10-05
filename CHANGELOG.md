@@ -4,9 +4,10 @@
 
 ## [未發布]
 
-`APP_VERSION`: `v2-20261005-dash-signoff` · 分支 `v2/portfolio`
+`APP_VERSION`: `v2-20261005-qingxin-layout` · 分支 `v2/portfolio`
 
 ### 新增
+- **項目概覽 · 清新版**：原主題／清新版／專業版三種版面（localStorage `fresh`）；淡色帶與重點欄位修飾，欄位同原主題
 - **項目概覽 · 專業版**：原主題／專業版切換（localStorage）；KPI、合約主體、里程碑、保固金與合約結算表
 - **會簽出表 · Master List**：操作列「加入會簽出表」；`POST /api/eng/intake/from-master`
 

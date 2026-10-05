@@ -49,42 +49,58 @@ const ProjectDashboard = {
     }).join(' ');
   },
 
+  _normalizeLayoutMode(raw) {
+    const m = (raw || '').trim().toLowerCase();
+    if (m === 'pro' || m === 'fresh') return m;
+    return 'classic';
+  },
+
   initLayoutToggle() {
     if (this._layoutInited) return;
     this._layoutInited = true;
     const saved = localStorage.getItem(this.LAYOUT_KEY);
-    this.setLayout(saved === 'pro' ? 'pro' : 'classic', { persist: false });
+    this.setLayout(this._normalizeLayoutMode(saved), { persist: false });
   },
 
   setLayout(mode, { persist = true } = {}) {
-    const isPro = mode === 'pro';
+    const layout = this._normalizeLayoutMode(mode);
+    const isPro = layout === 'pro';
+    const isFresh = layout === 'fresh';
     const classic = document.getElementById('projectDashClassic');
     const pro = document.getElementById('projectDashPro');
+    const card = document.getElementById('projectDashCard');
     const btnClassic = document.getElementById('projDashLayoutClassic');
+    const btnFresh = document.getElementById('projDashLayoutFresh');
     const btnPro = document.getElementById('projDashLayoutPro');
     const sub = document.getElementById('projectDashSubtitle');
     if (classic) {
       classic.style.display = isPro ? 'none' : '';
       classic.hidden = isPro;
+      classic.classList.toggle('proj-dash-theme-fresh', isFresh);
     }
+    if (card) card.dataset.projDashLayout = layout;
     if (pro) {
       pro.style.display = isPro ? '' : 'none';
       pro.hidden = !isPro;
     }
     if (btnClassic) {
-      btnClassic.classList.toggle('active', !isPro);
-      btnClassic.setAttribute('aria-selected', isPro ? 'false' : 'true');
+      btnClassic.classList.toggle('active', layout === 'classic');
+      btnClassic.setAttribute('aria-selected', layout === 'classic' ? 'true' : 'false');
+    }
+    if (btnFresh) {
+      btnFresh.classList.toggle('active', isFresh);
+      btnFresh.setAttribute('aria-selected', isFresh ? 'true' : 'false');
     }
     if (btnPro) {
       btnPro.classList.toggle('active', isPro);
       btnPro.setAttribute('aria-selected', isPro ? 'true' : 'false');
     }
     if (sub) {
-      sub.textContent = isPro
-        ? '專業概覽 · 重點 KPI 與分區摘要'
-        : 'QS 項目資料 · 與工程項目表單相同欄位';
+      if (isPro) sub.textContent = '專業概覽 · 重點 KPI 與分區摘要';
+      else if (isFresh) sub.textContent = 'QS 項目資料 · 清新版（欄位與原主題相同）';
+      else sub.textContent = 'QS 項目資料 · 與工程項目表單相同欄位';
     }
-    if (persist) localStorage.setItem(this.LAYOUT_KEY, isPro ? 'pro' : 'classic');
+    if (persist) localStorage.setItem(this.LAYOUT_KEY, layout);
   },
 
   _syncProContractCalc() {
