@@ -477,9 +477,42 @@ function fmtInputNum(num, decimals = FMT_DECIMALS) {
   return n.toLocaleString('en-HK', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+/** 輸入過程千分位（不強補 .00，blur 時再用 fmtInputNum） */
+function fmtInputLive(raw) {
+  let s = String(raw ?? '').replace(/,/g, '');
+  if (s === '') return '';
+  const neg = s.startsWith('-');
+  if (neg) s = s.slice(1);
+  if (s === '') return neg ? '-' : '';
+  const dot = s.indexOf('.');
+  let intPart = (dot >= 0 ? s.slice(0, dot) : s).replace(/\D/g, '');
+  let decPart = dot >= 0 ? s.slice(dot + 1).replace(/\D/g, '').slice(0, FMT_DECIMALS) : null;
+  if (!intPart) intPart = '0';
+  const intFmt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  let out = intFmt;
+  if (dot >= 0) {
+    out += decPart != null && decPart.length ? `.${decPart}` : '.';
+  }
+  return neg ? `-${out}` : out;
+}
+
+function _amtDigitsBeforeCursor(val, cursor) {
+  return String(val).slice(0, cursor).replace(/[^\d]/g, '').length;
+}
+
+function _amtCursorAfterFormat(formatted, digitsBefore) {
+  if (digitsBefore <= 0) return 0;
+  let digits = 0;
+  for (let i = 0; i < formatted.length; i += 1) {
+    if (/\d/.test(formatted[i])) digits += 1;
+    if (digits >= digitsBefore) return i + 1;
+  }
+  return formatted.length;
+}
+
 /** 金額輸入框：type=number step=0.01 → text + 千分位；讀值用 parseAmt / parseAmtOrZero */
 const AmountInput = {
-  _selector: 'input[type=number][step="0.01"], input.amt-input, input.iso-amt-input',
+  _selector: 'input[type=number][step="0.01"]:not(.no-amt-fmt), input.amt-input:not(.no-amt-fmt), input.iso-amt-input',
 
   init(root = document) {
     if (!root?.querySelectorAll) return;
@@ -502,6 +535,15 @@ const AmountInput = {
       if (el.readOnly || el.disabled) return;
       const n = parseAmt(el.value);
       if (!Number.isNaN(n)) el.value = n === 0 ? '' : String(n);
+    });
+    el.addEventListener('input', () => {
+      if (el.readOnly || el.disabled) return;
+      const digitsBefore = _amtDigitsBeforeCursor(el.value, el.selectionStart ?? el.value.length);
+      const next = fmtInputLive(el.value);
+      if (next === el.value) return;
+      el.value = next;
+      const pos = _amtCursorAfterFormat(next, digitsBefore);
+      try { el.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
     });
     el.addEventListener('blur', () => {
       if (el.value === '') return;
@@ -1743,7 +1785,7 @@ const App = {
     // 更新頁面標題
     const titles = {
       dashboard: ['項目概覽', 'QS 項目資料 · 與工程項目表單一致'],
-      'project-lens': ['項目視角', '財務 KPI · 糧期 · 主要功能'],
+      'project-lens': ['項目視角(臨時)', '財務 KPI · 糧期 · 主要功能'],
       'iso-docs': ['ISO文件登記', 'ISO 文件上傳 · 主合約及分判招標合約附件'],
       payments: ['分判付款登記', '發票／中期糧款計算書登記'],
       'sc-vo-reg': ['變更以及扣款登記', '主合約及分判 · 變更工程及扣款 · 模板快速新增'],

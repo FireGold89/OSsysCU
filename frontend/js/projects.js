@@ -1063,6 +1063,7 @@ const Projects = {
     this._projDocs = [];
     this._renderProjDocLists();
     document.getElementById('projectModal').classList.add('open');
+    AmountInput.init(document.getElementById('projectModal'));
   },
 
   async openEdit(id, tab) {
@@ -1095,6 +1096,7 @@ const Projects = {
     if (!p.category_l2_code) await this._maybeSuggestCategory(id);
     await this._loadProjDocuments(p.id);
     document.getElementById('projectModal').classList.add('open');
+    AmountInput.init(document.getElementById('projectModal'));
     if (tab === 'cover') this.switchTab('cover');
   },
 

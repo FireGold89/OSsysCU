@@ -134,10 +134,6 @@
         </div>
       </div>
 
-      <div class="nav-item" data-page="project-lens" onclick="App.navigate('project-lens')" title="項目視角 · 財務 KPI 與糧期">
-        <span class="nav-icon">🔭</span><span class="nav-label">項目視角</span>
-      </div>
-
       <div class="nav-section-title sidebar-expand-only" style="margin-top:12px">全公司總表</div>
       <div class="nav-item" data-page="portfolio-fac" onclick="App.navigate('portfolio-fac')" title="N 項目結算總表">
         <span class="nav-icon">📋</span><span class="nav-label">N 項目結算總表</span>
@@ -166,6 +162,9 @@
       </div>
       <div class="nav-item" data-page="staff" onclick="App.navigate('staff')" title="項目負責人管理">
         <span class="nav-icon">👷</span><span class="nav-label">項目負責人管理</span>
+      </div>
+      <div class="nav-item" data-page="project-lens" onclick="App.navigate('project-lens')" title="項目視角(臨時) · 財務 KPI 與糧期">
+        <span class="nav-icon">🔭</span><span class="nav-label">項目視角(臨時)</span>
       </div>
       <div class="nav-item" data-page="settings" onclick="App.navigate('settings')" title="系統設定">
         <span class="nav-icon">⚙️</span><span class="nav-label">系統設定</span>
@@ -2546,7 +2545,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">預計利潤率 (%)</label>
-            <input type="number" class="form-input" id="pAnticipatedProfitPct" placeholder="" step="0.01">
+            <input type="number" class="form-input no-amt-fmt" id="pAnticipatedProfitPct" placeholder="" step="0.01">
           </div>
         </div>
 
@@ -2603,11 +2602,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">保固金 (%)</label>
-            <input type="number" class="form-input" id="pRetentionPct" step="0.01">
+            <input type="number" class="form-input no-amt-fmt" id="pRetentionPct" step="0.01">
           </div>
           <div class="form-group">
             <label class="form-label">最高保固金 (%)</label>
-            <input type="number" class="form-input" id="pRetentionMaxPct" step="0.01">
+            <input type="number" class="form-input no-amt-fmt" id="pRetentionMaxPct" step="0.01">
           </div>
         </div>
         <div class="form-group">
@@ -3688,7 +3687,7 @@
 
 <!-- Scripts -->
 <script src="js/load_perf.js?v=v2-20261006-init-guard"></script>
-<script src="js/main.js?v=v2-20261006-init-guard"></script>
+<script src="js/main.js?v=v2-20261006-nav-amt"></script>
 <script src="js/nav_layout.js?v=v2-20261003-proj-dash"></script>
 <script src="js/col_picker.js?v=v2-20260828-p3"></script>
 <script src="js/iso_docs.js?v=v2-20261006-load-perf-bundle"></script>
@@ -3696,7 +3695,7 @@
 <script src="js/sc_vo_reg.js?v=v2-20260924-amt-fmt"></script>
 <script src="js/sc_fac.js?v=20260911-sc-fac-p2"></script>
 <script src="js/proj_iso_attach.js?v=v2-20261005-iso-multi"></script>
-<script src="js/projects.js?v=v2-20261006-load-perf-bundle"></script>
+<script src="js/projects.js?v=v2-20261006-nav-amt"></script>
 <script src="js/project_dashboard.js?v=v2-20261006-load-perf-bundle"></script>
 <script src="js/main_con_fac.js?v=v2-20261006-load-perf-bundle"></script>
 <script src="js/hk_banks.js?v=20260805c"></script>
