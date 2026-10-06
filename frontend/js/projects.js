@@ -2041,8 +2041,11 @@ const SC = {
       return;
     }
     const projectId = p.id;
-    if (App.scList?.length && App.currentProject?.id == projectId) {
-      this.data = App.scList;
+    const cached = typeof LoadPerf !== 'undefined'
+      ? LoadPerf.getCachedSubcontractors(projectId, App.scList)
+      : (App.scList?.length && App.currentProject?.id == projectId ? App.scList : null);
+    if (cached) {
+      this.data = cached;
     } else {
       this.data = await api('GET', `/projects/${projectId}/subcontractors`) || [];
     }
