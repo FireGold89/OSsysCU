@@ -1,5 +1,4 @@
-# 與 main（ossys.zeabur.app）相同的最小映像 — 避免 Zeabur registry ImagePull 逾時
-# 會簽 PDF 在 Linux 以 ReportLab fallback（無 LibreOffice）
+# 精簡映像；會簽 PDF 需 LibreOffice headless 轉換 assets/signoff/signoff_template.docx
 FROM python:3.11-slim-bookworm
 
 WORKDIR /app
@@ -10,7 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
+    libreoffice-writer-nogui \
     fonts-wqy-zenhei \
+    fonts-arphic-uming \
+    fonts-arphic-ukai \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

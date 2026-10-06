@@ -6,6 +6,7 @@ signoff_generator.py — 投標合約會簽表 Word / PDF 輸出
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 import shutil
@@ -1112,6 +1113,10 @@ def generate_signoff_pdf(payload, template_path=None):
     pdf = _docx_bytes_to_pdf_libreoffice(docx_bytes)
     if pdf:
         return pdf
+    logging.warning(
+        'signoff PDF: Word/LibreOffice 轉換失敗，改用 ReportLab 簡版；'
+        'Linux 請確認已安裝 libreoffice-writer-nogui 與 assets/signoff/signoff_template.docx'
+    )
     return _generate_signoff_pdf_reportlab(payload)
 
 

@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261006-signoff-lo` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽 PDF（V2/Zeabur）**：Docker 安裝 LibreOffice headless + 字型，PDF 由 Template.docx 轉換（與本機 Word 版式一致；不再預設 ReportLab 五列表）
+
 `APP_VERSION`: `v2-20261006-text-scale` · 分支 `v2/portfolio`
 
 ### 改善
