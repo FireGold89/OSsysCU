@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261006-init-guard` · 分支 `v2/portfolio`
+
+### 改善
+- **登入後卡住**：先顯示主介面再載入記憶項目；逾時自動清除 `qs_project_id`；部署版本變更時清 LoadPerf 快取；`index.html` 禁止瀏覽器長快取
+
 `APP_VERSION`: `v2-20261006-load-perf-bundle` · 分支 `v2/portfolio`
 
 ### 改善

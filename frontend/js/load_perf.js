@@ -9,6 +9,7 @@ const LoadPerf = {
   SUMMARY_SLOT: 'reports-summary',
   BUNDLE_SLOT: 'dashboard-overview',
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
+  AUTO_PROJECT_LOAD_TIMEOUT_MS: 45000,
 
   _MUTATION_PATH_RE: [
     /^\/payments(\/|$)/,
@@ -21,6 +22,26 @@ const LoadPerf = {
   ],
 
   _slots: Object.create(null),
+
+  withTimeout(promise, ms, message = '載入逾時') {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const err = new Error(message);
+        err.code = 'LOAD_TIMEOUT';
+        reject(err);
+      }, ms);
+      Promise.resolve(promise).then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
+  },
 
   _ensureSlot(key) {
     if (!this._slots[key]) {

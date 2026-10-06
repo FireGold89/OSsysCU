@@ -1440,6 +1440,50 @@ const App = {
   projects: [],
   scList: [],
   _projectSwitchSeq: 0,
+  PROJECT_ID_STORAGE_KEY: 'qs_project_id',
+  APP_BUILD_STORAGE_KEY: 'qs_app_build',
+
+  _pickInitialProjectId() {
+    const saved = localStorage.getItem(this.PROJECT_ID_STORAGE_KEY);
+    if (saved && this.projects.find((p) => p.id == saved)) return saved;
+    if (saved) localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
+    if (this.projects.length > 0) return String(this.projects[0].id);
+    return null;
+  },
+
+  _noteAppBuildFromStatus(data) {
+    if (!data?.app_version) return;
+    const ver = String(data.app_version);
+    const prev = localStorage.getItem(this.APP_BUILD_STORAGE_KEY);
+    if (prev && prev !== ver && typeof LoadPerf !== 'undefined') {
+      LoadPerf.invalidateProjectCaches();
+    }
+    localStorage.setItem(this.APP_BUILD_STORAGE_KEY, ver);
+  },
+
+  async _restoreInitialProject(id) {
+    const timeoutMs = typeof LoadPerf !== 'undefined'
+      ? LoadPerf.AUTO_PROJECT_LOAD_TIMEOUT_MS
+      : 45000;
+    try {
+      const p = typeof LoadPerf !== 'undefined'
+        ? LoadPerf.withTimeout(
+          this.selectProject(id),
+          timeoutMs,
+          '上次項目載入逾時',
+        )
+        : this.selectProject(id);
+      await p;
+    } catch (e) {
+      hideContentLoading();
+      localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
+      if (typeof LoadPerf !== 'undefined') LoadPerf.invalidateProjectCaches();
+      const msg = e?.code === 'LOAD_TIMEOUT' || (e?.message || '').includes('逾時')
+        ? '上次記住的項目載入逾時，已清除；請在上方重新選擇項目'
+        : (e?.message || '上次項目載入失敗，請重新選擇');
+      toast(msg, 'warning');
+    }
+  },
 
   async init() {
     VaultEntry.showHoldOpenFromLogin();
@@ -1471,14 +1515,10 @@ const App = {
     document.getElementById('projectSelect').addEventListener('change', (e) => {
       this.selectProject(e.target.value);
     });
-    const saved = localStorage.getItem('qs_project_id');
-    if (saved && this.projects.find(p => p.id == saved)) {
-      await this.selectProject(saved);
-    } else if (this.projects.length > 0) {
-      await this.selectProject(this.projects[0].id);
-    }
     this._updateProjectSettlementNav();
     this.navigate('dashboard', { skipLoad: true });
+    const initialId = this._pickInitialProjectId();
+    if (initialId) void this._restoreInitialProject(initialId);
   },
 
   async syncDeploymentBadge() {
@@ -1499,6 +1539,7 @@ const App = {
       } else {
         wrap.style.display = 'none';
       }
+      this._noteAppBuildFromStatus(data);
     } catch (_) {
       wrap.style.display = 'none';
     }
@@ -1538,7 +1579,7 @@ const App = {
         LoadPerf.invalidateProjectSummary();
         this.currentProject = null;
         this.scList = [];
-        localStorage.removeItem('qs_project_id');
+        localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
         document.getElementById('projectSelect').value = '';
         document.getElementById('currentProjectBadge').style.display = 'none';
         if (this._getActivePage() === 'project-settlement') {
@@ -1558,7 +1599,7 @@ const App = {
       const idx = this.projects.findIndex(p => p.id == id);
       if (idx >= 0) this.projects[idx] = fresh;
 
-      localStorage.setItem('qs_project_id', id);
+      localStorage.setItem(this.PROJECT_ID_STORAGE_KEY, id);
       document.getElementById('projectSelect').value = String(id);
       document.getElementById('currentProjectCode').textContent = projectBadgeCode(this.currentProject);
       document.getElementById('currentProjectBadge').style.display = '';
