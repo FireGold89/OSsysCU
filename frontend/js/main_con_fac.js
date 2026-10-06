@@ -497,6 +497,7 @@ const MainConFac = {
     const res = await fetch(`${API}/projects/${p.id}/main-con-fac/upload`, { method: 'POST', body: fd });
     const json = await res.json();
     if (!res.ok || !json.success) throw new Error(json.error || '上傳失敗');
+    if (typeof LoadPerf !== 'undefined') LoadPerf.notifyProjectMutated(p.id);
   },
 
   async save(ev) {

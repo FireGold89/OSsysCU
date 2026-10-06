@@ -692,6 +692,7 @@ const IsoDocs = {
         if (valid.length > 1) showLoading(`上傳 ISO 文件（${ok}/${valid.length}）…`);
       }
       toast(ok > 1 ? `已上傳 ${ok} 個文件` : '文件已上傳', 'success');
+      if (typeof LoadPerf !== 'undefined') LoadPerf.notifyProjectMutated(pid);
       await this.load();
     } catch (e) {
       toast(e.message || '上傳失敗', 'error');

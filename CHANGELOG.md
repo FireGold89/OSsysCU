@@ -4,11 +4,17 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261006-load-perf-bundle` · 分支 `v2/portfolio`
+
+### 改善
+- **首屏載入**：`GET /api/projects/{id}/dashboard-overview` 一次返回 ISO／文件／FAC／summary；`LoadPerf` 去重快取、idle 預載
+- **資料新鮮度**：付款／糧期／分判／VO／FAC／ISO 等寫入成功後自動 `invalidate` 快取（含 FormData 上傳）
+- **項目概覽**：移除體驗版；舊 `localStorage` `ux` 自動改回原主題
+
 `APP_VERSION`: `v2-20261006-load-perf` · 分支 `v2/portfolio`
 
 ### 改善
-- **首屏載入**：`/reports/summary` 共用快取；項目概覽 ISO／文件／FAC／summary 並行；換項目時縮減背景預載（idle 再載項目視角）；分判清單重用 `App.scList`
-- **項目概覽**：移除體驗版；舊 `localStorage` `ux` 自動改回原主題
+- **首屏載入**：summary 去重、並行 API、idle 預載、分判清單重用
 
 `APP_VERSION`: `v2-20261005-qingxin-layout` · 分支 `v2/portfolio`
 

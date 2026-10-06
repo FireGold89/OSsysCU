@@ -1124,6 +1124,9 @@ async function api(method, path, body, opts = {}) {
       throw new Error(r.ok ? '伺服器回應格式錯誤' : `伺服器錯誤 (${r.status})，請重新啟動系統後再試`);
     }
     if (!json.success) throw new Error(json.error || '操作失敗');
+    if (typeof LoadPerf !== 'undefined') {
+      LoadPerf.handleApiSuccess(method, path, body, json.data);
+    }
     return json.data;
   } catch (e) {
     if (!silent) toast(e.message, 'error');
@@ -1437,51 +1440,6 @@ const App = {
   projects: [],
   scList: [],
   _projectSwitchSeq: 0,
-  _summaryCache: { projectId: null, data: null, promise: null },
-
-  invalidateProjectSummaryCache(projectId) {
-    const pid = projectId == null ? null : Number(projectId);
-    if (pid == null || this._summaryCache.projectId === pid) {
-      this._summaryCache = { projectId: null, data: null, promise: null };
-    }
-  },
-
-  /** 合併 /reports/summary 請求（項目概覽 · 項目視角 · 報表共用） */
-  fetchProjectSummary(projectId, { silent = true } = {}) {
-    const pid = Number(projectId);
-    if (!pid) return Promise.resolve(null);
-    const cache = this._summaryCache;
-    if (cache.projectId === pid && cache.data) return Promise.resolve(cache.data);
-    if (cache.projectId === pid && cache.promise) return cache.promise;
-    cache.projectId = pid;
-    cache.data = null;
-    cache.promise = api('GET', `/reports/summary/${pid}`, null, { silent })
-      .then((data) => {
-        if (cache.projectId === pid && App.currentProject?.id === pid) {
-          cache.data = data;
-        }
-        return data;
-      })
-      .catch((err) => {
-        if (cache.projectId === pid) cache.promise = null;
-        throw err;
-      })
-      .finally(() => {
-        if (cache.projectId === pid) cache.promise = null;
-      });
-    return cache.promise;
-  },
-
-  _scheduleIdle(fn, timeoutMs = 2800) {
-    const run = () => {
-      try { fn(); } catch (_) { /* ignore */ }
-    };
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: timeoutMs });
-    } else {
-      setTimeout(run, Math.min(1200, timeoutMs));
-    }
-  },
 
   async init() {
     VaultEntry.showHoldOpenFromLogin();
@@ -1577,7 +1535,7 @@ const App = {
     showContentLoading('載入項目資料…');
     try {
       if (!id) {
-        this.invalidateProjectSummaryCache();
+        LoadPerf.invalidateProjectSummary();
         this.currentProject = null;
         this.scList = [];
         localStorage.removeItem('qs_project_id');
@@ -1593,7 +1551,7 @@ const App = {
         await this._refreshProjectViews(switchSeq);
         return;
       }
-      if (String(prevId) !== String(id)) this.invalidateProjectSummaryCache();
+      if (String(prevId) !== String(id)) LoadPerf.invalidateProjectSummary();
       const fresh = await api('GET', `/projects/${id}`);
       if (!fresh || switchSeq !== this._projectSwitchSeq) return;
       this.currentProject = fresh;
@@ -1612,7 +1570,7 @@ const App = {
 
       const [scList] = await Promise.all([
         api('GET', `/projects/${id}/subcontractors`).then((r) => r || []),
-        this.fetchProjectSummary(id, { silent: true }).catch(() => null),
+        LoadPerf.fetchProjectSummary(id, { silent: true }).catch(() => null),
       ]);
       this.scList = scList;
       if (switchSeq !== this._projectSwitchSeq) return;
@@ -1705,11 +1663,7 @@ const App = {
     }
     if (switchSeq !== this._projectSwitchSeq) return;
 
-    // 首屏只載當前頁；其餘延後 idle 預載（減輕第一次進站 API 洪峰）
-    this._scheduleIdle(() => {
-      if (switchSeq !== this._projectSwitchSeq || !this.currentProject?.id) return;
-      if (active !== 'project-lens') Dashboard.load(switchSeq).catch(() => {});
-    });
+    LoadPerf.scheduleProjectSwitchPreloads({ switchSeq, activePage: active });
 
     if (switchSeq !== this._projectSwitchSeq) return;
     if (active === 'iso-docs') IsoDocs.load();
@@ -1985,7 +1939,7 @@ const Dashboard = {
     if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
 
     const statsP = this.loadCompanyFacStats();
-    const summaryP = App.fetchProjectSummary(projectId, { silent: true });
+    const summaryP = LoadPerf.fetchProjectSummary(projectId, { silent: true });
     const facP = this.loadProjectFac(projectId, switchSeq);
 
     const summary = await summaryP;

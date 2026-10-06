@@ -263,17 +263,35 @@ const ProjectDashboard = {
       notesEl.classList.toggle('is-empty', !notes);
     }
 
-    const summaryP = typeof App.fetchProjectSummary === 'function'
-      ? App.fetchProjectSummary(p.id, { silent: true }).catch(() => null)
-      : api('GET', `/reports/summary/${p.id}`, null, { silent: true }).catch(() => null);
+    let board = null;
+    let legacyRaw = [];
+    let facData = null;
+    let summaryEarly = null;
 
-    const [board, legacyRaw, facData, summaryEarly] = await Promise.all([
-      api('GET', `/projects/${p.id}/iso-documents`, null, { silent: true }).catch(() => null),
-      api('GET', `/projects/${p.id}/documents`, null, { silent: true }).catch(() => []),
-      api('GET', `/projects/${p.id}/main-con-fac`, null, { silent: true }).catch(() => null),
-      summaryP,
-    ]);
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+    if (typeof LoadPerf !== 'undefined' && LoadPerf.fetchDashboardOverview) {
+      const bundle = await LoadPerf.fetchDashboardOverview(p.id, { silent: true }).catch(() => null);
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      if (bundle) {
+        board = bundle.iso_board;
+        legacyRaw = bundle.documents || [];
+        facData = bundle.main_con_fac;
+        summaryEarly = bundle.report_summary;
+      }
+    }
+
+    if (!board && summaryEarly == null) {
+      const summaryP = typeof LoadPerf !== 'undefined'
+        ? LoadPerf.fetchProjectSummary(p.id, { silent: true }).catch(() => null)
+        : api('GET', `/reports/summary/${p.id}`, null, { silent: true }).catch(() => null);
+      const rows = await Promise.all([
+        api('GET', `/projects/${p.id}/iso-documents`, null, { silent: true }).catch(() => null),
+        api('GET', `/projects/${p.id}/documents`, null, { silent: true }).catch(() => []),
+        api('GET', `/projects/${p.id}/main-con-fac`, null, { silent: true }).catch(() => null),
+        summaryP,
+      ]);
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      [board, legacyRaw, facData, summaryEarly] = rows;
+    }
 
     let merged = [];
     try {
@@ -305,8 +323,8 @@ const ProjectDashboard = {
     if (calcHost) {
       try {
         const summary = summaryEarly
-          || await (typeof App.fetchProjectSummary === 'function'
-            ? App.fetchProjectSummary(p.id, { silent: true })
+          || await (typeof LoadPerf !== 'undefined'
+            ? LoadPerf.fetchProjectSummary(p.id, { silent: true })
             : api('GET', `/reports/summary/${p.id}`, null, { silent: true }));
         if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
         const calc = summary?.contract_calc;

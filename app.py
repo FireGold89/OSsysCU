@@ -984,6 +984,23 @@ def _iso_disk_filename(doc_slot, original_filename):
     return f"{label}_{date}_{uid}.{ext}"
 
 
+@app.route('/api/projects/<int:project_id>/dashboard-overview', methods=['GET'])
+def project_dashboard_overview(project_id):
+    """項目概覽一次載入：ISO 板、legacy 文件、主合約 FAC、財務 summary（減少首屏 round-trip）"""
+    if not db.get_project(project_id):
+        return resp(error='項目不存在', status=404)
+    board = db.get_iso_documents_board(project_id)
+    summary = db.get_project_summary(project_id)
+    if not board or not summary:
+        return resp(error='項目不存在', status=404)
+    return resp({
+        'iso_board': board,
+        'documents': db.get_project_documents(project_id),
+        'main_con_fac': db.get_main_con_fac(project_id),
+        'report_summary': summary,
+    })
+
+
 @app.route('/api/projects/<int:project_id>/iso-documents', methods=['GET'])
 def get_iso_documents(project_id):
     board = db.get_iso_documents_board(project_id)
