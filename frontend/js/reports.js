@@ -10,7 +10,9 @@ const Reports = {
     }
     const projectId = p.id;
 
-    this.data = await api('GET', `/reports/summary/${projectId}`);
+    this.data = typeof App.fetchProjectSummary === 'function'
+      ? await App.fetchProjectSummary(projectId, { silent: false })
+      : await api('GET', `/reports/summary/${projectId}`);
     if (!this.data || !App.currentProject || App.currentProject.id != projectId) return;
     if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
 

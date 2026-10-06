@@ -2041,7 +2041,11 @@ const SC = {
       return;
     }
     const projectId = p.id;
-    this.data = await api('GET', `/projects/${projectId}/subcontractors`) || [];
+    if (App.scList?.length && App.currentProject?.id == projectId) {
+      this.data = App.scList;
+    } else {
+      this.data = await api('GET', `/projects/${projectId}/subcontractors`) || [];
+    }
     if (!App.currentProject || App.currentProject.id != projectId) return;
     if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
     this.filtered = [...this.data];

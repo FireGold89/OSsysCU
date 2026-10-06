@@ -4,6 +4,12 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261006-load-perf` · 分支 `v2/portfolio`
+
+### 改善
+- **首屏載入**：`/reports/summary` 共用快取；項目概覽 ISO／文件／FAC／summary 並行；換項目時縮減背景預載（idle 再載項目視角）；分判清單重用 `App.scList`
+- **項目概覽**：移除體驗版；舊 `localStorage` `ux` 自動改回原主題
+
 `APP_VERSION`: `v2-20261005-qingxin-layout` · 分支 `v2/portfolio`
 
 ### 新增

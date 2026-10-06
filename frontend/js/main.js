@@ -1437,6 +1437,51 @@ const App = {
   projects: [],
   scList: [],
   _projectSwitchSeq: 0,
+  _summaryCache: { projectId: null, data: null, promise: null },
+
+  invalidateProjectSummaryCache(projectId) {
+    const pid = projectId == null ? null : Number(projectId);
+    if (pid == null || this._summaryCache.projectId === pid) {
+      this._summaryCache = { projectId: null, data: null, promise: null };
+    }
+  },
+
+  /** 合併 /reports/summary 請求（項目概覽 · 項目視角 · 報表共用） */
+  fetchProjectSummary(projectId, { silent = true } = {}) {
+    const pid = Number(projectId);
+    if (!pid) return Promise.resolve(null);
+    const cache = this._summaryCache;
+    if (cache.projectId === pid && cache.data) return Promise.resolve(cache.data);
+    if (cache.projectId === pid && cache.promise) return cache.promise;
+    cache.projectId = pid;
+    cache.data = null;
+    cache.promise = api('GET', `/reports/summary/${pid}`, null, { silent })
+      .then((data) => {
+        if (cache.projectId === pid && App.currentProject?.id === pid) {
+          cache.data = data;
+        }
+        return data;
+      })
+      .catch((err) => {
+        if (cache.projectId === pid) cache.promise = null;
+        throw err;
+      })
+      .finally(() => {
+        if (cache.projectId === pid) cache.promise = null;
+      });
+    return cache.promise;
+  },
+
+  _scheduleIdle(fn, timeoutMs = 2800) {
+    const run = () => {
+      try { fn(); } catch (_) { /* ignore */ }
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: timeoutMs });
+    } else {
+      setTimeout(run, Math.min(1200, timeoutMs));
+    }
+  },
 
   async init() {
     VaultEntry.showHoldOpenFromLogin();
@@ -1464,8 +1509,7 @@ const App = {
       if (path) DocViewer.open(path, title);
     });
 
-    await this.syncDeploymentBadge();
-    await this.loadProjects();
+    await Promise.all([this.syncDeploymentBadge(), this.loadProjects()]);
     document.getElementById('projectSelect').addEventListener('change', (e) => {
       this.selectProject(e.target.value);
     });
@@ -1529,9 +1573,11 @@ const App = {
 
   async selectProject(id) {
     const switchSeq = ++this._projectSwitchSeq;
+    const prevId = this.currentProject?.id;
     showContentLoading('載入項目資料…');
     try {
       if (!id) {
+        this.invalidateProjectSummaryCache();
         this.currentProject = null;
         this.scList = [];
         localStorage.removeItem('qs_project_id');
@@ -1547,6 +1593,7 @@ const App = {
         await this._refreshProjectViews(switchSeq);
         return;
       }
+      if (String(prevId) !== String(id)) this.invalidateProjectSummaryCache();
       const fresh = await api('GET', `/projects/${id}`);
       if (!fresh || switchSeq !== this._projectSwitchSeq) return;
       this.currentProject = fresh;
@@ -1563,7 +1610,11 @@ const App = {
       this._closeProjectModals();
       this._resetProjectFilters();
 
-      this.scList = await api('GET', `/projects/${id}/subcontractors`) || [];
+      const [scList] = await Promise.all([
+        api('GET', `/projects/${id}/subcontractors`).then((r) => r || []),
+        this.fetchProjectSummary(id, { silent: true }).catch(() => null),
+      ]);
+      this.scList = scList;
       if (switchSeq !== this._projectSwitchSeq) return;
 
       if (this._getActivePage() === 'project-settlement') {
@@ -1654,16 +1705,11 @@ const App = {
     }
     if (switchSeq !== this._projectSwitchSeq) return;
 
-    const bgLoads = [];
-    if (active !== 'project-lens') bgLoads.push(Dashboard.load(switchSeq));
-    if (active !== 'dashboard') bgLoads.push(ProjectDashboard.load(switchSeq));
-    if (active !== 'payments') bgLoads.push(Payments.load(switchSeq));
-    bgLoads.push(SC.load(switchSeq));
-    if (active !== 'ip-period') bgLoads.push(IpPeriod.load(switchSeq));
-    if (active !== 'reports') bgLoads.push(Reports.load(switchSeq));
-    if (bgLoads.length) {
-      Promise.all(bgLoads).catch(() => {});
-    }
+    // 首屏只載當前頁；其餘延後 idle 預載（減輕第一次進站 API 洪峰）
+    this._scheduleIdle(() => {
+      if (switchSeq !== this._projectSwitchSeq || !this.currentProject?.id) return;
+      if (active !== 'project-lens') Dashboard.load(switchSeq).catch(() => {});
+    });
 
     if (switchSeq !== this._projectSwitchSeq) return;
     if (active === 'iso-docs') IsoDocs.load();
@@ -1939,7 +1985,7 @@ const Dashboard = {
     if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
 
     const statsP = this.loadCompanyFacStats();
-    const summaryP = api('GET', `/reports/summary/${projectId}`, null, { silent: true });
+    const summaryP = App.fetchProjectSummary(projectId, { silent: true });
     const facP = this.loadProjectFac(projectId, switchSeq);
 
     const summary = await summaryP;

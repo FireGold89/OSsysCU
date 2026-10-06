@@ -51,14 +51,30 @@ const ProjectDashboard = {
 
   _normalizeLayoutMode(raw) {
     const m = (raw || '').trim().toLowerCase();
+    if (m === 'ux') return 'classic';
     if (m === 'pro' || m === 'fresh') return m;
     return 'classic';
+  },
+
+  _projectNameFields(p) {
+    let nameZh = p.project_name_zh || '';
+    let nameEn = p.project_name_en || '';
+    if (!nameZh && !nameEn && p.project_name) {
+      const parts = projectNameParts(p);
+      nameZh = parts.zh;
+      nameEn = parts.en;
+    }
+    return { nameZh, nameEn };
   },
 
   initLayoutToggle() {
     if (this._layoutInited) return;
     this._layoutInited = true;
-    const saved = localStorage.getItem(this.LAYOUT_KEY);
+    let saved = localStorage.getItem(this.LAYOUT_KEY);
+    if (saved === 'ux') {
+      saved = 'classic';
+      localStorage.setItem(this.LAYOUT_KEY, 'classic');
+    }
     this.setLayout(this._normalizeLayoutMode(saved), { persist: false });
   },
 
@@ -126,13 +142,7 @@ const ProjectDashboard = {
 
   _renderProLayout(p, facDates, merged) {
     const code = p.quotation_no || p.project_code || '—';
-    let nameZh = p.project_name_zh || '';
-    let nameEn = p.project_name_en || '';
-    if (!nameZh && !nameEn && p.project_name) {
-      const parts = projectNameParts(p);
-      nameZh = parts.zh;
-      nameEn = parts.en;
-    }
+    const { nameZh, nameEn } = this._projectNameFields(p);
     this._setText('pdProCode', code);
     this._setText('pdProNameZh', nameZh || '—');
     this._setText('pdProNameEn', nameEn || '—');
@@ -253,31 +263,29 @@ const ProjectDashboard = {
       notesEl.classList.toggle('is-empty', !notes);
     }
 
+    const summaryP = typeof App.fetchProjectSummary === 'function'
+      ? App.fetchProjectSummary(p.id, { silent: true }).catch(() => null)
+      : api('GET', `/reports/summary/${p.id}`, null, { silent: true }).catch(() => null);
+
+    const [board, legacyRaw, facData, summaryEarly] = await Promise.all([
+      api('GET', `/projects/${p.id}/iso-documents`, null, { silent: true }).catch(() => null),
+      api('GET', `/projects/${p.id}/documents`, null, { silent: true }).catch(() => []),
+      api('GET', `/projects/${p.id}/main-con-fac`, null, { silent: true }).catch(() => null),
+      summaryP,
+    ]);
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+
     let merged = [];
     try {
-      let mainFiles = {};
-      let legacySot = [];
-      try {
-        const board = await api('GET', `/projects/${p.id}/iso-documents`, null, { silent: true });
-        mainFiles = board?.main_files || {};
-      } catch (_) { /* ignore */ }
-      try {
-        const legacy = (await api('GET', `/projects/${p.id}/documents`, null, { silent: true })) || [];
-        legacySot = legacy.filter((d) => d.doc_category === 'attachment3_sot_sor');
-      } catch (_) { /* ignore */ }
+      const mainFiles = board?.main_files || {};
+      const legacy = legacyRaw || [];
+      const legacySot = legacy.filter((d) => d.doc_category === 'attachment3_sot_sor');
       merged = typeof ProjIsoAttach !== 'undefined'
         ? ProjIsoAttach.mergeDocs(legacySot, mainFiles, { isoOnly: true })
         : legacySot;
     } catch (_) {
       merged = [];
     }
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-
-    let facData = null;
-    try {
-      facData = await api('GET', `/projects/${p.id}/main-con-fac`, null, { silent: true });
-    } catch (_) { /* ignore */ }
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
 
     const facDates = typeof MainConFac !== 'undefined' && MainConFac.overviewDates
       ? MainConFac.overviewDates(facData, p)
@@ -296,7 +304,10 @@ const ProjectDashboard = {
     const calcHost = document.getElementById('pdContractCalc');
     if (calcHost) {
       try {
-        const summary = await api('GET', `/reports/summary/${p.id}`, null, { silent: true });
+        const summary = summaryEarly
+          || await (typeof App.fetchProjectSummary === 'function'
+            ? App.fetchProjectSummary(p.id, { silent: true })
+            : api('GET', `/reports/summary/${p.id}`, null, { silent: true }));
         if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
         const calc = summary?.contract_calc;
         if (calc && typeof contractCalcTableHtml === 'function') {
