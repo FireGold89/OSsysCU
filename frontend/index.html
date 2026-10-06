@@ -14,6 +14,10 @@
       if (localStorage.getItem('qs_sidebar_collapsed') === '1') {
         document.documentElement.classList.add('sidebar-collapsed');
       }
+      var ts = parseFloat(localStorage.getItem('qs_text_scale'));
+      if (Number.isFinite(ts) && ts > 0) {
+        document.documentElement.style.setProperty('--ui-zoom', String(ts));
+      }
     })();
   </script>
   <style>
@@ -27,7 +31,7 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=v2-20261005-no-ux">
+    <link rel="stylesheet" href="css/style.css?v=v2-20261006-text-scale">
   <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -202,9 +206,16 @@
         <div id="deploymentTierBadge" style="display:none" title="非正式生產環境">
           <span class="badge badge-warning" id="deploymentTierLabel">V2 試用環境</span>
         </div>
-        <div class="theme-toggle" role="group" aria-label="主題模式">
-          <button type="button" class="theme-toggle-btn" data-theme-pick="light" title="淺色模式" aria-label="淺色模式">☀️</button>
-          <button type="button" class="theme-toggle-btn" data-theme-pick="dark" title="深色模式" aria-label="深色模式">🌙</button>
+        <div class="topbar-display-tools">
+          <div class="theme-toggle" role="group" aria-label="主題模式">
+            <button type="button" class="theme-toggle-btn" data-theme-pick="light" title="淺色模式" aria-label="淺色模式">☀️</button>
+            <button type="button" class="theme-toggle-btn" data-theme-pick="dark" title="深色模式" aria-label="深色模式">🌙</button>
+          </div>
+          <div class="text-scale-toggle" role="group" aria-label="文字大小">
+            <button type="button" class="text-scale-btn" id="textScaleDown" title="縮小文字" aria-label="縮小文字">A−</button>
+            <span class="text-scale-label" id="textScaleLabel" aria-live="polite">100%</span>
+            <button type="button" class="text-scale-btn" id="textScaleUp" title="放大文字" aria-label="放大文字">A+</button>
+          </div>
         </div>
         <div id="currentProjectBadge" style="display:none">
           <span class="badge badge-info" id="currentProjectCode"></span>
@@ -3687,7 +3698,7 @@
 
 <!-- Scripts -->
 <script src="js/load_perf.js?v=v2-20261006-init-guard"></script>
-<script src="js/main.js?v=v2-20261006-nav-amt"></script>
+<script src="js/main.js?v=v2-20261006-text-scale"></script>
 <script src="js/nav_layout.js?v=v2-20261003-proj-dash"></script>
 <script src="js/col_picker.js?v=v2-20260828-p3"></script>
 <script src="js/iso_docs.js?v=v2-20261006-load-perf-bundle"></script>

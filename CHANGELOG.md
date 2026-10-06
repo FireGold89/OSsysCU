@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261006-text-scale` · 分支 `v2/portfolio`
+
+### 改善
+- **頂欄**：日夜模式旁文字放大／縮小（90%–125%，localStorage `qs_text_scale`）
+
 `APP_VERSION`: `v2-20261006-nav-amt` · 分支 `v2/portfolio`
 
 ### 改善

@@ -83,6 +83,59 @@ const Theme = {
   },
 };
 
+/** 頂欄文字縮放（localStorage qs_text_scale） */
+const TextScale = {
+  STORAGE_KEY: 'qs_text_scale',
+  LEVELS: [0.9, 1, 1.1, 1.25],
+  _index: 1,
+
+  init() {
+    const saved = parseFloat(localStorage.getItem(this.STORAGE_KEY));
+    let idx = this.LEVELS.indexOf(saved);
+    if (idx < 0) {
+      idx = this.LEVELS.findIndex((z) => Math.abs(z - saved) < 0.001);
+    }
+    if (idx < 0) idx = 1;
+    this._index = idx;
+    this.apply(this.LEVELS[idx], { persist: false });
+    document.getElementById('textScaleDown')?.addEventListener('click', () => this.step(-1));
+    document.getElementById('textScaleUp')?.addEventListener('click', () => this.step(1));
+    this._syncButtons();
+  },
+
+  step(delta) {
+    const next = Math.max(0, Math.min(this.LEVELS.length - 1, this._index + delta));
+    if (next === this._index) return;
+    this._index = next;
+    this.apply(this.LEVELS[next], { persist: true });
+  },
+
+  apply(zoom, { persist = true } = {}) {
+    const z = Number(zoom);
+    if (!Number.isFinite(z) || z <= 0) return;
+    document.documentElement.style.setProperty('--ui-zoom', String(z));
+    if (persist) {
+      try { localStorage.setItem(this.STORAGE_KEY, String(z)); } catch (_) { /* ignore */ }
+    }
+    const label = document.getElementById('textScaleLabel');
+    if (label) label.textContent = `${Math.round(z * 100)}%`;
+    this._syncButtons();
+    if (typeof Dashboard !== 'undefined' && Dashboard.charts && App.currentProject) {
+      const page = document.getElementById('page-project-lens');
+      if (page?.classList.contains('active') && Dashboard._lastScStats) {
+        Dashboard.renderCharts(Dashboard._lastScStats);
+      }
+    }
+  },
+
+  _syncButtons() {
+    const down = document.getElementById('textScaleDown');
+    const up = document.getElementById('textScaleUp');
+    if (down) down.disabled = this._index <= 0;
+    if (up) up.disabled = this._index >= this.LEVELS.length - 1;
+  },
+};
+
 function uploadUrl(filename) {
   if (!filename) return null;
   const parts = String(filename).replace(/\\/g, '/').split('/').filter(Boolean).map(encodeURIComponent);
@@ -1533,6 +1586,7 @@ const App = {
     if (!ok) return;
     VaultEntry.playIfNeeded();
     Theme.init();
+    TextScale.init();
     Sidebar.init();
     if (typeof NavLayout !== 'undefined') NavLayout.init();
     ModalA11y.init();
