@@ -480,34 +480,57 @@ def eng_intake_rematch_api():
         return resp(error=f'重新比對失敗: {e}', status=500)
 
 
+def _eng_signoff_docx_and_pdf(payload, template_path=None):
+    """Word 與 PDF 共用同一份填好的 Template.docx（對齊 Ref/投標合約會簽表Template）。"""
+    from signoff_generator import (
+        _signoff_pdf_engine,
+        convert_signoff_docx_to_pdf,
+        generate_signoff_docx,
+        generate_signoff_pdf,
+    )
+    if _signoff_pdf_engine() == 'reportlab':
+        docx_bytes = generate_signoff_docx(payload, template_path=template_path)
+        pdf_bytes = generate_signoff_pdf(payload, template_path=template_path, docx_bytes=docx_bytes)
+        return docx_bytes, pdf_bytes, 'reportlab'
+    docx_bytes = generate_signoff_docx(payload, template_path=template_path)
+    pdf_bytes, source = convert_signoff_docx_to_pdf(docx_bytes)
+    if pdf_bytes:
+        return docx_bytes, pdf_bytes, source or 'docx'
+    pdf_bytes = generate_signoff_pdf(payload, template_path=template_path, docx_bytes=docx_bytes)
+    return docx_bytes, pdf_bytes, 'reportlab-fallback'
+
+
 @app.route('/api/eng/signoff/preview', methods=['POST'])
 def eng_signoff_preview_api():
     """產生 PDF 供預覽（inline，非下載）"""
     from nn1_importer import build_signoff_payload
-    from signoff_generator import generate_signoff_pdf
+    import startup
     body = request.json or {}
     item = body.get('item') or body
     pm = body.get('pm') or {}
     content = body.get('content') or {}
     try:
         payload = build_signoff_payload(item, pm_overrides=pm, content_overrides=content)
-        raw = generate_signoff_pdf(payload)
+        _docx, raw, pdf_source = _eng_signoff_docx_and_pdf(payload)
     except Exception as e:
         return resp(error=f'預覽失敗: {e}', status=500)
     qno = (payload.get('quotation_no') or 'signoff').replace('/', '_')
     safe = re.sub(r'[^\w\-]+', '_', qno)
-    return send_file(
+    response = send_file(
         BytesIO(raw),
         mimetype='application/pdf',
         as_attachment=False,
         download_name=f'會簽表_{safe}.pdf',
     )
+    response.headers['X-Signoff-Pdf-Source'] = pdf_source
+    response.headers['X-App-Version'] = startup.APP_VERSION
+    return response
 
 
 @app.route('/api/eng/signoff/generate', methods=['POST'])
 def eng_signoff_generate_api():
-    from nn1_importer import build_signoff_payload, resolve_signoff_template
-    from signoff_generator import generate_signoff_docx, generate_signoff_pdf
+    from nn1_importer import build_signoff_payload
+    import startup
     body = request.json or {}
     item = body.get('item') or body
     pm = body.get('pm') or {}
@@ -519,22 +542,27 @@ def eng_signoff_generate_api():
         return resp(error=f'資料組裝失敗: {e}', status=400)
     qno = (payload.get('quotation_no') or 'signoff').replace('/', '_')
     safe = re.sub(r'[^\w\-]+', '_', qno)
+    tpl = body.get('template_path')
     try:
+        docx_bytes, pdf_bytes, pdf_source = _eng_signoff_docx_and_pdf(payload, template_path=tpl)
         if fmt == 'pdf':
-            raw = generate_signoff_pdf(payload)
-            return send_file(
-                BytesIO(raw),
+            response = send_file(
+                BytesIO(pdf_bytes),
                 mimetype='application/pdf',
                 as_attachment=True,
                 download_name=f'會簽表_{safe}.pdf',
             )
-        raw = generate_signoff_docx(payload, template_path=body.get('template_path'))
-        return send_file(
-            BytesIO(raw),
+            response.headers['X-Signoff-Pdf-Source'] = pdf_source
+            response.headers['X-App-Version'] = startup.APP_VERSION
+            return response
+        response = send_file(
+            BytesIO(docx_bytes),
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             as_attachment=True,
             download_name=f'會簽表_{safe}.docx',
         )
+        response.headers['X-App-Version'] = startup.APP_VERSION
+        return response
     except Exception as e:
         return resp(error=f'出表失敗: {e}', status=500)
 

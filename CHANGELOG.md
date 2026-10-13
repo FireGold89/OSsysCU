@@ -4,10 +4,20 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261013-proj-switch` · 分支 `v2/portfolio`
+
+### 修正
+- **切換項目載入卡住（Chrome）**：新切換會 abort 舊請求、清空 LoadPerf 快取避免重用 hung promise；整段 28s 逾時；overview/summary 單請求 22s 逾時；失敗時關閉「載入中」並提示。
+
+`APP_VERSION`: `v2-20261006-signoff-tpl` · 分支 `v2/portfolio`
+
+### 修正
+- **會簽出表**：預覽 PDF／下載 PDF／下載 Word **共用同一份填好的 Template.docx**（對齊 `Ref/投標合約會簽表Template`）；PDF 預設 **docx → Word 或 LibreOffice**，不再預設 ReportLab。Linux 預設關閉 LO「壓成單頁」（`SIGNOFF_LO_COMPACT=1` 才啟用）。轉檔失敗回傳明確錯誤（可選 `SIGNOFF_PDF_FALLBACK_REPORTLAB=1`）。
+
 `APP_VERSION`: `v2-20261006-signoff-lo` · 分支 `v2/portfolio`
 
 ### 修正
-- **會簽 PDF（V2/Zeabur）**：Docker 安裝 LibreOffice headless + 字型，PDF 由 Template.docx 轉換（與本機 Word 版式一致；不再預設 ReportLab 五列表）
+- **會簽 PDF（V2/Zeabur）**：Docker 安裝 LibreOffice headless + 字型，供 `SIGNOFF_PDF_ENGINE=word` 時由 Template.docx 轉 PDF
 
 `APP_VERSION`: `v2-20261006-text-scale` · 分支 `v2/portfolio`
 

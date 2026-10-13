@@ -747,7 +747,7 @@ const EngIntake = {
         <button type="button" class="btn btn-secondary btn-sm" onclick="EngIntake.download('docx')">📄 下載 Word</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="EngIntake.download('pdf')">📑 下載 PDF</button>
       </div>
-      <p class="form-hint" style="margin-top:10px">編輯後請先「儲存」，再預覽或下載；換項目前未儲存會提示。Template：<code>投標合約會簽表Template.docx</code></p>`;
+      <p class="form-hint" style="margin-top:10px">編輯後請先「儲存」，再預覽或下載；換項目前未儲存會提示。預覽 PDF／下載 PDF 與 Word 均來自同一 <code>投標合約會簽表Template.docx</code>（版式對照 <code>Ref/投標合約會簽表Template.pdf</code>）。</p>`;
     this._editorSnapshot = this._snapshotItem(it);
     this._dirty = false;
     this._updateEditorStatus();

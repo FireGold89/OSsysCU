@@ -1197,6 +1197,13 @@ async function api(method, path, body, opts = {}) {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
     };
+    const switchSig = opts.useProjectSwitchSignal
+      && typeof App !== 'undefined'
+      && App._projectSwitchAbort
+      ? App._projectSwitchAbort.signal
+      : null;
+    const sig = opts.signal || switchSig;
+    if (sig) fetchOpts.signal = sig;
     if (body) fetchOpts.body = JSON.stringify(body);
     const r = await fetch(API + path, fetchOpts);
     const text = await r.text();
@@ -1224,6 +1231,7 @@ async function api(method, path, body, opts = {}) {
     }
     return json.data;
   } catch (e) {
+    if (e?.name === 'AbortError') throw e;
     if (!silent) toast(e.message, 'error');
     throw e;
   }
@@ -1535,8 +1543,16 @@ const App = {
   projects: [],
   scList: [],
   _projectSwitchSeq: 0,
+  _projectSwitchAbort: null,
   PROJECT_ID_STORAGE_KEY: 'qs_project_id',
   APP_BUILD_STORAGE_KEY: 'qs_app_build',
+
+  _abortProjectSwitch() {
+    if (this._projectSwitchAbort) {
+      try { this._projectSwitchAbort.abort(); } catch (_) { /* ignore */ }
+    }
+    this._projectSwitchAbort = new AbortController();
+  },
 
   _pickInitialProjectId() {
     const saved = localStorage.getItem(this.PROJECT_ID_STORAGE_KEY);
@@ -1668,11 +1684,12 @@ const App = {
 
   async selectProject(id) {
     const switchSeq = ++this._projectSwitchSeq;
-    const prevId = this.currentProject?.id;
+    this._abortProjectSwitch();
+    if (typeof LoadPerf !== 'undefined') LoadPerf.invalidateProjectCaches();
     showContentLoading('載入項目資料…');
-    try {
+
+    const run = async () => {
       if (!id) {
-        LoadPerf.invalidateProjectSummary();
         this.currentProject = null;
         this.scList = [];
         localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
@@ -1688,8 +1705,7 @@ const App = {
         await this._refreshProjectViews(switchSeq);
         return;
       }
-      if (String(prevId) !== String(id)) LoadPerf.invalidateProjectSummary();
-      const fresh = await api('GET', `/projects/${id}`);
+      const fresh = await api('GET', `/projects/${id}`, null, { useProjectSwitchSignal: true });
       if (!fresh || switchSeq !== this._projectSwitchSeq) return;
       this.currentProject = fresh;
       const idx = this.projects.findIndex(p => p.id == id);
@@ -1706,7 +1722,7 @@ const App = {
       this._resetProjectFilters();
 
       const [scList] = await Promise.all([
-        api('GET', `/projects/${id}/subcontractors`).then((r) => r || []),
+        api('GET', `/projects/${id}/subcontractors`, null, { useProjectSwitchSignal: true }).then((r) => r || []),
         LoadPerf.fetchProjectSummary(id, { silent: true }).catch(() => null),
       ]);
       this.scList = scList;
@@ -1718,6 +1734,25 @@ const App = {
 
       await this._refreshProjectViews(switchSeq);
       if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
+    };
+
+    const timeoutMs = typeof LoadPerf !== 'undefined'
+      ? LoadPerf.PROJECT_SWITCH_TIMEOUT_MS
+      : 28000;
+    try {
+      if (typeof LoadPerf !== 'undefined' && LoadPerf.withTimeout) {
+        await LoadPerf.withTimeout(run(), timeoutMs, '切換項目逾時');
+      } else {
+        await run();
+      }
+    } catch (e) {
+      if (switchSeq !== this._projectSwitchSeq) return;
+      if (e?.name === 'AbortError') return;
+      if (e?.code === 'LOAD_TIMEOUT') {
+        toast('切換項目逾時，請再試一次；若僅 Chrome 發生可清除本站快取或改用 Edge', 'warning');
+        return;
+      }
+      toast(e?.message || '載入項目失敗', 'error');
     } finally {
       if (switchSeq === this._projectSwitchSeq) hideContentLoading();
     }

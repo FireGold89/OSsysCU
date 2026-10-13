@@ -992,8 +992,13 @@ def _compact_document_for_single_page(xml: str) -> str:
     )
 
 
+def _lo_compact_enabled() -> bool:
+    """預設關閉：壓成單頁會偏離 Ref Template.pdf（2 頁）版式。"""
+    return os.environ.get('SIGNOFF_LO_COMPACT', '').strip().lower() in ('1', 'true', 'yes')
+
+
 def _patch_docx_for_linux_pdf(docx_bytes: bytes) -> bytes:
-    """Zeabur：字型對應 + 方格字元 + 單頁壓版，使 LO 轉 PDF 接近本機 Word。"""
+    """Zeabur：字型對應 + 方格字元；版面以 Ref/投標合約會簽表Template 為準。"""
     if sys.platform == 'win32':
         return docx_bytes
     in_buf = BytesIO(docx_bytes)
@@ -1012,7 +1017,8 @@ def _patch_docx_for_linux_pdf(docx_bytes: bytes) -> bytes:
                         text = _normalize_unicode_checkbox_runs(
                             text, font=CHECKBOX_FONT_LINUX,
                         )
-                        text = _compact_document_for_single_page(text)
+                        if _lo_compact_enabled():
+                            text = _compact_document_for_single_page(text)
                     data = text.encode('utf-8')
                 zout.writestr(item, data)
     return out_buf.getvalue()
@@ -1105,19 +1111,55 @@ def _docx_bytes_to_pdf_libreoffice(docx_bytes: bytes) -> bytes | None:
     return None
 
 
-def generate_signoff_pdf(payload, template_path=None):
-    docx_bytes = generate_signoff_docx(payload, template_path=template_path)
+def _signoff_pdf_engine() -> str:
+    """template（預設）＝填 Template.docx 後轉 PDF；reportlab＝僅開發／緊急 fallback。"""
+    return (os.environ.get('SIGNOFF_PDF_ENGINE') or 'template').strip().lower()
+
+
+def convert_signoff_docx_to_pdf(docx_bytes: bytes) -> tuple[bytes | None, str]:
+    """將已填好的會簽 docx 轉 PDF。回傳 (bytes, source)；source 為 docx-word / docx-lo / 空。"""
     pdf = _docx_bytes_to_pdf_win(docx_bytes)
     if pdf:
-        return pdf
+        return pdf, 'docx-word'
     pdf = _docx_bytes_to_pdf_libreoffice(docx_bytes)
     if pdf:
-        return pdf
-    logging.warning(
-        'signoff PDF: Word/LibreOffice 轉換失敗，改用 ReportLab 簡版；'
-        'Linux 請確認已安裝 libreoffice-writer-nogui 與 assets/signoff/signoff_template.docx'
+        return pdf, 'docx-lo'
+    return None, ''
+
+
+def generate_signoff_pdf(payload, template_path=None, *, docx_bytes: bytes | None = None):
+    """
+    會簽 PDF：與 Ref/投標合約會簽表Template 相同來源（填 docx → Word 或 LibreOffice）。
+    預覽與「下載 PDF」應共用同一 docx_bytes 以保證一致。
+    """
+    engine = _signoff_pdf_engine()
+    if engine == 'reportlab':
+        from signoff_pdf import generate_signoff_pdf_reportlab
+        return generate_signoff_pdf_reportlab(payload)
+
+    docx_bytes = docx_bytes if docx_bytes is not None else generate_signoff_docx(
+        payload, template_path=template_path,
     )
-    return _generate_signoff_pdf_reportlab(payload)
+    pdf, _source = convert_signoff_docx_to_pdf(docx_bytes)
+    if pdf:
+        return pdf
+
+    allow_rl = os.environ.get('SIGNOFF_PDF_FALLBACK_REPORTLAB', '').strip().lower() in (
+        '1', 'true', 'yes',
+    )
+    if allow_rl:
+        logging.warning('signoff PDF: Template 轉檔失敗，SIGNOFF_PDF_FALLBACK_REPORTLAB 啟用 ReportLab')
+        from signoff_pdf import generate_signoff_pdf_reportlab
+        try:
+            return generate_signoff_pdf_reportlab(payload)
+        except Exception:
+            return _generate_signoff_pdf_reportlab(payload)
+
+    raise RuntimeError(
+        '會簽 PDF 轉換失敗：請在本機安裝 Microsoft Word（含 pywin32），'
+        '或於 Linux/Docker 確認已安裝 libreoffice-writer-nogui。'
+        '版面以 Ref/投標合約會簽表Template.docx 為準，無法使用簡化 PDF 代替。'
+    )
 
 
 def _generate_signoff_pdf_reportlab(payload):

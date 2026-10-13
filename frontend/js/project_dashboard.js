@@ -280,13 +280,14 @@ const ProjectDashboard = {
     }
 
     if (!board && summaryEarly == null) {
+      const apiOpt = { silent: true, useProjectSwitchSignal: true };
       const summaryP = typeof LoadPerf !== 'undefined'
         ? LoadPerf.fetchProjectSummary(p.id, { silent: true }).catch(() => null)
-        : api('GET', `/reports/summary/${p.id}`, null, { silent: true }).catch(() => null);
+        : api('GET', `/reports/summary/${p.id}`, null, apiOpt).catch(() => null);
       const rows = await Promise.all([
-        api('GET', `/projects/${p.id}/iso-documents`, null, { silent: true }).catch(() => null),
-        api('GET', `/projects/${p.id}/documents`, null, { silent: true }).catch(() => []),
-        api('GET', `/projects/${p.id}/main-con-fac`, null, { silent: true }).catch(() => null),
+        api('GET', `/projects/${p.id}/iso-documents`, null, apiOpt).catch(() => null),
+        api('GET', `/projects/${p.id}/documents`, null, apiOpt).catch(() => []),
+        api('GET', `/projects/${p.id}/main-con-fac`, null, apiOpt).catch(() => null),
         summaryP,
       ]);
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;

@@ -10,6 +10,10 @@ const LoadPerf = {
   BUNDLE_SLOT: 'dashboard-overview',
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
   AUTO_PROJECT_LOAD_TIMEOUT_MS: 45000,
+  /** 切換項目整段流程逾時（避免 Chrome 等瀏覽器 hung fetch 一直顯示載入中） */
+  PROJECT_SWITCH_TIMEOUT_MS: 28000,
+  /** dashboard-overview / summary 單次請求逾時 */
+  OVERVIEW_FETCH_TIMEOUT_MS: 22000,
 
   _MUTATION_PATH_RE: [
     /^\/payments(\/|$)/,
@@ -119,13 +123,27 @@ const LoadPerf = {
     return typeof App !== 'undefined' && App.currentProject?.id === Number(pid);
   },
 
+  _apiGet(path, { silent = true, timeoutMs = 0 } = {}) {
+    const run = () => api('GET', path, null, { silent, useProjectSwitchSignal: true });
+    if (timeoutMs > 0) {
+      return this.withTimeout(run(), timeoutMs, '載入逾時').catch((err) => {
+        if (err.code === 'LOAD_TIMEOUT') return null;
+        throw err;
+      });
+    }
+    return run();
+  },
+
   fetchProjectSummary(projectId, { silent = true } = {}) {
     const pid = Number(projectId);
     if (!pid) return Promise.resolve(null);
     return this.fetchDeduped(
       this.SUMMARY_SLOT,
       pid,
-      () => api('GET', `/reports/summary/${pid}`, null, { silent }),
+      () => this._apiGet(`/reports/summary/${pid}`, {
+        silent,
+        timeoutMs: this.OVERVIEW_FETCH_TIMEOUT_MS,
+      }),
       { shouldCommit: (sid) => this._isCurrentProject(sid) },
     );
   },
@@ -136,7 +154,10 @@ const LoadPerf = {
     return this.fetchDeduped(
       this.BUNDLE_SLOT,
       pid,
-      () => api('GET', `/projects/${pid}/dashboard-overview`, null, { silent }),
+      () => this._apiGet(`/projects/${pid}/dashboard-overview`, {
+        silent,
+        timeoutMs: this.OVERVIEW_FETCH_TIMEOUT_MS,
+      }),
       { shouldCommit: (sid) => this._isCurrentProject(sid) },
     ).then((bundle) => {
       if (bundle?.report_summary) this.seedProjectSummary(pid, bundle.report_summary);
