@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261013-iso-index` · 分支 `v2/portfolio`
+
+### 修正
+- **Zeabur 啟動崩潰**：`init_db` 不再重建 ISO 槽位 UNIQUE 索引（v4 已允許同槽多附件）；避免 `idx_iso_doc_unique_slot` IntegrityError → Gunicorn worker failed to boot。
+
 `APP_VERSION`: `v2-20261013-proj-switch` · 分支 `v2/portfolio`
 
 ### 修正

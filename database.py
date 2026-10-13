@@ -750,13 +750,11 @@ def _migrate_iso_documents(conn):
         )
     """)
     conn.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_iso_doc_unique_slot
-        ON iso_document_files(project_id, scope, IFNULL(subcontractor_id, 0), doc_slot)
-    """)
-    conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_iso_doc_project
         ON iso_document_files(project_id)
     """)
+    # 槽位唯一索引已於 v4 取消（同槽可多附件）；勿再 CREATE UNIQUE，否則既有重複列會令 init_db 崩潰
+    conn.execute("DROP INDEX IF EXISTS idx_iso_doc_unique_slot")
     conn.commit()
 
 
