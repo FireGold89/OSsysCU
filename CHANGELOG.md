@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261014-proj-prefs` · 分支 `v2/portfolio`
+
+### 改善
+- **Chrome 載入卡住**：側欄可關閉「開啟時自動載入上次項目」（`qs_auto_restore_project`）；項目載入逾 12 秒顯示「取消載入／清除記憶並重試」；`index.html` 與全部 `js`／`css` 統一 cache-bust 版本。
+
 `APP_VERSION`: `v2-20261013-iso-index` · 分支 `v2/portfolio`
 
 ### 修正

@@ -31,7 +31,7 @@
     }
   </style>
   <script>document.documentElement.classList.add('auth-pending');</script>
-    <link rel="stylesheet" href="css/style.css?v=v2-20261006-text-scale">
+    <link rel="stylesheet" href="css/style.css?v=v2-20261014-proj-prefs">
   <link rel="stylesheet" href="css/vault-login.css?v=20260827-vault-hold">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -82,6 +82,10 @@
       <select id="projectSelect">
         <option value="">— 請選擇項目 —</option>
       </select>
+      <label class="project-pref-auto-restore" title="關閉可加快 Chrome 首次開啟；仍會記住下拉選單的項目">
+        <input type="checkbox" id="prefAutoRestoreProject" onchange="App.onAutoRestorePrefChange(this.checked)">
+        開啟時自動載入上次項目
+      </label>
     </div>
 
     <nav class="sidebar-nav">
@@ -236,6 +240,13 @@
       <div class="content-loading-overlay" id="contentLoadingOverlay" aria-hidden="true">
         <div class="spinner"></div>
         <span id="contentLoadingHint">載入項目資料…</span>
+        <div class="content-loading-slow-actions" id="contentLoadingSlowActions" hidden>
+          <p class="content-loading-slow-hint">載入時間較長？可取消或清除本機記住的項目後重試。</p>
+          <div class="content-loading-slow-btns">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="App.cancelContentLoading()">取消載入</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="App.clearProjectMemoryAndRetry()">清除記憶並重試</button>
+          </div>
+        </div>
       </div>
 
       <!-- ─── 項目概覽（項目資料唯讀） ─────────── -->
@@ -3697,29 +3708,29 @@
 <input type="file" id="pfImportFile" accept=".xlsx,.xls" style="display:none" onchange="PortfolioCommon.onImportFile(event)">
 
 <!-- Scripts -->
-<script src="js/load_perf.js?v=v2-20261013-proj-switch"></script>
-<script src="js/main.js?v=v2-20261013-proj-switch"></script>
-<script src="js/nav_layout.js?v=v2-20261003-proj-dash"></script>
-<script src="js/col_picker.js?v=v2-20260828-p3"></script>
-<script src="js/iso_docs.js?v=v2-20261006-load-perf-bundle"></script>
-<script src="js/payments.js?v=v2-20261005-ic-sign-v2"></script>
-<script src="js/sc_vo_reg.js?v=v2-20260924-amt-fmt"></script>
-<script src="js/sc_fac.js?v=20260911-sc-fac-p2"></script>
-<script src="js/proj_iso_attach.js?v=v2-20261005-iso-multi"></script>
-<script src="js/projects.js?v=v2-20261006-nav-amt"></script>
-<script src="js/project_dashboard.js?v=v2-20261013-proj-switch"></script>
-<script src="js/main_con_fac.js?v=v2-20261006-load-perf-bundle"></script>
-<script src="js/hk_banks.js?v=20260805c"></script>
-<script src="js/ip_period.js?v=v2-20260925-ip-receipts"></script>
-<script src="js/ocr.js?v=v2-20260924-amt-fmt"></script>
-<script src="js/reports.js?v=v2-20261006-load-perf-bundle"></script>
-<script src="js/ip_reconcile.js?v=20260805a"></script>
-<script src="js/master_trade.js?v=20260813z"></script>
-<script src="js/master_list.js?v=v2-20261005-signoff-master"></script>
-<script src="js/sc_contract_registry.js?v=v2-20260925-scr-label"></script>
-<script src="js/staff.js?v=20260827-staff2"></script>
-<script src="js/portfolio_progress.js?v=v2-20260831-pf-status"></script>
-<script src="js/portfolio_fac.js?v=v2-20260831-pf-status"></script>
-<script src="js/eng_intake.js?v=v2-20261005-signoff-master"></script>
+<script src="js/load_perf.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/main.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/nav_layout.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/col_picker.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/iso_docs.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/payments.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/sc_vo_reg.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/sc_fac.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/proj_iso_attach.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/projects.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/project_dashboard.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/main_con_fac.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/hk_banks.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/ip_period.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/ocr.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/reports.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/ip_reconcile.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/master_trade.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/master_list.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/sc_contract_registry.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/staff.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/portfolio_progress.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/portfolio_fac.js?v=v2-20261014-proj-prefs"></script>
+<script src="js/eng_intake.js?v=v2-20261014-proj-prefs"></script>
 </body>
 </html>

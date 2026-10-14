@@ -1092,14 +1092,34 @@ function hideLoading() {
   document.getElementById('loadingOverlay').classList.remove('show');
 }
 
+const CONTENT_SLOW_LOAD_MS = 12000;
+let _contentLoadingSlowTimer = null;
+
+function _resetContentLoadingSlowUi() {
+  clearTimeout(_contentLoadingSlowTimer);
+  _contentLoadingSlowTimer = null;
+  const content = document.querySelector('.content');
+  content?.classList.remove('content-loading-interactive');
+  const actions = document.getElementById('contentLoadingSlowActions');
+  if (actions) actions.hidden = true;
+}
+
 function showContentLoading(text = '載入項目資料…') {
   const content = document.querySelector('.content');
   const hint = document.getElementById('contentLoadingHint');
   if (hint) hint.textContent = text;
+  _resetContentLoadingSlowUi();
   content?.classList.add('content-loading');
+  _contentLoadingSlowTimer = setTimeout(() => {
+    if (!content?.classList.contains('content-loading')) return;
+    content.classList.add('content-loading-interactive');
+    const actions = document.getElementById('contentLoadingSlowActions');
+    if (actions) actions.hidden = false;
+  }, CONTENT_SLOW_LOAD_MS);
 }
 
 function hideContentLoading() {
+  _resetContentLoadingSlowUi();
   document.querySelector('.content')?.classList.remove('content-loading');
 }
 
@@ -1545,7 +1565,61 @@ const App = {
   _projectSwitchSeq: 0,
   _projectSwitchAbort: null,
   PROJECT_ID_STORAGE_KEY: 'qs_project_id',
+  AUTO_RESTORE_STORAGE_KEY: 'qs_auto_restore_project',
   APP_BUILD_STORAGE_KEY: 'qs_app_build',
+
+  shouldAutoRestoreProject() {
+    return localStorage.getItem(this.AUTO_RESTORE_STORAGE_KEY) !== '0';
+  },
+
+  setAutoRestoreProject(enabled) {
+    localStorage.setItem(this.AUTO_RESTORE_STORAGE_KEY, enabled ? '1' : '0');
+  },
+
+  _initAutoRestorePrefUi() {
+    const cb = document.getElementById('prefAutoRestoreProject');
+    if (cb) cb.checked = this.shouldAutoRestoreProject();
+  },
+
+  onAutoRestorePrefChange(checked) {
+    this.setAutoRestoreProject(checked);
+    toast(
+      checked ? '下次開啟會自動載入上次項目' : '下次開啟不會自動載入；仍可在下拉選單選項目',
+      'info',
+    );
+  },
+
+  cancelContentLoading() {
+    this._projectSwitchSeq += 1;
+    this._abortProjectSwitch();
+    hideContentLoading();
+    toast('已取消載入', 'info');
+  },
+
+  clearProjectMemoryAndRetry() {
+    localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
+    if (typeof LoadPerf !== 'undefined') LoadPerf.invalidateProjectCaches();
+    this._projectSwitchSeq += 1;
+    this._abortProjectSwitch();
+    this.currentProject = null;
+    this.scList = [];
+    const sel = document.getElementById('projectSelect');
+    if (sel) sel.value = '';
+    const badgeWrap = document.getElementById('currentProjectBadge');
+    if (badgeWrap) badgeWrap.style.display = 'none';
+    hideContentLoading();
+    this._syncQuickAddBtn();
+    this._updateProjectSettlementNav();
+    toast('已清除本機記住的項目，請在上方重新選擇', 'success');
+    void this.navigate('dashboard', { skipLoad: true });
+  },
+
+  _applySavedProjectSelectionWithoutLoad() {
+    const saved = localStorage.getItem(this.PROJECT_ID_STORAGE_KEY);
+    if (saved && this.projects.find((p) => p.id == saved)) {
+      document.getElementById('projectSelect').value = saved;
+    }
+  },
 
   _abortProjectSwitch() {
     if (this._projectSwitchAbort) {
@@ -1624,13 +1698,18 @@ const App = {
     });
 
     await Promise.all([this.syncDeploymentBadge(), this.loadProjects()]);
+    this._initAutoRestorePrefUi();
     document.getElementById('projectSelect').addEventListener('change', (e) => {
       this.selectProject(e.target.value);
     });
     this._updateProjectSettlementNav();
     this.navigate('dashboard', { skipLoad: true });
-    const initialId = this._pickInitialProjectId();
-    if (initialId) void this._restoreInitialProject(initialId);
+    if (this.shouldAutoRestoreProject()) {
+      const initialId = this._pickInitialProjectId();
+      if (initialId) void this._restoreInitialProject(initialId);
+    } else {
+      this._applySavedProjectSelectionWithoutLoad();
+    }
   },
 
   async syncDeploymentBadge() {
