@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261014-trial-batch1` · 分支 `v2/portfolio`
+
+### 改善
+- **V2 試行 batch1**：OCR `method=failed` 回 422、前端禁存；項目內發票號 `create_payment`/`update_payment` 後端去重（409）；切換項目逾時 abort 並作廢進行中請求；SQLite WAL + busy_timeout 10s。
+
 `APP_VERSION`: `v2-20261014-proj-prefs` · 分支 `v2/portfolio`
 
 ### 改善

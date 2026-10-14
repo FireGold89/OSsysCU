@@ -1293,7 +1293,10 @@ def create_payment():
         data['payment_type'] = 'normal'
     ocr_id = data.pop('ocr_id', None)
     data['ocr_id'] = ocr_id
-    new_id = db.create_payment(data)
+    try:
+        new_id = db.create_payment(data)
+    except ValueError as e:
+        return resp(error=str(e), status=409)
     if ocr_id:
         db.link_ocr_extraction(
             ocr_id, project_id=data['project_id'], sc_id=data.get('sc_id'),
@@ -1325,7 +1328,9 @@ def update_payment(payment_id):
     try:
         db.update_payment(payment_id, data)
     except ValueError as e:
-        return resp(error=str(e), status=400)
+        msg = str(e)
+        status = 409 if '發票號' in msg and '已存在' in msg else 400
+        return resp(error=msg, status=status)
     return resp({'message': '已更新'})
 
 
@@ -1670,6 +1675,7 @@ def ocr_upload():
         return resp(error=f'OCR處理錯誤: {str(e)}', status=500)
 
     project_id = request.form.get('project_id', type=int)
+    ocr_failed = method == 'failed'
 
     # 儲存OCR記錄（每次上傳均保留 PDF 路徑）
     ocr_id = db.save_ocr_extraction(
@@ -1679,10 +1685,16 @@ def ocr_upload():
         extracted_json=extracted or {},
         confidence='high' if method in (
             'gemini', 'quark_handwritten', 'quark_general', 'quark_invoice') else 'medium',
-        status='success' if extracted else 'failed',
+        status='failed' if ocr_failed else 'success',
         project_id=project_id,
         doc_type='scan',
     )
+
+    if ocr_failed:
+        return resp(
+            error=error or '無法識別文件，請手動輸入或更換檔案',
+            status=422,
+        )
 
     from ocr_processor import enrich_extracted_result
     extracted = enrich_extracted_result(extracted or {}, raw_text or '')

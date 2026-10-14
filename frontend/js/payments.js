@@ -1707,6 +1707,25 @@ const Payments = {
     document.getElementById('payModal').classList.remove('open');
   },
 
+  async _invoiceDuplicateBlocked(invNo, excludeId) {
+    const p = App.currentProject;
+    const inv = (invNo || '').trim();
+    if (!p?.id || !inv) return false;
+    try {
+      const res = await api(
+        'GET',
+        `/projects/${p.id}/payments/check-invoice?invoice_no=${encodeURIComponent(inv)}`,
+      );
+      if (!res?.exists) return false;
+      if (excludeId && String(res.payment?.id) === String(excludeId)) return false;
+      const ex = res.payment || {};
+      toast(`發票號「${inv}」已存在（${ex.sc_no || '—'}）`, 'error');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  },
+
   async saveModal() {
     if (this._getPayType() === 'interim_cert') {
       this.goInterimPreview();
@@ -1720,6 +1739,7 @@ const Payments = {
       pdf_path: null,
     };
     if (!data.project_id) { toast('請先選擇項目', 'warning'); return; }
+    if (await this._invoiceDuplicateBlocked(data.invoice_no, id || null)) return;
     try {
       if (id) {
         await api('PUT', `/payments/${id}`, data);

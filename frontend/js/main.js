@@ -1660,6 +1660,8 @@ const App = {
         : this.selectProject(id);
       await p;
     } catch (e) {
+      this._projectSwitchSeq += 1;
+      this._abortProjectSwitch();
       hideContentLoading();
       localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
       if (typeof LoadPerf !== 'undefined') LoadPerf.invalidateProjectCaches();
@@ -1828,6 +1830,8 @@ const App = {
       if (switchSeq !== this._projectSwitchSeq) return;
       if (e?.name === 'AbortError') return;
       if (e?.code === 'LOAD_TIMEOUT') {
+        this._projectSwitchSeq += 1;
+        this._abortProjectSwitch();
         toast('切換項目逾時，請再試一次；若僅 Chrome 發生可清除本站快取或改用 Edge', 'warning');
         return;
       }

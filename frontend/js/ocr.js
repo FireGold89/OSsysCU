@@ -613,18 +613,33 @@ const OCR = {
       progressBar.style.width = '80%';
       progressText.textContent = '提取項目明細...';
 
-      const json = await r.json();
+      let json;
+      try {
+        json = await r.json();
+      } catch (_) {
+        toast('OCR 回應無法解析，請稍後再試', 'error');
+        progress.style.display = 'none';
+        this._enableSaveButtons(false);
+        return;
+      }
       progressBar.style.width = '100%';
 
-      if (!json.success) {
-        toast('OCR失敗: ' + json.error, 'error');
+      if (!r.ok || !json.success) {
+        toast('OCR失敗: ' + (json.error || r.statusText || '識別失敗'), 'error');
         progress.style.display = 'none';
+        this._enableSaveButtons(false);
         return;
       }
 
       setTimeout(() => { progress.style.display = 'none'; }, 500);
 
       const data = json.data;
+      if (!data || data.method === 'failed') {
+        toast('OCR 識別失敗，請手動輸入或更換檔案', 'error');
+        progress.style.display = 'none';
+        this._enableSaveButtons(false);
+        return;
+      }
       this.currentPdfPath = data.pdf_path;
       this.currentOcrId = data.ocr_id || null;
 
@@ -718,6 +733,7 @@ const OCR = {
 
     } catch (e) {
       progress.style.display = 'none';
+      this._enableSaveButtons(false);
       toast('OCR錯誤: ' + e.message, 'error');
     }
   },

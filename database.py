@@ -16,6 +16,8 @@ def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     return conn
 
 
@@ -3583,6 +3585,19 @@ def payment_invoice_exists(project_id, invoice_no, exclude_id=None):
     return dict(row) if row else None
 
 
+def ensure_unique_payment_invoice(project_id, invoice_no, exclude_id=None):
+    """同一項目內發票號不可重複（空白略過）"""
+    inv = (invoice_no or '').strip()
+    if not inv:
+        return
+    existing = payment_invoice_exists(project_id, inv, exclude_id=exclude_id)
+    if not existing:
+        return
+    sc = (existing.get('sc_no') or '').strip() or '—'
+    pid = existing.get('id')
+    raise ValueError(f'發票號「{inv}」已存在（判項 {sc} · 記錄 #{pid}）')
+
+
 def suggest_sc_matches(project_id, hints=None):
     """依報價單號、公司名、金額建議關聯合同項目"""
     hints = hints or {}
@@ -3646,6 +3661,7 @@ def suggest_next_sc_number(project_id, prefix='SC', company=None):
 def create_payment(data):
     data.setdefault('payment_type', 'normal')
     data.setdefault('backcharge_amount', 0)
+    ensure_unique_payment_invoice(data.get('project_id'), data.get('invoice_no'))
     conn = get_conn()
     # 計算餘額
     if 'remainder_amount' not in data or data['remainder_amount'] is None:
@@ -3721,6 +3737,11 @@ def update_payment(payment_id, data):
     if existing['revoked_at']:
         conn.close()
         raise ValueError('已撤回的計算書不可修改')
+    ensure_unique_payment_invoice(
+        existing['project_id'],
+        data.get('invoice_no'),
+        exclude_id=payment_id,
+    )
     if data.get('payment_type') == 'interim_cert':
         cert = _load_cert_json(data.get('interim_cert_json'))
         if existing['payment_type'] != 'interim_cert':
