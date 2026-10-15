@@ -52,6 +52,8 @@
 | `RESTORE_TOKEN` | 同 V1 或另設 | Settings 還原 DB 用 |
 | `AUTH_SESSION_DAYS` | 同 V1 | 可選 |
 | `AUTH_IDLE_MINUTES` | 同 V1 | 可選 |
+| `GUNICORN_WORKERS` | （可省略） | 未設且 `DEPLOYMENT_TIER=v2` 時 **start.sh 預設 2**；要改回 1 可設 `GUNICORN_WORKERS=1` |
+| `GUNICORN_THREADS` | `4` | 可選 |
 
 **不要**設 `DATA_DIR`（容器內 Dockerfile 已固定 `/data`）。
 

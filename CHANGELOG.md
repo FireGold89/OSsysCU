@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261015-gunicorn2` · 分支 `v2/portfolio`
+
+### 改善
+- **Zeabur V2 並發**：`start.sh` 支援 `GUNICORN_WORKERS`／`GUNICORN_THREADS`；`DEPLOYMENT_TIER=v2` 且未设 workers 时 **默认 2 workers**（V1 仍为 1）。
+
 `APP_VERSION`: `v2-20261015-overview-perf` · 分支 `v2/portfolio`
 
 ### 改善
