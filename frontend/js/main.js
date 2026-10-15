@@ -1318,8 +1318,16 @@ const Auth = {
   },
 
   async ensure() {
+    const timeoutMs = typeof LoadPerf !== 'undefined'
+      ? LoadPerf.AUTH_ME_TIMEOUT_MS
+      : 18000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const r = await fetch(`${API}/auth/me`, { credentials: 'include' });
+      const r = await fetch(`${API}/auth/me`, {
+        credentials: 'include',
+        signal: controller.signal,
+      });
       const text = await r.text();
       let json;
       try {
@@ -1356,8 +1364,14 @@ const Auth = {
       this.user = null;
       this.applyUi();
       this.revealApp();
+      if (e?.name === 'AbortError') {
+        toast('登入驗證逾時，請重新整理；若仍失敗請檢查網路或暫停瀏覽器擴充', 'warning');
+        return true;
+      }
       toast(e.message || '登入驗證失敗', 'error');
       return true;
+    } finally {
+      clearTimeout(timer);
     }
   },
 
@@ -1569,11 +1583,20 @@ const App = {
   APP_BUILD_STORAGE_KEY: 'qs_app_build',
 
   shouldAutoRestoreProject() {
-    return localStorage.getItem(this.AUTO_RESTORE_STORAGE_KEY) !== '0';
+    return localStorage.getItem(this.AUTO_RESTORE_STORAGE_KEY) === '1';
   },
 
   setAutoRestoreProject(enabled) {
     localStorage.setItem(this.AUTO_RESTORE_STORAGE_KEY, enabled ? '1' : '0');
+  },
+
+  _migrateAutoRestorePref() {
+    const flag = 'qs_auto_restore_migrated_v2_trial';
+    if (localStorage.getItem(flag)) return;
+    localStorage.setItem(flag, '1');
+    if (localStorage.getItem(this.AUTO_RESTORE_STORAGE_KEY) == null) {
+      localStorage.setItem(this.AUTO_RESTORE_STORAGE_KEY, '0');
+    }
   },
 
   _initAutoRestorePrefUi() {
@@ -1628,11 +1651,11 @@ const App = {
     this._projectSwitchAbort = new AbortController();
   },
 
-  _pickInitialProjectId() {
+  _savedProjectIdForRestore() {
     const saved = localStorage.getItem(this.PROJECT_ID_STORAGE_KEY);
-    if (saved && this.projects.find((p) => p.id == saved)) return saved;
-    if (saved) localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
-    if (this.projects.length > 0) return String(this.projects[0].id);
+    if (!saved) return null;
+    if (this.projects.find((p) => p.id == saved)) return saved;
+    localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
     return null;
   },
 
@@ -1703,7 +1726,23 @@ const App = {
       if (path) DocViewer.open(path, title);
     });
 
-    await Promise.all([this.syncDeploymentBadge(), this.loadProjects()]);
+    const bootMs = typeof LoadPerf !== 'undefined'
+      ? LoadPerf.INIT_BOOT_TIMEOUT_MS
+      : 25000;
+    const boot = Promise.all([this.syncDeploymentBadge(), this.loadProjects()]);
+    try {
+      if (typeof LoadPerf !== 'undefined' && LoadPerf.withTimeout) {
+        await LoadPerf.withTimeout(boot, bootMs, '項目列表載入逾時');
+      } else {
+        await boot;
+      }
+    } catch (e) {
+      hideContentLoading();
+      if (e?.code === 'LOAD_TIMEOUT') {
+        toast('項目列表載入逾時，請重新整理或在上方選擇項目', 'warning');
+      }
+    }
+    this._migrateAutoRestorePref();
     this._initAutoRestorePrefUi();
     document.getElementById('projectSelect').addEventListener('change', (e) => {
       this.selectProject(e.target.value);
@@ -1711,7 +1750,7 @@ const App = {
     this._updateProjectSettlementNav();
     this.navigate('dashboard', { skipLoad: true });
     if (this.shouldAutoRestoreProject()) {
-      const initialId = this._pickInitialProjectId();
+      const initialId = this._savedProjectIdForRestore();
       if (initialId) void this._restoreInitialProject(initialId);
     } else {
       this._applySavedProjectSelectionWithoutLoad();
@@ -1833,7 +1872,10 @@ const App = {
       }
     } catch (e) {
       if (switchSeq !== this._projectSwitchSeq) return;
-      if (e?.name === 'AbortError') return;
+      if (e?.name === 'AbortError') {
+        if (switchSeq === this._projectSwitchSeq) hideContentLoading();
+        return;
+      }
       if (e?.code === 'LOAD_TIMEOUT') {
         this._projectSwitchSeq += 1;
         this._abortProjectSwitch();

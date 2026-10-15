@@ -196,8 +196,13 @@
     document.getElementById('vaultSkipBtn')?.addEventListener('click', finishVault);
 
     async function checkAlreadyIn() {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 18000);
       try {
-        const r = await fetch(API + '/auth/me', { credentials: 'include' });
+        const r = await fetch(API + '/auth/me', {
+          credentials: 'include',
+          signal: controller.signal,
+        });
         const json = await r.json();
         if (json.success && json.data?.user) {
           window.location.replace(nextUrl.startsWith('/') ? nextUrl : '/');
@@ -205,7 +210,11 @@
         if (json.success && json.data?.auth_required === false) {
           window.location.replace('/');
         }
-      } catch (e) {}
+      } catch (e) {
+        /* 逾時或離線時留在登入頁 */
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {

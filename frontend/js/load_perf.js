@@ -9,7 +9,9 @@ const LoadPerf = {
   SUMMARY_SLOT: 'reports-summary',
   BUNDLE_SLOT: 'dashboard-overview',
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
-  AUTO_PROJECT_LOAD_TIMEOUT_MS: 45000,
+  AUTH_ME_TIMEOUT_MS: 18000,
+  INIT_BOOT_TIMEOUT_MS: 25000,
+  AUTO_PROJECT_LOAD_TIMEOUT_MS: 35000,
   /** 切換項目整段流程逾時（避免 Chrome 等瀏覽器 hung fetch 一直顯示載入中） */
   PROJECT_SWITCH_TIMEOUT_MS: 28000,
   /** dashboard-overview / summary 單次請求逾時 */

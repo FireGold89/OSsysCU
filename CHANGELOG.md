@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261015-load-guard` · 分支 `v2/portfolio`
+
+### 修正
+- **Chrome 間歇 loading 卡住**：試行預設關閉「自動載入上次項目」（僅勾選才載）；不再自動載入列表第一個項目；`auth/me` 與首屏 `projects`/`status` 逾時；切換項目 Abort 時關閉遮罩。
+
 `APP_VERSION`: `v2-20261015-front-sync` · 分支 `v2/portfolio`
 
 ### 改善
