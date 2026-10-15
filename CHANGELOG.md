@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261015-overview-perf` · 分支 `v2/portfolio`
+
+### 改善
+- **項目概覽試跑卡頓**：切換項目不再多打一次 `reports/summary`（由概覽 bundle／各頁自行載入）；關閉 idle 預載「項目視角」；主合約／分判 FAC PDF 90s 逾時並可 abort；切項時取消進行中 PDF fetch。
+
 `APP_VERSION`: `v2-20261015-load-guard` · 分支 `v2/portfolio`
 
 ### 修正

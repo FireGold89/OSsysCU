@@ -1649,6 +1649,7 @@ const App = {
       try { this._projectSwitchAbort.abort(); } catch (_) { /* ignore */ }
     }
     this._projectSwitchAbort = new AbortController();
+    if (typeof LoadPerf !== 'undefined') LoadPerf.abortPdfFetch?.();
   },
 
   _savedProjectIdForRestore() {
@@ -1846,11 +1847,12 @@ const App = {
       this._closeProjectModals();
       this._resetProjectFilters();
 
-      const [scList] = await Promise.all([
-        api('GET', `/projects/${id}/subcontractors`, null, { useProjectSwitchSignal: true }).then((r) => r || []),
-        LoadPerf.fetchProjectSummary(id, { silent: true }).catch(() => null),
-      ]);
+      const scList = await api('GET', `/projects/${id}/subcontractors`, null, {
+        useProjectSwitchSignal: true,
+      }).then((r) => r || []);
       this.scList = scList;
+      const scCountEl = document.getElementById('dashScCount');
+      if (scCountEl) scCountEl.textContent = scList.length;
       if (switchSeq !== this._projectSwitchSeq) return;
 
       if (this._getActivePage() === 'project-settlement') {

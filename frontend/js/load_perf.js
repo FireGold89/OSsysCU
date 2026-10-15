@@ -16,6 +16,12 @@ const LoadPerf = {
   PROJECT_SWITCH_TIMEOUT_MS: 28000,
   /** dashboard-overview / summary 單次請求逾時 */
   OVERVIEW_FETCH_TIMEOUT_MS: 22000,
+  /** 主合約／分判 FAC PDF 生成逾時 */
+  PDF_FETCH_TIMEOUT_MS: 90000,
+  /** 試跑：切項目後勿 idle 預載「項目視角」(避免多打 summary + portfolio) */
+  IDLE_PRELOAD_PROJECT_LENS: false,
+
+  _pdfAbortController: null,
 
   _MUTATION_PATH_RE: [
     /^\/payments(\/|$)/,
@@ -203,6 +209,7 @@ const LoadPerf = {
   },
 
   scheduleProjectSwitchPreloads({ switchSeq, activePage, preloadProjectLens }) {
+    if (!this.IDLE_PRELOAD_PROJECT_LENS && !preloadProjectLens) return;
     const loadLens = preloadProjectLens
       || ((seq) => {
         if (typeof Dashboard !== 'undefined') Dashboard.load(seq).catch(() => {});
@@ -213,6 +220,42 @@ const LoadPerf = {
       if (activePage === 'project-lens') return;
       loadLens(switchSeq);
     });
+  },
+
+  abortPdfFetch() {
+    if (!this._pdfAbortController) return;
+    try {
+      this._pdfAbortController.abort();
+    } catch (_) { /* ignore */ }
+    this._pdfAbortController = null;
+  },
+
+  /**
+   * PDF 預覽／下載用 fetch（含逾時；新請求會 abort 上一個 PDF fetch）
+   * @returns {Promise<Response>}
+   */
+  async fetchPdf(url, { timeoutMs } = {}) {
+    this.abortPdfFetch();
+    const controller = new AbortController();
+    this._pdfAbortController = controller;
+    const ms = timeoutMs > 0 ? timeoutMs : this.PDF_FETCH_TIMEOUT_MS;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, ms);
+    try {
+      const r = await fetch(url, { credentials: 'include', signal: controller.signal });
+      return r;
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        throw new Error(timedOut ? 'PDF 生成逾時，請稍後再試' : 'PDF 載入已取消');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+      if (this._pdfAbortController === controller) this._pdfAbortController = null;
+    }
   },
 
   getCachedSubcontractors(projectId, scList) {

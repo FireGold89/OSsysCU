@@ -52,7 +52,9 @@ const MainConFac = {
     const meta = this._pdfMeta();
     if (!meta.p?.id) throw new Error('請先選擇項目');
     const url = this._pdfUrl(true, theme);
-    const r = await fetch(url, { credentials: 'include' });
+    const r = typeof LoadPerf !== 'undefined' && LoadPerf.fetchPdf
+      ? await LoadPerf.fetchPdf(url)
+      : await fetch(url, { credentials: 'include' });
     const ct = r.headers.get('Content-Type') || '';
     if (!r.ok) {
       let msg = `載入失敗（HTTP ${r.status}）`;
