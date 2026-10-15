@@ -55,7 +55,7 @@ def _require_login():
 # ─── 登入 ────────────────────────────────────────────────────────────────
 @app.route('/login.html')
 def login_page():
-    return send_from_directory(FRONTEND_DIR, 'login.html')
+    return _serve_frontend_html('login.html')
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -99,14 +99,38 @@ def auth_touch():
 
 
 # ─── 前端路由 ───────────────────────────────────────────────────────────
+_FRONTEND_BUILD_TOKEN = '__APP_BUILD__'
+
+
+def _app_build_for_html():
+    return _app_version()
+
+
+def _inject_frontend_build(html: str) -> str:
+    return html.replace(_FRONTEND_BUILD_TOKEN, _app_build_for_html())
+
+
+def _apply_no_store_headers(resp):
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+
+def _serve_frontend_html(filename):
+    path = os.path.join(FRONTEND_DIR, filename)
+    with open(path, encoding='utf-8') as f:
+        body = _inject_frontend_build(f.read())
+    resp = make_response(body)
+    resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return _apply_no_store_headers(resp)
+
+
 def _serve_index():
     """未登入且啟用 auth 時直接導向登入頁，避免先渲染主介面"""
     if auth.is_enabled() and not auth.current_user():
         return redirect('/login.html')
-    resp = make_response(send_from_directory(FRONTEND_DIR, 'index.html'))
-    resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
-    resp.headers['Pragma'] = 'no-cache'
-    return resp
+    return _serve_frontend_html('index.html')
 
 
 @app.route('/')
@@ -121,12 +145,22 @@ def index_html():
 
 @app.route('/css/<path:filename>')
 def static_css(filename):
-    return send_from_directory(os.path.join(FRONTEND_DIR, 'css'), filename)
+    resp = make_response(send_from_directory(os.path.join(FRONTEND_DIR, 'css'), filename))
+    if request.args.get('v'):
+        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    else:
+        resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    return resp
 
 
 @app.route('/js/<path:filename>')
 def static_js(filename):
-    return send_from_directory(os.path.join(FRONTEND_DIR, 'js'), filename)
+    resp = make_response(send_from_directory(os.path.join(FRONTEND_DIR, 'js'), filename))
+    if request.args.get('v'):
+        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    else:
+        resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    return resp
 
 
 @app.route('/assets/<path:filename>')

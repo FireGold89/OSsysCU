@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261015-front-sync` · 分支 `v2/portfolio`
+
+### 改善
+- **前端版本同步**：`index.html`／`login.html` 由伺服器注入 `APP_VERSION`（`__APP_BUILD__`），避免瀏覽器仍載入舊 `?v=`；HTML `no-store`；JS/CSS 帶 `v` 參數可長快取；頂欄 badge 顯示版本，與 API 不一致時提示硬重新整理。
+
 `APP_VERSION`: `v2-20261014-trial-batch1` · 分支 `v2/portfolio`
 
 ### 改善

@@ -1639,6 +1639,10 @@ const App = {
   _noteAppBuildFromStatus(data) {
     if (!data?.app_version) return;
     const ver = String(data.app_version);
+    const metaBuild = document.querySelector('meta[name="ossyscu-build"]')?.getAttribute('content');
+    if (metaBuild && metaBuild !== ver) {
+      toast(`系統已更新為 ${ver}，請按 Ctrl+Shift+R 重新整理`, 'warning');
+    }
     const prev = localStorage.getItem(this.APP_BUILD_STORAGE_KEY);
     if (prev && prev !== ver && typeof LoadPerf !== 'undefined') {
       LoadPerf.invalidateProjectCaches();
@@ -1729,6 +1733,7 @@ const App = {
       if (tier === 'v2' || ver.startsWith('v2-')) {
         wrap.style.display = '';
         label.textContent = data.deployment_label || 'V2 試用環境';
+        wrap.title = ver ? `V2 試用 · 版本 ${ver}` : (data.deployment_label || '');
       } else {
         wrap.style.display = 'none';
       }
