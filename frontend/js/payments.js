@@ -136,6 +136,9 @@ const Payments = {
       : [...this.data];
     this.applySort();
     this.render();
+    if (typeof LoadPerf !== 'undefined') {
+      LoadPerf.scheduleIdle(() => this.prefetchCertTemplates());
+    }
     if (this._pendingOpenPaymentId) {
       const openId = this._pendingOpenPaymentId;
       this._pendingOpenPaymentId = null;
@@ -393,8 +396,10 @@ const Payments = {
     if (nextBtn) nextBtn.style.display = isInterim ? '' : 'none';
     this._setAmountFieldsReadonly(isInterim);
     if (isInterim) {
-      await this.calcInterimAmounts();
-      await this.ensureCertTemplates();
+      await Promise.all([
+        this.calcInterimAmounts(),
+        this.ensureCertTemplates(),
+      ]);
       await this.loadScVoPickList();
     } else {
       this._setAmountFieldsReadonly(false);
@@ -516,11 +521,38 @@ const Payments = {
     return paid;
   },
 
+  _applyCertTemplateRows(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    this._scVoTemplates = list.filter((t) => t.source === 'sc_vo');
+    this._standardLineTemplates = list.filter((t) => t.source === 'cert_standard');
+  },
+
+  prefetchCertTemplates() {
+    if (this._scVoTemplates) return;
+    const run = typeof LoadPerf !== 'undefined' && LoadPerf.fetchScVoTemplates
+      ? LoadPerf.fetchScVoTemplates({ silent: true })
+      : api('GET', '/sc-vo-templates', null, { silent: true });
+    run.then((rows) => {
+      if (this._scVoTemplates || !rows) return;
+      this._applyCertTemplateRows(rows);
+    }).catch(() => { /* ignore */ });
+  },
+
   async ensureCertTemplates() {
     if (this._scVoTemplates) return;
-    const rows = await api('GET', '/sc-vo-templates', null, { silent: true }) || [];
-    this._scVoTemplates = rows.filter(t => t.source === 'sc_vo');
-    this._standardLineTemplates = rows.filter(t => t.source === 'cert_standard');
+    try {
+      const rows = typeof LoadPerf !== 'undefined' && LoadPerf.fetchScVoTemplates
+        ? await LoadPerf.fetchScVoTemplates({ silent: true })
+        : await api('GET', '/sc-vo-templates', null, { silent: true });
+      this._applyCertTemplateRows(rows);
+    } catch (e) {
+      if (e?.code === 'LOAD_TIMEOUT' || (e?.message || '').includes('逾時')) {
+        toast('範本目錄載入逾時（伺服器繁忙），請稍後再試', 'warning');
+      }
+      if (!this._scVoTemplates) {
+        this._applyCertTemplateRows([]);
+      }
+    }
   },
 
   _templateLabelForRecord(r) {

@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261016-sc-vo-tpl` · 分支 `v2/portfolio`
+
+### 改善
+- **sc-vo-templates Pending**：前端全域去重快取 + 15s 逾時；進入分判付款 idle 預載；後端先讀目錄再種子，減 SQLite 寫鎖等待。
+
 `APP_VERSION`: `v2-20261015-gunicorn2` · 分支 `v2/portfolio`
 
 ### 改善

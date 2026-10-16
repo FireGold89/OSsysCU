@@ -8,7 +8,12 @@
 const LoadPerf = {
   SUMMARY_SLOT: 'reports-summary',
   BUNDLE_SLOT: 'dashboard-overview',
+  SC_VO_TEMPLATES_SLOT: 'sc-vo-templates',
+  SC_VO_TEMPLATES_MANAGE_SLOT: 'sc-vo-templates-manage',
+  GLOBAL_CACHE_ID: 'global',
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
+  /** 輕量全域 GET（範本目錄等）逾時 */
+  LIGHT_GET_TIMEOUT_MS: 15000,
   AUTH_ME_TIMEOUT_MS: 18000,
   INIT_BOOT_TIMEOUT_MS: 25000,
   AUTO_PROJECT_LOAD_TIMEOUT_MS: 35000,
@@ -173,6 +178,26 @@ const LoadPerf = {
     });
   },
 
+  fetchScVoTemplates({ manage = false, silent = true } = {}) {
+    const slot = manage ? this.SC_VO_TEMPLATES_MANAGE_SLOT : this.SC_VO_TEMPLATES_SLOT;
+    const path = manage ? '/sc-vo-templates?manage=1' : '/sc-vo-templates';
+    return this.fetchDeduped(
+      slot,
+      this.GLOBAL_CACHE_ID,
+      () => this.withTimeout(
+        api('GET', path, null, { silent }),
+        this.LIGHT_GET_TIMEOUT_MS,
+        '載入逾時',
+      ),
+      { shouldCommit: (sid, data) => sid === this.GLOBAL_CACHE_ID && Array.isArray(data) },
+    ).then((rows) => rows || []);
+  },
+
+  invalidateScVoTemplateCaches() {
+    this.invalidate(this.SC_VO_TEMPLATES_SLOT, this.GLOBAL_CACHE_ID);
+    this.invalidate(this.SC_VO_TEMPLATES_MANAGE_SLOT, this.GLOBAL_CACHE_ID);
+  },
+
   _projectIdFromMutation(path, body, data) {
     const p = (path || '').split('?')[0];
     let m = p.match(/^\/projects\/(\d+)/);
@@ -193,6 +218,10 @@ const LoadPerf = {
   handleApiSuccess(method, path, body, data) {
     const m = (method || 'GET').toUpperCase();
     if (m === 'GET' || m === 'HEAD') return;
+    const p = (path || '').split('?')[0];
+    if (/^\/sc-vo-templates(\/|$)/.test(p)) {
+      this.invalidateScVoTemplateCaches();
+    }
     const pid = this._projectIdFromMutation(path, body, data);
     if (pid) this.invalidateProjectCaches(pid);
   },

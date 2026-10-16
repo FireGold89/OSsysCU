@@ -11,7 +11,14 @@ const ScVoReg = {
 
   async ensureTemplates() {
     if (this.templates.length) return;
-    this.templates = await api('GET', '/sc-vo-templates', null, { silent: true }) || [];
+    try {
+      this.templates = typeof LoadPerf !== 'undefined' && LoadPerf.fetchScVoTemplates
+        ? await LoadPerf.fetchScVoTemplates({ silent: true })
+        : await api('GET', '/sc-vo-templates', null, { silent: true }) || [];
+    } catch (e) {
+      this.templates = [];
+      if (e?.code === 'LOAD_TIMEOUT') toast('範本目錄載入逾時，請稍後再試', 'warning');
+    }
   },
 
   _tpl(code) {
@@ -812,7 +819,14 @@ const ScVoReg = {
   },
 
   async loadTplCatalog() {
-    this.tplCatalog = await api('GET', '/sc-vo-templates?manage=1', null, { silent: true }) || [];
+    try {
+      this.tplCatalog = typeof LoadPerf !== 'undefined' && LoadPerf.fetchScVoTemplates
+        ? await LoadPerf.fetchScVoTemplates({ manage: true, silent: true })
+        : await api('GET', '/sc-vo-templates?manage=1', null, { silent: true }) || [];
+    } catch (e) {
+      this.tplCatalog = [];
+      toast(e?.message || '範本目錄載入失敗', 'error');
+    }
     this.renderTplManager();
   },
 

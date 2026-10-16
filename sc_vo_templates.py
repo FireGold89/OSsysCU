@@ -165,8 +165,11 @@ def _load_catalog() -> list[dict]:
         return _catalog_cache
     try:
         import database as db
-        db.seed_sc_vo_template_catalog()
+        # 種子只在空表時寫入；勿在每次 API 都 commit，以免與重查詢搶 SQLite 寫鎖
         _catalog_cache = db.list_sc_vo_template_catalog(active_only=False)
+        if not _catalog_cache:
+            db.seed_sc_vo_template_catalog()
+            _catalog_cache = db.list_sc_vo_template_catalog(active_only=False)
     except Exception:
         _catalog_cache = _fallback_catalog()
     return _catalog_cache
