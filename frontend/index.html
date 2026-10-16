@@ -79,7 +79,7 @@
     </div>
 
     <div class="project-selector sidebar-expand-only">
-      <label>當前項目</label>
+      <label for="projectSelect">當前項目</label>
       <select id="projectSelect">
         <option value="">— 請選擇項目 —</option>
       </select>
@@ -222,7 +222,8 @@
             <button type="button" class="text-scale-btn" id="textScaleUp" title="放大文字" aria-label="放大文字">A+</button>
           </div>
         </div>
-        <div id="currentProjectBadge" style="display:none">
+        <div id="currentProjectBadge" class="topbar-project-badge" style="display:none">
+          <span class="project-switch-spinner" id="projectSwitchSpinner" hidden aria-hidden="true"></span>
           <span class="badge badge-info" id="currentProjectCode"></span>
         </div>
         <button class="btn btn-primary btn-sm" onclick="App.quickAddPayment()" id="btnQuickAdd" style="display:none">

@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261016-switch-lite` · 分支 `v2/portfolio`
+
+### 改善
+- **切換項目體驗**：頂欄小 spinner（15s 後才全屏遮罩）；同一項目不重載；僅換項目時清快取；概覽 `dashboard-overview?lite=1` 延後 summary；側欄 label 關聯 projectSelect。
+
 `APP_VERSION`: `v2-20261016-load-unstick` · 分支 `v2/portfolio`
 
 ### 修正

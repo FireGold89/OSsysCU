@@ -1055,15 +1055,22 @@ def project_dashboard_overview(project_id):
     if not db.get_project(project_id):
         return resp(error='項目不存在', status=404)
     board = db.get_iso_documents_board(project_id)
-    summary = db.get_project_summary(project_id)
-    if not board or not summary:
+    if not board:
         return resp(error='項目不存在', status=404)
-    return resp({
+    lite = request.args.get('lite') in ('1', 'true', 'yes')
+    payload = {
         'iso_board': board,
         'documents': db.get_project_documents(project_id),
         'main_con_fac': db.get_main_con_fac(project_id),
-        'report_summary': summary,
-    })
+    }
+    if lite:
+        payload['report_summary'] = None
+        return resp(payload)
+    summary = db.get_project_summary(project_id)
+    if not summary:
+        return resp(error='項目不存在', status=404)
+    payload['report_summary'] = summary
+    return resp(payload)
 
 
 @app.route('/api/projects/<int:project_id>/iso-documents', methods=['GET'])

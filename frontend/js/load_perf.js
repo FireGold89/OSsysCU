@@ -8,6 +8,7 @@
 const LoadPerf = {
   SUMMARY_SLOT: 'reports-summary',
   BUNDLE_SLOT: 'dashboard-overview',
+  BUNDLE_LITE_SLOT: 'dashboard-overview-lite',
   SC_VO_TEMPLATES_SLOT: 'sc-vo-templates',
   SC_VO_TEMPLATES_MANAGE_SLOT: 'sc-vo-templates-manage',
   STAFF_ROSTER_SLOT: 'staff-roster',
@@ -81,6 +82,7 @@ const LoadPerf = {
   invalidateProjectCaches(projectId) {
     this.invalidate(this.SUMMARY_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_SLOT, projectId ?? null);
+    this.invalidate(this.BUNDLE_LITE_SLOT, projectId ?? null);
   },
 
   /** @deprecated 别名；請用 invalidateProjectCaches */
@@ -162,13 +164,17 @@ const LoadPerf = {
     );
   },
 
-  fetchDashboardOverview(projectId, { silent = true } = {}) {
+  fetchDashboardOverview(projectId, { silent = true, lite = false } = {}) {
     const pid = Number(projectId);
     if (!pid) return Promise.resolve(null);
+    const slot = lite ? this.BUNDLE_LITE_SLOT : this.BUNDLE_SLOT;
+    const path = lite
+      ? `/projects/${pid}/dashboard-overview?lite=1`
+      : `/projects/${pid}/dashboard-overview`;
     return this.fetchDeduped(
-      this.BUNDLE_SLOT,
+      slot,
       pid,
-      () => this._apiGet(`/projects/${pid}/dashboard-overview`, {
+      () => this._apiGet(path, {
         silent,
         timeoutMs: this.OVERVIEW_FETCH_TIMEOUT_MS,
       }),

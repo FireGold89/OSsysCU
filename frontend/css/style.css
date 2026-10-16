@@ -668,6 +668,30 @@ html.sidebar-collapsed .sidebar-toggle-btn {
   display: flex; align-items: center; gap: 8px;
 }
 
+.topbar-project-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-project-badge.is-switching .badge-info {
+  opacity: 0.75;
+}
+
+.project-switch-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+.project-switch-spinner[hidden] {
+  display: none !important;
+}
+
 .topbar-display-tools {
   display: inline-flex;
   align-items: center;

@@ -1093,7 +1093,9 @@ function hideLoading() {
 }
 
 const CONTENT_SLOW_LOAD_MS = 12000;
+const PROJECT_SWITCH_FULL_OVERLAY_MS = 15000;
 let _contentLoadingSlowTimer = null;
+let _projectSwitchOverlayTimer = null;
 
 function _resetContentLoadingSlowUi() {
   clearTimeout(_contentLoadingSlowTimer);
@@ -1121,6 +1123,30 @@ function showContentLoading(text = '載入項目資料…') {
 function hideContentLoading() {
   _resetContentLoadingSlowUi();
   document.querySelector('.content')?.classList.remove('content-loading');
+}
+
+function showProjectSwitchLoading() {
+  hideContentLoading();
+  clearTimeout(_projectSwitchOverlayTimer);
+  const spinner = document.getElementById('projectSwitchSpinner');
+  const badge = document.getElementById('currentProjectBadge');
+  const sel = document.getElementById('projectSelect');
+  spinner?.removeAttribute('hidden');
+  badge?.classList.add('is-switching');
+  if (sel) sel.disabled = true;
+  _projectSwitchOverlayTimer = setTimeout(() => {
+    showContentLoading('載入項目資料…');
+  }, PROJECT_SWITCH_FULL_OVERLAY_MS);
+}
+
+function hideProjectSwitchLoading() {
+  clearTimeout(_projectSwitchOverlayTimer);
+  _projectSwitchOverlayTimer = null;
+  hideContentLoading();
+  document.getElementById('projectSwitchSpinner')?.setAttribute('hidden', '');
+  document.getElementById('currentProjectBadge')?.classList.remove('is-switching');
+  const sel = document.getElementById('projectSelect');
+  if (sel) sel.disabled = false;
 }
 
 async function downloadExcelExport(apiPath, filename) {
@@ -1615,7 +1641,7 @@ const App = {
   cancelContentLoading() {
     this._projectSwitchSeq += 1;
     this._abortProjectSwitch();
-    hideContentLoading();
+    hideProjectSwitchLoading();
     toast('已取消載入', 'info');
   },
 
@@ -1630,7 +1656,7 @@ const App = {
     if (sel) sel.value = '';
     const badgeWrap = document.getElementById('currentProjectBadge');
     if (badgeWrap) badgeWrap.style.display = 'none';
-    hideContentLoading();
+    hideProjectSwitchLoading();
     this._syncQuickAddBtn();
     this._updateProjectSettlementNav();
     toast('已清除本機記住的項目，請在上方重新選擇', 'success');
@@ -1728,7 +1754,7 @@ const App = {
     });
 
     window.addEventListener('pageshow', (ev) => {
-      if (ev.persisted) hideContentLoading();
+      if (ev.persisted) hideProjectSwitchLoading();
     });
 
     const bootMs = typeof LoadPerf !== 'undefined'
@@ -1813,10 +1839,16 @@ const App = {
   },
 
   async selectProject(id) {
+    if (id && String(id) === String(this.currentProject?.id)) {
+      return;
+    }
+    const prevProjectId = this.currentProject?.id;
     const switchSeq = ++this._projectSwitchSeq;
     this._abortProjectSwitch();
-    if (typeof LoadPerf !== 'undefined') LoadPerf.invalidateProjectCaches();
-    showContentLoading('載入項目資料…');
+    if (typeof LoadPerf !== 'undefined' && String(id || '') !== String(prevProjectId ?? '')) {
+      LoadPerf.invalidateProjectCaches();
+    }
+    showProjectSwitchLoading();
 
     const run = async () => {
       if (!id) {
@@ -1879,11 +1911,11 @@ const App = {
     } catch (e) {
       if (switchSeq !== this._projectSwitchSeq) return;
       if (e?.name === 'AbortError') {
-        if (switchSeq === this._projectSwitchSeq) hideContentLoading();
+        if (switchSeq === this._projectSwitchSeq) hideProjectSwitchLoading();
         return;
       }
       if (e?.code === 'LOAD_TIMEOUT') {
-        hideContentLoading();
+        hideProjectSwitchLoading();
         this._projectSwitchSeq += 1;
         this._abortProjectSwitch();
         toast('切換項目逾時，請再試一次；若僅 Chrome 發生可清除本站快取或改用 Edge', 'warning');
@@ -1891,7 +1923,7 @@ const App = {
       }
       toast(e?.message || '載入項目失敗', 'error');
     } finally {
-      if (switchSeq === this._projectSwitchSeq) hideContentLoading();
+      if (switchSeq === this._projectSwitchSeq) hideProjectSwitchLoading();
     }
   },
 

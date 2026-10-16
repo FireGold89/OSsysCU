@@ -279,7 +279,10 @@ const ProjectDashboard = {
     let summaryEarly = null;
 
     if (typeof LoadPerf !== 'undefined' && LoadPerf.fetchDashboardOverview) {
-      const bundle = await LoadPerf.fetchDashboardOverview(p.id, { silent: true }).catch(() => null);
+      const bundle = await LoadPerf.fetchDashboardOverview(p.id, {
+        silent: true,
+        lite: opts.lite === true,
+      }).catch(() => null);
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
       if (bundle) {
         board = bundle.iso_board;
@@ -380,6 +383,6 @@ const ProjectDashboard = {
 
   /** ISO／FAC／合約結算表（可背景載入） */
   async renderHeavy(p, switchSeq) {
-    await this.render(p, switchSeq, { heavy: true, coreOnly: false });
+    await this.render(p, switchSeq, { heavy: true, coreOnly: false, lite: true });
   },
 };
