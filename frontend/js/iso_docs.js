@@ -2,6 +2,8 @@
  * iso_docs.js — ISO 文件登記（主合約／分判附件）
  */
 const IsoDocs = {
+  /** 主合約金額 ≥ 此值時，美博／港澳招投標會議記錄為必填 */
+  MAIN_TMC_REQUIRED_AMOUNT: 10_000_000,
   _board: null,
   _uploadCtx: null,
   _linkCtx: null,
@@ -38,7 +40,7 @@ const IsoDocs = {
     { slot: 'sc_contract', label: '分判合約', short: '分判合約' },
     { slot: 'tender_confirm', label: '參與投標確認單', short: '參與投標確認單' },
     { slot: 'tender_collect', label: '領取標書記錄', short: '領取標書記錄' },
-    { slot: 'integrity_declaration', label: '聲明、誠信及範圍表及道德承擔條款', short: '聲明誠信及範圍表' },
+    { slot: 'integrity_declaration', label: '誠信及反圍標', short: '誠信及反圍標' },
     { slot: 'tender_opening', label: '開標記錄', short: '開標記錄' },
     { slot: 'contract_signoff', label: '合約會簽表', short: '合約會簽' },
     { slot: 'mepo_tmc', label: '美博招投標會議記錄', short: '美博招投標會議記錄' },
@@ -112,9 +114,36 @@ const IsoDocs = {
     });
   },
 
-  _mainColsForGroup(group) {
+  _mainContractAmount(source) {
+    const p = source?.project || (typeof App !== 'undefined' ? App.currentProject : null) || {};
+    const n = Number(p.contract_amount);
+    return Number.isFinite(n) ? n : 0;
+  },
+
+  _mainColTier(col, amount) {
+    if (!col?.slot) return col;
+    if (col.slot !== 'mepo_tmc' && col.slot !== 'hkmo_tmc') return col;
+    const required = amount >= this.MAIN_TMC_REQUIRED_AMOUNT;
+    const stripOptional = (s) => (s || '').replace(/\(如有\)/g, '').trim();
+    return {
+      ...col,
+      optional: !required,
+      label: required ? stripOptional(col.label) : col.label,
+    };
+  },
+
+  _mainColsResolved(board) {
+    const amount = this._mainContractAmount(board || this._board);
+    return this.MAIN_COLS.map((c) => this._mainColTier(c, amount));
+  },
+
+  _mainColsForGroup(group, board = null) {
     const slots = this.MAIN_SLOT_GROUPS[group] || [];
-    return slots.map(s => this._colBySlot(s, this.MAIN_COLS)).filter(Boolean);
+    const amount = this._mainContractAmount(board || this._board);
+    return slots
+      .map(s => this._colBySlot(s, this.MAIN_COLS))
+      .filter(Boolean)
+      .map(c => this._mainColTier(c, amount));
   },
 
   setView(view) {
@@ -152,7 +181,7 @@ const IsoDocs = {
   },
 
   _computeStats(b) {
-    const mainSlots = this._fileSlots(this.MAIN_COLS);
+    const mainSlots = this._fileSlots(this._mainColsResolved(b));
     const mainFiles = b.main_files || {};
     const rows = b.subcontractors || [];
 
@@ -454,7 +483,7 @@ const IsoDocs = {
   _renderMainGrid(b) {
     const el = document.getElementById('isoMainGrid');
     if (!el) return;
-    const cols = this._mainColsForGroup(this._mainSubTab);
+    const cols = this._mainColsForGroup(this._mainSubTab, b);
     const pending = b._filesPending;
     if (!cols.length) {
       el.innerHTML = '';
@@ -473,7 +502,7 @@ const IsoDocs = {
     const pending = b._filesPending;
 
     if (!rows.length) {
-      el.innerHTML = `<div class="iso-sc-empty">尚無分判資料 · 請先在「分判合約登記表」新增判項</div>`;
+      el.innerHTML = `<div class="iso-sc-empty">尚無分判資料 · 請先在「分判商登記」新增判項</div>`;
       return;
     }
 
@@ -561,9 +590,10 @@ const IsoDocs = {
     const suppAmt = this._suppAmountCell(p);
     const pending = b._filesPending ? ' iso-cell-pending' : '';
 
-    const head = `<thead><tr>${this.MAIN_COLS.map(c => this._thCell(c)).join('')}</tr></thead>`;
+    const mainCols = this._mainColsResolved(b);
+    const head = `<thead><tr>${mainCols.map(c => this._thCell(c)).join('')}</tr></thead>`;
 
-    const cells = this.MAIN_COLS.map(col => {
+    const cells = mainCols.map(col => {
       if (col.kind === 'label') {
         return this._tdSticky(col, `${label}${name}`);
       }
@@ -614,7 +644,7 @@ const IsoDocs = {
     const head = `<thead><tr>${stickyCols.map(c => this._thCell(c)).join('')}${fileCols.map(c => this._thCell(c)).join('')}</tr></thead>`;
 
     if (!rows.length) {
-      el.innerHTML = `${head}<tbody><tr><td colspan="${colCount}" class="td-muted" style="padding:20px;text-align:center">尚無分判資料 · 請先在「分判合約登記表」新增判項</td></tr></tbody>`;
+      el.innerHTML = `${head}<tbody><tr><td colspan="${colCount}" class="td-muted" style="padding:20px;text-align:center">尚無分判資料 · 請先在「分判商登記」新增判項</td></tr></tbody>`;
       return;
     }
 

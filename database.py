@@ -944,7 +944,7 @@ ISO_SLOT_DISK_LABELS = {
     'sc_contract': '分判合約',
     'tender_confirm': '參與投標確認單',
     'tender_collect': '領取標書記錄',
-    'integrity_declaration': '聲明誠信及範圍表',
+    'integrity_declaration': '誠信及反圍標',
     'tender_opening': '開標記錄',
     'contract_signoff': '合約會簽',
 }

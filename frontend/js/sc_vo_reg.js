@@ -314,7 +314,7 @@ const ScVoReg = {
     if (!scNos.length) {
       const msg = all
         ? '無符合搜尋／篩選的記錄'
-        : '暫無變更工程 / 扣款記錄';
+        : '暫無分判合約變更工程 / 扣款記錄';
       const sub = all ? '請調整搜尋或篩選條件' : '用上方模板快速新增，或按「新增分判登記」';
       tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state" style="padding:40px"><div class="empty-icon">📝</div><div class="empty-title">${msg}</div><div class="empty-sub">${sub}</div></div></td></tr>`;
       return;

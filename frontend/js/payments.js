@@ -100,7 +100,7 @@ const Payments = {
     if (panelRec) panelRec.hidden = tab !== 'records';
     if (panelOcr) panelOcr.hidden = tab !== 'ocr';
     const subs = {
-      sc: '分判合約登記表 · 報價單／分判合約 · 先建判項再登付款',
+      sc: '分判商登記 · 報價單／分判合約 · 先建判項再登付款',
       records: '發票／中期糧款計算書登記',
       ocr: '上傳發票、報價，自動識別並登記付款或判項',
     };
