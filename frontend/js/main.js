@@ -1093,7 +1093,7 @@ function hideLoading() {
 }
 
 const CONTENT_SLOW_LOAD_MS = 12000;
-const PROJECT_SWITCH_FULL_OVERLAY_MS = 15000;
+const PROJECT_SWITCH_FULL_OVERLAY_MS = 12000;
 let _contentLoadingSlowTimer = null;
 let _projectSwitchOverlayTimer = null;
 
@@ -1864,10 +1864,13 @@ const App = {
         this._updateProjectSettlementNav();
         this._closeProjectModals();
         this._resetProjectFilters();
-        await this._refreshProjectViews(switchSeq);
+        void this._refreshProjectViews(switchSeq);
         return;
       }
-      const fresh = await api('GET', `/projects/${id}`, null, { useProjectSwitchSignal: true });
+      const getOne = (path) => (typeof LoadPerf !== 'undefined' && LoadPerf.switchGet
+        ? LoadPerf.switchGet(path, { silent: true })
+        : api('GET', path, null, { useProjectSwitchSignal: true }));
+      const fresh = await getOne(`/projects/${id}`);
       if (!fresh || switchSeq !== this._projectSwitchSeq) return;
       this.currentProject = fresh;
       const idx = this.projects.findIndex(p => p.id == id);
@@ -1883,20 +1886,28 @@ const App = {
       this._closeProjectModals();
       this._resetProjectFilters();
 
-      const scList = await api('GET', `/projects/${id}/subcontractors`, null, {
-        useProjectSwitchSignal: true,
-      }).then((r) => r || []);
-      this.scList = scList;
-      const scCountEl = document.getElementById('dashScCount');
-      if (scCountEl) scCountEl.textContent = scList.length;
-      if (switchSeq !== this._projectSwitchSeq) return;
-
       if (this._getActivePage() === 'project-settlement') {
         Projects._settleProjectId = id;
       }
 
-      await this._refreshProjectViews(switchSeq);
-      if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
+      hideProjectSwitchLoading();
+
+      void (async () => {
+        try {
+          const scList = await getOne(`/projects/${id}/subcontractors`).then((r) => r || []);
+          if (switchSeq !== this._projectSwitchSeq) return;
+          this.scList = scList;
+          const scCountEl = document.getElementById('dashScCount');
+          if (scCountEl) scCountEl.textContent = scList.length;
+          void this._refreshProjectViews(switchSeq);
+          if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
+        } catch (e) {
+          if (switchSeq !== this._projectSwitchSeq) return;
+          if (e?.name === 'AbortError') return;
+          toast(e?.message || '分判清單載入失敗', 'warning');
+          void this._refreshProjectViews(switchSeq);
+        }
+      })();
     };
 
     const timeoutMs = typeof LoadPerf !== 'undefined'
@@ -1997,20 +2008,26 @@ const App = {
     };
     const active = this._getActivePage();
 
+    const runLoader = (fn) => {
+      void Promise.resolve(fn()).catch(() => {});
+    };
     if (loaders[active]) {
-      await loaders[active]();
+      runLoader(() => loaders[active]());
     } else if (active === 'dashboard' || !this.currentProject) {
-      await ProjectDashboard.load(switchSeq);
+      runLoader(() => ProjectDashboard.load(switchSeq));
     }
     if (switchSeq !== this._projectSwitchSeq) return;
 
     LoadPerf.scheduleProjectSwitchPreloads({ switchSeq, activePage: active });
 
     if (switchSeq !== this._projectSwitchSeq) return;
-    if (active === 'iso-docs') IsoDocs.load();
-    if (active === 'sc-vo-reg') { ScVoReg.populateScFilter(); ScVoReg.load(); }
-    if (active === 'main-con-fac') MainConFac.load();
-    if (active === 'sc-fac') ScFac.load();
+    if (active === 'iso-docs') runLoader(() => IsoDocs.load());
+    if (active === 'sc-vo-reg') {
+      ScVoReg.populateScFilter();
+      runLoader(() => ScVoReg.load());
+    }
+    if (active === 'main-con-fac') runLoader(() => MainConFac.load());
+    if (active === 'sc-fac') runLoader(() => ScFac.load());
     OCR.reset();
   },
 

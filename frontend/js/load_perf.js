@@ -16,6 +16,8 @@ const LoadPerf = {
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
   /** 輕量全域 GET（範本目錄等）逾時 */
   LIGHT_GET_TIMEOUT_MS: 15000,
+  /** 切換項目：單次 GET /projects/{id} 或 subcontractors */
+  PROJECT_GET_TIMEOUT_MS: 22000,
   AUTH_ME_TIMEOUT_MS: 18000,
   INIT_BOOT_TIMEOUT_MS: 25000,
   AUTO_PROJECT_LOAD_TIMEOUT_MS: 35000,
@@ -137,6 +139,14 @@ const LoadPerf = {
 
   _isCurrentProject(pid) {
     return typeof App !== 'undefined' && App.currentProject?.id === Number(pid);
+  },
+
+  switchGet(path, { silent = true } = {}) {
+    return this.withTimeout(
+      api('GET', path, null, { silent, useProjectSwitchSignal: true }),
+      this.PROJECT_GET_TIMEOUT_MS,
+      '載入逾時',
+    );
   },
 
   _apiGet(path, { silent = true, timeoutMs = 0 } = {}) {

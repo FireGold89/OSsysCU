@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261016-switch-fast` · 分支 `v2/portfolio`
+
+### 修正
+- **切換項目仍全屏 Loading**：`/projects/{id}` 22s 逾時；項目主檔返回即關 spinner；分判與當前頁（含 VO 登記）背景載入，不再阻塞切項。
+
 `APP_VERSION`: `v2-20261016-switch-lite` · 分支 `v2/portfolio`
 
 ### 改善
