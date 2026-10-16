@@ -196,7 +196,9 @@ const ProjectDashboard = {
     }
   },
 
-  async render(p, switchSeq) {
+  async render(p, switchSeq, opts = {}) {
+    const heavy = opts.heavy !== false;
+    const coreOnly = opts.coreOnly !== false && opts.heavy === false;
     const noEl = document.getElementById('dashboardNoProject');
     const card = document.getElementById('projectDashCard');
     if (!p?.id) {
@@ -263,6 +265,14 @@ const ProjectDashboard = {
       notesEl.classList.toggle('is-empty', !notes);
     }
 
+    if (coreOnly) {
+      const calcHost = document.getElementById('pdContractCalc');
+      if (calcHost && !calcHost.dataset.heavyLoaded) {
+        calcHost.innerHTML = '<p class="form-hint">載入合約結算表…</p>';
+      }
+      return;
+    }
+
     let board = null;
     let legacyRaw = [];
     let facData = null;
@@ -281,13 +291,24 @@ const ProjectDashboard = {
 
     if (!board && summaryEarly == null) {
       const apiOpt = { silent: true, useProjectSwitchSignal: true };
+      const tMs = typeof LoadPerf !== 'undefined' ? LoadPerf.OVERVIEW_FETCH_TIMEOUT_MS : 22000;
+      const timedGet = (path) => {
+        const run = () => api('GET', path, null, apiOpt);
+        if (typeof LoadPerf !== 'undefined' && LoadPerf.withTimeout) {
+          return LoadPerf.withTimeout(run(), tMs, '載入逾時').catch((err) => {
+            if (err?.code === 'LOAD_TIMEOUT') return null;
+            throw err;
+          });
+        }
+        return run().catch(() => null);
+      };
       const summaryP = typeof LoadPerf !== 'undefined'
         ? LoadPerf.fetchProjectSummary(p.id, { silent: true }).catch(() => null)
-        : api('GET', `/reports/summary/${p.id}`, null, apiOpt).catch(() => null);
+        : timedGet(`/reports/summary/${p.id}`);
       const rows = await Promise.all([
-        api('GET', `/projects/${p.id}/iso-documents`, null, apiOpt).catch(() => null),
-        api('GET', `/projects/${p.id}/documents`, null, apiOpt).catch(() => []),
-        api('GET', `/projects/${p.id}/main-con-fac`, null, apiOpt).catch(() => null),
+        timedGet(`/projects/${p.id}/iso-documents`),
+        timedGet(`/projects/${p.id}/documents`).then((r) => r || []),
+        timedGet(`/projects/${p.id}/main-con-fac`),
         summaryP,
       ]);
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
@@ -341,10 +362,24 @@ const ProjectDashboard = {
       }
     }
     this._syncProContractCalc();
+    const calcHostDone = document.getElementById('pdContractCalc');
+    if (calcHostDone) calcHostDone.dataset.heavyLoaded = '1';
   },
 
   async load(switchSeq) {
     const p = App.currentProject;
-    await this.render(p, switchSeq);
+    await this.renderCore(p, switchSeq);
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+    void this.renderHeavy(p, switchSeq);
+  },
+
+  /** 項目表單欄位（不等待 summary／ISO bundle） */
+  async renderCore(p, switchSeq) {
+    await this.render(p, switchSeq, { heavy: false });
+  },
+
+  /** ISO／FAC／合約結算表（可背景載入） */
+  async renderHeavy(p, switchSeq) {
+    await this.render(p, switchSeq, { heavy: true, coreOnly: false });
   },
 };

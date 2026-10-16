@@ -1727,6 +1727,10 @@ const App = {
       if (path) DocViewer.open(path, title);
     });
 
+    window.addEventListener('pageshow', (ev) => {
+      if (ev.persisted) hideContentLoading();
+    });
+
     const bootMs = typeof LoadPerf !== 'undefined'
       ? LoadPerf.INIT_BOOT_TIMEOUT_MS
       : 25000;
@@ -1879,6 +1883,7 @@ const App = {
         return;
       }
       if (e?.code === 'LOAD_TIMEOUT') {
+        hideContentLoading();
         this._projectSwitchSeq += 1;
         this._abortProjectSwitch();
         toast('切換項目逾時，請再試一次；若僅 Chrome 發生可清除本站快取或改用 Edge', 'warning');

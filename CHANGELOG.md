@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261016-load-unstick` · 分支 `v2/portfolio`
+
+### 修正
+- **Reload 後「載入項目資料」卡住**：切項逾時必關遮罩；項目概覽先顯示基本欄位、ISO/summary 背景載入；fallback API 22s 逾時；bf cache 還原時清遮罩。
+
 `APP_VERSION`: `v2-20261016-staff-roster` · 分支 `v2/portfolio`
 
 ### 修正
