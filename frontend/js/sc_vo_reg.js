@@ -41,10 +41,15 @@ const ScVoReg = {
     await this.ensureTemplates();
     this.renderQuickAdd();
     const scNo = document.getElementById('svrFilterSc')?.value || '';
-    const scQs = scNo ? `&sc_no=${encodeURIComponent(scNo)}` : '';
+    const fetchVo = typeof LoadPerf !== 'undefined' && LoadPerf.fetchScVoRecords
+      ? (scope, sc) => LoadPerf.fetchScVoRecords(p.id, { scope, scNo: sc, silent: true })
+      : (scope, sc) => {
+        const scQs = sc ? `&sc_no=${encodeURIComponent(sc)}` : '';
+        return api('GET', `/projects/${p.id}/sc-vo-records?scope=${scope}${scQs}`, null, { silent: true }) || [];
+      };
     const [mainRows, scRows] = await Promise.all([
-      api('GET', `/projects/${p.id}/sc-vo-records?scope=main`, null, { silent: true }) || [],
-      api('GET', `/projects/${p.id}/sc-vo-records?scope=subcontractor${scQs}`, null, { silent: true }) || [],
+      fetchVo('main', ''),
+      fetchVo('subcontractor', scNo),
     ]);
     this.mainData = mainRows;
     this.data = scRows;

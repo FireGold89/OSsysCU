@@ -1814,7 +1814,12 @@ const App = {
   },
 
   async loadProjects() {
-    this.projects = await api('GET', '/projects') || [];
+    this.projects = await api('GET', '/projects?lite=1') || [];
+    this._renderProjectSelectOptions();
+    void this._refreshProjectsListFull();
+  },
+
+  _renderProjectSelectOptions() {
     const sel = document.getElementById('projectSelect');
     const curId = this.currentProject?.id;
     sel.innerHTML = '<option value="">— 請選擇項目 —</option>';
@@ -1834,8 +1839,34 @@ const App = {
         document.getElementById('currentProjectBadge').style.display = '';
       }
     }
-    // 更新工程項目頁
     Projects.render(this.projects);
+  },
+
+  async _refreshProjectsListFull() {
+    try {
+      const full = await api('GET', '/projects', null, { silent: true });
+      if (!Array.isArray(full) || !full.length) return;
+      this.projects = full;
+      const sel = document.getElementById('projectSelect');
+      const curVal = sel?.value;
+      this._renderProjectSelectOptions();
+      if (curVal && sel) sel.value = curVal;
+    } catch (_) { /* ignore */ }
+  },
+
+  _applyProjectUiFromRow(row, id) {
+    this.currentProject = row;
+    localStorage.setItem(this.PROJECT_ID_STORAGE_KEY, String(id));
+    document.getElementById('projectSelect').value = String(id);
+    document.getElementById('currentProjectCode').textContent = projectBadgeCode(row);
+    document.getElementById('currentProjectBadge').style.display = '';
+    this._syncQuickAddBtn();
+    this._updateProjectSettlementNav();
+    this._closeProjectModals();
+    this._resetProjectFilters();
+    if (this._getActivePage() === 'project-settlement') {
+      Projects._settleProjectId = id;
+    }
   },
 
   async selectProject(id) {
@@ -1870,31 +1901,28 @@ const App = {
       const getOne = (path) => (typeof LoadPerf !== 'undefined' && LoadPerf.switchGet
         ? LoadPerf.switchGet(path, { silent: true })
         : api('GET', path, null, { useProjectSwitchSignal: true }));
+      const cached = this.projects.find((p) => p.id == id);
+      let usedCache = false;
+      if (cached) {
+        this._applyProjectUiFromRow({ ...cached }, id);
+        hideProjectSwitchLoading();
+        usedCache = true;
+        void this._refreshProjectViews(switchSeq);
+      }
       const fresh = await getOne(`/projects/${id}`);
       if (!fresh || switchSeq !== this._projectSwitchSeq) return;
       this.currentProject = fresh;
       const idx = this.projects.findIndex(p => p.id == id);
       if (idx >= 0) this.projects[idx] = fresh;
-
-      localStorage.setItem(this.PROJECT_ID_STORAGE_KEY, id);
-      document.getElementById('projectSelect').value = String(id);
-      document.getElementById('currentProjectCode').textContent = projectBadgeCode(this.currentProject);
-      document.getElementById('currentProjectBadge').style.display = '';
-
-      this._syncQuickAddBtn();
-      this._updateProjectSettlementNav();
-      this._closeProjectModals();
-      this._resetProjectFilters();
-
-      if (this._getActivePage() === 'project-settlement') {
-        Projects._settleProjectId = id;
-      }
-
-      hideProjectSwitchLoading();
+      else this.projects.push(fresh);
+      this._applyProjectUiFromRow(fresh, id);
+      if (!usedCache) hideProjectSwitchLoading();
 
       void (async () => {
         try {
-          const scList = await getOne(`/projects/${id}/subcontractors`).then((r) => r || []);
+          const scList = typeof LoadPerf !== 'undefined' && LoadPerf.fetchSubcontractors
+            ? await LoadPerf.fetchSubcontractors(id, { silent: true })
+            : await getOne(`/projects/${id}/subcontractors`).then((r) => r || []);
           if (switchSeq !== this._projectSwitchSeq) return;
           this.scList = scList;
           const scCountEl = document.getElementById('dashScCount');

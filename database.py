@@ -602,6 +602,15 @@ def _migrate_db(conn):
         CREATE INDEX IF NOT EXISTS idx_svr_project_sc
         ON sc_vo_records(project_id, sc_no)
     """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pr_project ON payment_records(project_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pr_project_sc ON payment_records(project_id, sc_no)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sc_project ON subcontractors(project_id)"
+    )
     conn.commit()
     svr_cols = {r[1] for r in conn.execute("PRAGMA table_info(sc_vo_records)")}
     if 'line_code' not in svr_cols:
@@ -1289,21 +1298,32 @@ def _attach_project_category_labels(project: dict, conn=None) -> dict:
     return project
 
 
-def get_all_projects():
+def get_all_projects(lite=False):
     conn = get_conn()
-    rows = conn.execute(f"""
-        SELECT p.*,
-               qr.quotation_no AS reg_quotation_no,
-               qr.person_code AS reg_person_code,
-               qr.person_in_charge AS reg_person_in_charge,
-               (SELECT COUNT(*) FROM subcontractors sc WHERE sc.project_id = p.id) AS sc_count,
-               (SELECT COALESCE(SUM(pr.paid_amount), 0)
-                FROM payment_records pr
-                WHERE pr.project_id = p.id AND (pr.revoked_at IS NULL OR pr.revoked_at = '')) AS total_paid
-        FROM projects p
-        {_primary_quotation_join()}
-        ORDER BY p.created_at DESC
-    """).fetchall()
+    if lite:
+        rows = conn.execute(f"""
+            SELECT p.*,
+                   qr.quotation_no AS reg_quotation_no,
+                   qr.person_code AS reg_person_code,
+                   qr.person_in_charge AS reg_person_in_charge
+            FROM projects p
+            {_primary_quotation_join()}
+            ORDER BY p.created_at DESC
+        """).fetchall()
+    else:
+        rows = conn.execute(f"""
+            SELECT p.*,
+                   qr.quotation_no AS reg_quotation_no,
+                   qr.person_code AS reg_person_code,
+                   qr.person_in_charge AS reg_person_in_charge,
+                   (SELECT COUNT(*) FROM subcontractors sc WHERE sc.project_id = p.id) AS sc_count,
+                   (SELECT COALESCE(SUM(pr.paid_amount), 0)
+                    FROM payment_records pr
+                    WHERE pr.project_id = p.id AND (pr.revoked_at IS NULL OR pr.revoked_at = '')) AS total_paid
+            FROM projects p
+            {_primary_quotation_join()}
+            ORDER BY p.created_at DESC
+        """).fetchall()
     conn.close()
     return [_enrich_project(r) for r in rows]
 

@@ -366,7 +366,7 @@ const IsoDocs = {
 
     if (this._globalDocUrl === undefined) {
       try {
-        const s = await api('GET', '/settings', null, { silent: true });
+        const s = await api('GET', '/app-config', null, { silent: true });
         this._globalDocUrl = (s?.doc_library_url || '').trim() || null;
       } catch {
         this._globalDocUrl = null;

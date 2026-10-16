@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261016-perf-pass2` · 分支 `v2/portfolio`
+
+### 改善
+- **Zeabur 卡頓（非加機器）**：首屏 `GET /projects?lite=1` 略過彙總子查詢，背景再拉完整列表；切項先用下拉快取即時更新 UI；分判／VO 登記 API 去重；`payment_records`／`subcontractors` 索引；ISO 改打 `GET /app-config`（非 admin 不再 403 `/settings`）。
+
 `APP_VERSION`: `v2-20261016-switch-fast` · 分支 `v2/portfolio`
 
 ### 修正

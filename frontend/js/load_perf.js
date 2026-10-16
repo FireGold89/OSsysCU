@@ -12,6 +12,8 @@ const LoadPerf = {
   SC_VO_TEMPLATES_SLOT: 'sc-vo-templates',
   SC_VO_TEMPLATES_MANAGE_SLOT: 'sc-vo-templates-manage',
   STAFF_ROSTER_SLOT: 'staff-roster',
+  SUBCONTRACTORS_SLOT: 'project-subcontractors',
+  SC_VO_RECORDS_SLOT: 'sc-vo-records',
   GLOBAL_CACHE_ID: 'global',
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
   /** 輕量全域 GET（範本目錄等）逾時 */
@@ -85,6 +87,14 @@ const LoadPerf = {
     this.invalidate(this.SUMMARY_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_LITE_SLOT, projectId ?? null);
+    this.invalidate(this.SUBCONTRACTORS_SLOT, projectId ?? null);
+    const svrSlot = this._slots[this.SC_VO_RECORDS_SLOT];
+    const svrId = svrSlot?.id;
+    if (projectId == null) {
+      this.invalidate(this.SC_VO_RECORDS_SLOT, null);
+    } else if (svrId != null && String(svrId).startsWith(`${projectId}:`)) {
+      this._slots[this.SC_VO_RECORDS_SLOT] = { id: null, data: null, promise: null };
+    }
   },
 
   /** @deprecated 别名；請用 invalidateProjectCaches */
@@ -213,6 +223,38 @@ const LoadPerf = {
   invalidateScVoTemplateCaches() {
     this.invalidate(this.SC_VO_TEMPLATES_SLOT, this.GLOBAL_CACHE_ID);
     this.invalidate(this.SC_VO_TEMPLATES_MANAGE_SLOT, this.GLOBAL_CACHE_ID);
+  },
+
+  fetchSubcontractors(projectId, { silent = true } = {}) {
+    const pid = Number(projectId);
+    if (!pid) return Promise.resolve([]);
+    return this.fetchDeduped(
+      this.SUBCONTRACTORS_SLOT,
+      pid,
+      () => this.switchGet(`/projects/${pid}/subcontractors`, { silent }),
+      { shouldCommit: (sid) => this._isCurrentProject(sid) },
+    ).then((rows) => rows || []);
+  },
+
+  fetchScVoRecords(projectId, { scope = 'subcontractor', scNo = '', silent = true } = {}) {
+    const pid = Number(projectId);
+    if (!pid) return Promise.resolve([]);
+    const scQs = scNo ? `&sc_no=${encodeURIComponent(scNo)}` : '';
+    const slotId = `${scope}${scQs}`;
+    const path = `/projects/${pid}/sc-vo-records?scope=${encodeURIComponent(scope)}${scQs}`;
+    return this.fetchDeduped(
+      this.SC_VO_RECORDS_SLOT,
+      `${pid}:${slotId}`,
+      () => this.withTimeout(
+        api('GET', path, null, { silent, useProjectSwitchSignal: true }),
+        this.PROJECT_GET_TIMEOUT_MS,
+        '載入逾時',
+      ),
+      { shouldCommit: (sid) => {
+        const cur = typeof App !== 'undefined' && App.currentProject?.id;
+        return cur && sid.startsWith(String(cur));
+      } },
+    ).then((rows) => rows || []);
   },
 
   fetchStaffRoster({ activeOnly = true, silent = true } = {}) {

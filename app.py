@@ -229,7 +229,17 @@ def save_doc_library_settings():
 # ─── Projects API ───────────────────────────────────────────────────────
 @app.route('/api/projects', methods=['GET'])
 def get_projects():
-    return resp(db.get_all_projects())
+    lite = request.args.get('lite') in ('1', 'true', 'yes')
+    return resp(db.get_all_projects(lite=lite))
+
+
+@app.route('/api/app-config', methods=['GET'])
+def get_app_config():
+    """已登入用戶可讀的公開設定（不含 OCR 密鑰）；避免 ISO 頁誤打 admin-only /settings"""
+    return resp({
+        'doc_library_url': db.get_setting('doc_library_url', ''),
+        'company_name': db.get_setting('company_name', 'Mepork Engineering Services Limited'),
+    })
 
 
 @app.route('/api/projects/<int:project_id>', methods=['GET'])
