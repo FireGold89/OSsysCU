@@ -6755,8 +6755,82 @@ def list_master_person_roster(active_only=False, conn=None):
             })
         roster.append(entry)
 
+    seen_keys = {r['pic_key'] for r in roster}
+
+    def _append_roster_person(name, staff=None, quotation_count=0):
+        nonlocal roster, seen_keys
+        label = (name or '').strip()
+        if not label or _invalid_master_person_label(label):
+            return
+        key = label.lower()
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        if staff is None:
+            staff = staff_by_lower.get(key)
+        project_count = conn.execute(
+            "SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge))=?",
+            (key,),
+        ).fetchone()[0]
+        entry = {
+            'person_name': label,
+            'pic_key': key,
+            'quotation_count': quotation_count,
+            'project_count': project_count,
+            'variant_count': 1,
+            'in_staff_table': bool(staff),
+        }
+        if staff:
+            entry.update({
+                'id': staff['id'],
+                'code': staff.get('code'),
+                'name_en': staff.get('name_en'),
+                'name_zh': staff.get('name_zh'),
+                'email': staff.get('email'),
+                'phone': staff.get('phone'),
+                'department': staff.get('department'),
+                'access_role': staff.get('access_role', 'qs'),
+                'is_active': staff.get('is_active', 1),
+                'notes': staff.get('notes'),
+            })
+        else:
+            entry.update({
+                'id': None,
+                'code': None,
+                'name_en': label,
+                'name_zh': None,
+                'email': None,
+                'phone': None,
+                'department': None,
+                'access_role': 'qs',
+                'is_active': 1,
+                'notes': None,
+            })
+        roster.append(entry)
+
+    # Master List 空或試跑庫：仍列出 staff_members／工程項目負責人
+    for s in staff_rows:
+        if active_only and not s.get('is_active'):
+            continue
+        _append_roster_person(_staff_canonical_name(s), staff=s)
+    for row in conn.execute("""
+        SELECT DISTINCT trim(person_in_charge) AS pic
+        FROM projects
+        WHERE person_in_charge IS NOT NULL AND trim(person_in_charge) != ''
+    """):
+        _append_roster_person(row['pic'])
+    for row in conn.execute("""
+        SELECT DISTINCT trim(qs_in_charge) AS qs
+        FROM projects
+        WHERE qs_in_charge IS NOT NULL AND trim(qs_in_charge) != ''
+    """):
+        _append_roster_person(row['qs'])
+
     if active_only:
         roster = [r for r in roster if not r['in_staff_table'] or r.get('is_active')]
+    roster.sort(
+        key=lambda x: (-(x.get('quotation_count') or 0), (x.get('person_name') or '').lower()),
+    )
     if own:
         conn.close()
     return roster

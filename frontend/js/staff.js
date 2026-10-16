@@ -79,8 +79,21 @@ const StaffRoster = {
   },
 
   async load(activeOnly = false) {
-    const q = activeOnly ? '?active=1' : '';
-    this.list = await api('GET', `/staff${q}`) || [];
+    try {
+      if (typeof LoadPerf !== 'undefined' && LoadPerf.fetchStaffRoster) {
+        this.list = await LoadPerf.fetchStaffRoster({ activeOnly, silent: !activeOnly });
+      } else {
+        const q = activeOnly ? '?active=1' : '';
+        this.list = await api('GET', `/staff${q}`) || [];
+      }
+    } catch (e) {
+      this.list = this.list || [];
+      if (activeOnly && e?.code === 'LOAD_TIMEOUT') {
+        toast('項目負責人名單載入逾時，請稍後再試', 'warning');
+      } else if (!activeOnly) {
+        throw e;
+      }
+    }
     return this.list;
   },
 
@@ -99,8 +112,9 @@ const StaffRoster = {
   findByName(name) {
     const n = (name || '').trim().toLowerCase();
     if (!n) return null;
-    return this.list.find(s =>
-      (s.name_en || '').trim().toLowerCase() === n
+    return this.list.find((s) =>
+      (s.person_name || '').trim().toLowerCase() === n
+      || (s.name_en || '').trim().toLowerCase() === n
       || (s.name_zh || '').trim().toLowerCase() === n
     ) || null;
   },
@@ -111,7 +125,9 @@ const StaffRoster = {
     const wantName = norm(selectedName);
     let html = allowEmpty ? '<option value="">— 選擇項目負責人 —</option>' : '';
     const seen = new Set();
-    (this.list.filter(s => s.is_active !== 0 && s.is_active !== false) || this.list).forEach(s => {
+    const activeRows = (this.list || []).filter((s) => s.is_active !== 0 && s.is_active !== false);
+    const rows = activeRows.length ? activeRows : (this.list || []);
+    rows.forEach((s) => {
       const name = (s.person_name || this.displayName(s)).trim();
       const key = name.trim().toLowerCase();
       if (!key || seen.has(key)) return;

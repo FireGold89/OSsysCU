@@ -1062,12 +1062,21 @@ const Payments = {
     const p = App.currentProject;
     const isNew = cert == null;
     const storedName = (cert?.prepared_by || '').trim();
-    const picDefault = isNew ? (p?.person_in_charge || '').trim() : '';
+    const picDefault = isNew ? (p?.person_in_charge || p?.qs_in_charge || '').trim() : '';
     const sel = document.getElementById('fIcPreparedBySelect');
     const customEl = document.getElementById('fIcPreparedByCustom');
     if (sel) {
       const pickName = storedName || picDefault;
       StaffRoster.fillPersonSelect(sel, { selectedName: pickName });
+      if (pickName && !StaffRoster.findByName(pickName)) {
+        const esc = (s) => String(s).replace(/"/g, '&quot;');
+        if (![...sel.options].some((o) => o.value === pickName)) {
+          sel.insertAdjacentHTML(
+            'afterbegin',
+            `<option value="${esc(pickName)}">${escHtml(pickName)}（本項目）</option>`,
+          );
+        }
+      }
       this._ensureIcPreparedByCustomOption(sel);
       const inRoster = pickName && StaffRoster.findByName(pickName);
       if (storedName && !inRoster) {
@@ -1646,7 +1655,6 @@ const Payments = {
     this._pendingCertModel = null;
     this._scVoOptions = [];
     this._resetLineRemarks();
-    void this._applyInternalSignToForm(null);
   },
 
   openAdd(type = 'normal') {
@@ -1668,6 +1676,7 @@ const Payments = {
     this.populateScSelect();
     document.getElementById('payModal').classList.add('open');
     AmountInput.init(document.getElementById('payModal'));
+    if (isCert) void this._applyInternalSignToForm(null);
   },
 
   async openEdit(id) {

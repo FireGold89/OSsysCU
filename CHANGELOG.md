@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261016-staff-roster` · 分支 `v2/portfolio`
+
+### 修正
+- **中期糧款 Prepared by 下拉空白**：`/staff` 在 Master List 無資料時仍合併 `staff_members` 與工程項目負責人；名單去重快取與逾時；預設帶入本項目負責人／QS。
+
 `APP_VERSION`: `v2-20261016-sc-vo-tpl` · 分支 `v2/portfolio`
 
 ### 改善

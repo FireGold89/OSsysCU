@@ -10,6 +10,7 @@ const LoadPerf = {
   BUNDLE_SLOT: 'dashboard-overview',
   SC_VO_TEMPLATES_SLOT: 'sc-vo-templates',
   SC_VO_TEMPLATES_MANAGE_SLOT: 'sc-vo-templates-manage',
+  STAFF_ROSTER_SLOT: 'staff-roster',
   GLOBAL_CACHE_ID: 'global',
   DEFAULT_IDLE_TIMEOUT_MS: 2800,
   /** 輕量全域 GET（範本目錄等）逾時 */
@@ -198,6 +199,26 @@ const LoadPerf = {
     this.invalidate(this.SC_VO_TEMPLATES_MANAGE_SLOT, this.GLOBAL_CACHE_ID);
   },
 
+  fetchStaffRoster({ activeOnly = true, silent = true } = {}) {
+    const slotId = activeOnly ? `${this.STAFF_ROSTER_SLOT}-active` : this.STAFF_ROSTER_SLOT;
+    const path = activeOnly ? '/staff?active=1' : '/staff';
+    return this.fetchDeduped(
+      this.STAFF_ROSTER_SLOT,
+      slotId,
+      () => this.withTimeout(
+        api('GET', path, null, { silent }),
+        this.LIGHT_GET_TIMEOUT_MS,
+        '載入逾時',
+      ),
+      { shouldCommit: (sid, data) => sid === slotId && Array.isArray(data) },
+    ).then((rows) => rows || []);
+  },
+
+  invalidateStaffRosterCaches() {
+    this.invalidate(this.STAFF_ROSTER_SLOT, `${this.STAFF_ROSTER_SLOT}-active`);
+    this.invalidate(this.STAFF_ROSTER_SLOT, this.STAFF_ROSTER_SLOT);
+  },
+
   _projectIdFromMutation(path, body, data) {
     const p = (path || '').split('?')[0];
     let m = p.match(/^\/projects\/(\d+)/);
@@ -221,6 +242,9 @@ const LoadPerf = {
     const p = (path || '').split('?')[0];
     if (/^\/sc-vo-templates(\/|$)/.test(p)) {
       this.invalidateScVoTemplateCaches();
+    }
+    if (/^\/staff(\/|$)/.test(p)) {
+      this.invalidateStaffRosterCaches();
     }
     const pid = this._projectIdFromMutation(path, body, data);
     if (pid) this.invalidateProjectCaches(pid);
