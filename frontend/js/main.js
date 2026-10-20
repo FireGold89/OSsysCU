@@ -1690,8 +1690,19 @@ const App = {
     if (!data?.app_version) return;
     const ver = String(data.app_version);
     const metaBuild = document.querySelector('meta[name="ossyscu-build"]')?.getAttribute('content');
-    if (metaBuild && metaBuild !== ver) {
-      toast(`系統已更新為 ${ver}，請按 Ctrl+Shift+R 重新整理`, 'warning');
+    const htmlStale = !!(metaBuild && metaBuild !== '__APP_BUILD__' && metaBuild !== ver);
+    if (htmlStale) {
+      const reloadKey = 'qs_html_reload_for';
+      try {
+        if (sessionStorage.getItem(reloadKey) !== ver) {
+          sessionStorage.setItem(reloadKey, ver);
+          const url = new URL(window.location.href);
+          url.searchParams.set('_cb', String(Date.now()));
+          window.location.replace(url.toString());
+          return;
+        }
+      } catch (_) { /* private mode */ }
+      toast(`頁面仍是舊版 ${metaBuild}，請在此分頁按 Ctrl+Shift+R`, 'warning');
     }
     const prev = localStorage.getItem(this.APP_BUILD_STORAGE_KEY);
     if (prev && prev !== ver && typeof LoadPerf !== 'undefined') {

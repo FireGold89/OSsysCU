@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261020-chrome-cache` · 分支 `v2/portfolio`
+
+### 修正
+- **Chrome 舊 Profile 載入舊前端**：JS/CSS 不再 `immutable` 快取一年；頁面版本與 `/api/system/status` 不一致時自動帶 `_cb` 重新載入一次。
+
 `APP_VERSION`: `v2-20261020-q1161-sync` · 分支 `v2/portfolio`
 
 ### 資料 / 修正

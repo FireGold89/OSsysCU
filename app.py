@@ -143,24 +143,25 @@ def index_html():
     return _serve_index()
 
 
-@app.route('/css/<path:filename>')
-def static_css(filename):
-    resp = make_response(send_from_directory(os.path.join(FRONTEND_DIR, 'css'), filename))
+def _static_asset_cache(resp):
+    """帶 ?v= 可快取，但勿 immutable 一年：舊 Chrome Profile 會把過期 JS 釘死。"""
     if request.args.get('v'):
-        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        resp.headers['Cache-Control'] = 'public, max-age=86400, must-revalidate'
     else:
         resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
     return resp
+
+
+@app.route('/css/<path:filename>')
+def static_css(filename):
+    resp = make_response(send_from_directory(os.path.join(FRONTEND_DIR, 'css'), filename))
+    return _static_asset_cache(resp)
 
 
 @app.route('/js/<path:filename>')
 def static_js(filename):
     resp = make_response(send_from_directory(os.path.join(FRONTEND_DIR, 'js'), filename))
-    if request.args.get('v'):
-        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-    else:
-        resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
-    return resp
+    return _static_asset_cache(resp)
 
 
 @app.route('/assets/<path:filename>')
