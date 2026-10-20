@@ -2272,6 +2272,80 @@ const SC = {
     this._pendingOcrId = null;
   },
 
+  _isScMatrixSc(scNo) {
+    return /^SC-\d/i.test(String(scNo || '').trim());
+  },
+
+  inferSubIpNo(description, subIpNo) {
+    const raw = (subIpNo || '').trim();
+    if (raw) {
+      const m = /^IP[-\s]*(\d+)/i.exec(raw);
+      return m ? `IP-${parseInt(m[1], 10).toString().padStart(2, '0')}` : raw;
+    }
+    const desc = description || '';
+    let m = /whole\s*works\s*ip\s*-\s*(\d+)/i.exec(desc);
+    if (!m) m = /IP\s*-\s*(\d+)/i.exec(desc);
+    return m ? `IP-${parseInt(m[1], 10).toString().padStart(2, '0')}` : null;
+  },
+
+  _resolvePaySubIp(payment) {
+    const subIp = this.inferSubIpNo(payment.description, payment.sub_ip_no);
+    const scNo = this._payModalSc?.sc_no;
+    const inMatrix = this._isScMatrixSc(scNo);
+    return {
+      subIp,
+      inferred: !(payment.sub_ip_no || '').trim() && !!subIp,
+      inMatrix,
+    };
+  },
+
+  _setScPayMatrixNote(sc) {
+    const noteEl = document.getElementById('scPayMatrixNote');
+    const ipBtn = document.getElementById('scPayGoIpBtn');
+    if (!noteEl) return;
+    const scNo = sc?.sc_no || '';
+    if (this._isScMatrixSc(scNo)) {
+      noteEl.hidden = false;
+      noteEl.className = 'sc-pay-matrix-note sc-pay-matrix-note--sc';
+      noteEl.innerHTML = '付款列的 <strong>Sub-IP No.</strong>（付款登記表單填寫）對應「糧期狀況 → 分包糧期明細」<strong>IP-NN × 本分判</strong>；儲存時描述含 <code>Whole works IP - NN</code> 可自動解析。點「→ 糧期」核對。';
+      if (ipBtn) ipBtn.hidden = false;
+    } else {
+      noteEl.hidden = false;
+      noteEl.className = 'sc-pay-matrix-note sc-pay-matrix-note--other';
+      noteEl.innerHTML = `<strong>${escHtml(scNo)}</strong> 為其他支出／非 Summary 分包判項（如 O-、M-），<strong>不會</strong>出現在「分包糧期明細」矩陣；僅在此與付款登記追蹤。`;
+      if (ipBtn) ipBtn.hidden = true;
+    }
+  },
+
+  goToIpMatrix(ipNo, scNo, options = {}) {
+    const sc = scNo || this._payModalSc?.sc_no;
+    const ip = (ipNo || '').trim().toUpperCase();
+    if (!sc || !ip) {
+      toast('請先確認 Sub-IP No.', 'warning');
+      return;
+    }
+    this.closePayModal();
+    App.navigate('ip-period', {
+      matrixFocus: { ipNo: ip, scNo: String(sc).trim().toUpperCase(), openDrill: options.openDrill !== false },
+    });
+  },
+
+  goToIpMatrixFromModal() {
+    const sc = this._payModalSc;
+    if (!sc || !this._isScMatrixSc(sc.sc_no)) return;
+    const payments = this._payModalPayments || [];
+    let ipNo = null;
+    for (const r of payments) {
+      const info = this._resolvePaySubIp(r);
+      if (info.subIp) { ipNo = info.subIp; break; }
+    }
+    if (!ipNo) {
+      toast('尚無可對應 Sub-IP 的付款列', 'warning');
+      return;
+    }
+    this.goToIpMatrix(ipNo, sc.sc_no, { openDrill: false });
+  },
+
   async showPayments(id) {
     const p = App.currentProject;
     if (!p) { toast('請先選擇項目', 'warning'); return; }
@@ -2303,12 +2377,14 @@ const SC = {
         <div><span style="color:var(--text-muted)">付款登記</span><br><strong id="scPayCount">載入中...</strong></div>
       </div>${hvoLine}`;
 
+    this._setScPayMatrixNote(s);
     document.getElementById('scPayTableBody').innerHTML =
-      `<tr><td colspan="9"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>`;
+      `<tr><td colspan="11"><div class="empty-state" style="padding:32px">載入中...</div></td></tr>`;
     document.getElementById('scPayModal').classList.add('open');
 
     const payments = await api('GET',
       `/projects/${p.id}/payments?sc_no=${encodeURIComponent(s.sc_no)}`) || [];
+    this._payModalPayments = payments;
     this._renderPayModal(payments, ca, paid, pending);
   },
 
@@ -2319,7 +2395,7 @@ const SC = {
     const tbody = document.getElementById('scPayTableBody');
     if (!payments.length) {
       const pendingFmt = fmt(Math.max(0, pending != null ? pending : ca - paid));
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state" style="padding:40px">
+      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">
         <div class="empty-icon">💰</div>
         <div class="empty-title">尚無付款登記</div>
         <div class="empty-sub" style="margin-top:8px">待付金額：<strong style="color:var(--warning)">${pendingFmt}</strong></div>
@@ -2334,9 +2410,23 @@ const SC = {
       return sa - sb;
     });
 
+    const scNo = this._payModalSc?.sc_no || '';
+    const scEsc = String(scNo).replace(/'/g, "\\'");
+
     tbody.innerHTML = sorted.map(r => {
       const remClass = amtClass(r.remainder_amount, 'expense');
       const paidClass = amtClass(r.paid_amount, 'expense');
+      const ipInfo = this._resolvePaySubIp(r);
+      const subIpDisp = ipInfo.subIp
+        ? `${fmtRefNo(ipInfo.subIp)}${ipInfo.inferred ? ' <span class="badge badge-muted" style="font-size:9px" title="由描述解析">解析</span>' : ''}`
+        : '<span class="td-muted">—</span>';
+      let matrixCell = '<span class="td-muted" style="font-size:10px">—</span>';
+      if (ipInfo.inMatrix && ipInfo.subIp) {
+        const ipEsc = String(ipInfo.subIp).replace(/'/g, "\\'");
+        matrixCell = `<button type="button" class="btn btn-link btn-sm sc-pay-matrix-link" title="糧期狀況 · 分包矩陣 ${ipInfo.subIp} × ${scNo}" onclick="event.stopPropagation();SC.goToIpMatrix('${ipEsc}','${scEsc}')">→ 糧期</button>`;
+      } else if (ipInfo.inMatrix && !ipInfo.subIp) {
+        matrixCell = '<span class="form-hint" style="font-size:10px">未對期</span>';
+      }
       const oaBadge = r.oa_ref === 'OK' ? '<span class="badge badge-success">OK</span>' :
                       r.oa_ref === '-'  ? '<span class="badge badge-muted">—</span>' :
                       r.oa_ref          ? `<span class="badge badge-warning">${r.oa_ref}</span>` : '—';
@@ -2348,11 +2438,13 @@ const SC = {
           <td class="td-muted" style="font-size:11px">${r.seq_no || '—'}</td>
           <td class="td-muted">${fmtDate(r.invoice_date)}</td>
           <td class="td-mono td-muted" style="font-size:11px">${r.invoice_no || '—'}</td>
-          <td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description || ''}">${r.description || '—'}</td>
+          <td class="td-mono" style="font-size:11px">${subIpDisp}</td>
+          <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.description || '')}">${r.description || '—'}</td>
           <td class="td-amount">${fmt(r.contract_amount)}</td>
           <td class="td-amount ${paidClass}">${fmtExpense(r.paid_amount)}</td>
           <td class="td-amount ${remClass}">${fmtExpense(r.remainder_amount)}</td>
           <td>${oaBadge}</td>
+          <td onclick="event.stopPropagation()">${matrixCell}</td>
           <td onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px">
               ${pdfBtn}
@@ -2366,6 +2458,7 @@ const SC = {
   closePayModal() {
     document.getElementById('scPayModal').classList.remove('open');
     this._payModalSc = null;
+    this._payModalPayments = null;
   },
 
   goToPayments() {

@@ -159,6 +159,31 @@ def _pct_val(val):
     return round(v * 100, 2) if abs(v) <= 1.5 else round(v, 2)
 
 
+def infer_sub_ip_no(description, sub_ip_no=None):
+    """Sub-IP 空時從描述解析（Whole works IP - 01 → IP-01）"""
+    return db.infer_sub_ip_no(description, sub_ip_no)
+
+
+def _summary_header_cell(ws, header_row, j, offset=0):
+    row_idx = header_row + offset
+    if row_idx < 1:
+        return None
+    rv = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+    return safe_str(rv[j]) if len(rv) > j else None
+
+
+def _is_subcon_amount_column(ws, header_row, j):
+    """該欄為分包「美博批款／Payment Certified」金額欄（非 % 欄）"""
+    for offset in (0, 1):
+        t = _summary_header_cell(ws, header_row, j, offset) or ''
+        if '支出' in t or '美博批' in t:
+            return True
+        tl = t.lower()
+        if 'payment certified' in tl and j >= 6:
+            return True
+    return False
+
+
 def _find_summary_sc_columns(ws, header_row):
     """Summary 分包欄位：SC-004 等表頭列 → {col_index: sc_no}"""
     sc_col_map = {}
@@ -174,14 +199,63 @@ def _find_summary_sc_columns(ws, header_row):
                 found[j] = s.upper()
         if len(found) >= 1:
             sc_col_map = found
+    if len(sc_col_map) == 1:
+        j = next(iter(sc_col_map))
+        if not _is_subcon_amount_column(ws, header_row, j):
+            return {}
     return sc_col_map
 
 
-def _summary_subcon_total_col(sc_col_map):
-    """分包總支出欄（SC 欄位之後的第一欄數值總計）"""
+def _summary_subcon_total_col(ws, header_row, sc_col_map):
+    """分包總支出欄；單一 SC 時用各 SC 欄加總，勿誤讀 % 欄"""
     if not sc_col_map:
         return 12
-    return max(sc_col_map) + 1
+    if len(sc_col_map) == 1:
+        return None
+    max_j = max(sc_col_map)
+    for offset in (0, 1):
+        row_idx = header_row + offset
+        if row_idx < 1:
+            continue
+        rv = list(ws.iter_rows(min_row=row_idx, max_row=row_idx, values_only=True))[0]
+        for j in range(max_j + 1, max_j + 4):
+            if j in sc_col_map:
+                continue
+            t = safe_str(rv[j]) if len(rv) > j else ''
+            if not t:
+                continue
+            tl = t.lower()
+            if '支出' in t and '美博' in t:
+                return j
+            if 'sub-con' in tl and 'total' in tl:
+                return j
+    return max_j + 1
+
+
+def _summary_subcon_pct_col(ws, header_row, sc_col_map):
+    if not sc_col_map:
+        return 13
+    j = max(sc_col_map) + 1
+    for offset in (0, 1):
+        t = _summary_header_cell(ws, header_row, j, offset) or ''
+        if '%' in t or '百分比' in t:
+            return j
+    return j
+
+
+def _summary_subcon_cert_date_col(ws, header_row, pct_col):
+    """分包「美博批數日期」欄（通常緊接 % 欄之後）"""
+    if pct_col is None:
+        return 14
+    for j in (pct_col + 1, pct_col + 2):
+        for offset in (0, 1):
+            t = _summary_header_cell(ws, header_row, j, offset) or ''
+            tl = t.lower()
+            if '美博批' in t and '日' in t:
+                return j
+            if 'payment certificate date' in tl and j > 6:
+                return j
+    return pct_col + 1
 
 
 def _find_summary_trade_labels(ws, header_row, sc_col_map):
@@ -257,8 +331,9 @@ def import_site_ip_period(filepath, project_id):
 
     sc_col_map = _find_summary_sc_columns(ws, header_row)
     trade_labels = _find_summary_trade_labels(ws, header_row, sc_col_map)
-    total_col = _summary_subcon_total_col(sc_col_map)
-    pct_col = total_col + 1
+    total_col = _summary_subcon_total_col(ws, header_row, sc_col_map)
+    pct_col = _summary_subcon_pct_col(ws, header_row, sc_col_map)
+    cert_date_col = _summary_subcon_cert_date_col(ws, header_row, pct_col)
 
     items = []
     sc_lines = []
@@ -276,11 +351,13 @@ def import_site_ip_period(filepath, project_id):
             break
         seq += 1
         ip_key = ip_no.upper()
-        subcon_total = safe_float(rv[total_col]) if len(rv) > total_col else 0
-        if not subcon_total and sc_col_map:
-            subcon_total = sum(
-                safe_float(rv[j]) for j in sc_col_map if len(rv) > j
-            )
+        sc_sum = sum(safe_float(rv[j]) for j in sc_col_map if len(rv) > j) if sc_col_map else 0
+        if total_col is not None and len(rv) > total_col:
+            subcon_total = safe_float(rv[total_col])
+            if not subcon_total and sc_sum:
+                subcon_total = sc_sum
+        else:
+            subcon_total = sc_sum
         items.append({
             'ip_no': ip_key,
             'seq_no': seq,
@@ -290,7 +367,7 @@ def import_site_ip_period(filepath, project_id):
             'certificate_date': safe_date(rv[6]) if len(rv) > 6 else None,
             'subcon_paid': subcon_total,
             'subcon_paid_pct': _pct_val(rv[pct_col]) if len(rv) > pct_col else None,
-            'subcon_cert_date': None,
+            'subcon_cert_date': safe_date(rv[cert_date_col]) if len(rv) > cert_date_col else None,
         })
         for j, sc_no in sc_col_map.items():
             amt = safe_float(rv[j]) if len(rv) > j else 0
@@ -614,7 +691,10 @@ def import_excel(filepath, project_code=None):
                 oa_no = safe_str(get_col('oa_no'))
                 mc_ip_no = safe_str(get_col('mc_ip_no'))
                 bc_to_sub = safe_str(get_col('bc_to_sub'))
-                sub_ip_no = safe_str(get_col('sub_ip_no'))
+                sub_ip_no = infer_sub_ip_no(
+                    safe_str(get_col('description')),
+                    safe_str(get_col('sub_ip_no')),
+                )
                 remark = safe_str(get_col('remark'))
 
                 # 必須有分判商編號或公司名
@@ -820,30 +900,34 @@ def sync_excel_data(filepath, project_id=None):
                 if not sc_no and not company_en:
                     continue
                 sc_id = sc_map.get(sc_no) if sc_no else None
-                db.create_payment({
-                    'project_id': project_id,
-                    'sc_id': sc_id,
-                    'seq_no': seq_no,
-                    'invoice_date': safe_date(get_col('invoice_date')),
-                    'invoice_no': safe_str(get_col('invoice_no')),
-                    'quotation_no': safe_str(get_col('quotation_no')),
-                    'sc_no': sc_no,
-                    'company_name_en': company_en,
-                    'company_name_zh': safe_str(get_col('company_name_zh')),
-                    'description': safe_str(get_col('description')),
-                    'contract_amount': safe_float(get_col('contract_amount')),
-                    'paid_amount': safe_float(get_col('paid_amount')),
-                    'remainder_amount': safe_float(get_col('remainder_amount')),
-                    'oa_ref': safe_str(get_col('oa_ref')),
-                    'oa_no': safe_str(get_col('oa_no')),
-                    'mc_ip_no': safe_str(get_col('mc_ip_no')),
-                    'bc_to_sub': safe_str(get_col('bc_to_sub')),
-                    'sub_ip_no': safe_str(get_col('sub_ip_no')),
-                    'remark': safe_str(get_col('remark')),
-                    'pdf_path': None,
-                    'ocr_status': None,
-                })
-                pay_count += 1
+                description = safe_str(get_col('description'))
+                try:
+                    db.create_payment({
+                        'project_id': project_id,
+                        'sc_id': sc_id,
+                        'seq_no': seq_no,
+                        'invoice_date': safe_date(get_col('invoice_date')),
+                        'invoice_no': safe_str(get_col('invoice_no')),
+                        'quotation_no': safe_str(get_col('quotation_no')),
+                        'sc_no': sc_no,
+                        'company_name_en': company_en,
+                        'company_name_zh': safe_str(get_col('company_name_zh')),
+                        'description': description,
+                        'contract_amount': safe_float(get_col('contract_amount')),
+                        'paid_amount': safe_float(get_col('paid_amount')),
+                        'remainder_amount': safe_float(get_col('remainder_amount')),
+                        'oa_ref': safe_str(get_col('oa_ref')),
+                        'oa_no': safe_str(get_col('oa_no')),
+                        'mc_ip_no': safe_str(get_col('mc_ip_no')),
+                        'bc_to_sub': safe_str(get_col('bc_to_sub')),
+                        'sub_ip_no': infer_sub_ip_no(description, safe_str(get_col('sub_ip_no'))),
+                        'remark': safe_str(get_col('remark')),
+                        'pdf_path': None,
+                        'ocr_status': None,
+                    })
+                    pay_count += 1
+                except ValueError as exc:
+                    print(f'  [SKIP] #{seq_no} {sc_no}: {exc}')
         print(f'[SYNC] 已匯入 {pay_count} 條付款記錄')
 
     ip_count = import_site_ip_period(filepath, project_id)

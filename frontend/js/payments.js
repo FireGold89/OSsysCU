@@ -77,6 +77,8 @@ const Payments = {
     { id: 'date', label: '發票日期' },
     { id: 'inv', label: '發票號碼' },
     { id: 'sc', label: '判項編號' },
+    { id: 'subip', label: 'Sub-IP No.' },
+    { id: 'mcip', label: 'MC IP' },
     { id: 'co', label: '公司名稱' },
     { id: 'desc', label: '工程描述' },
     { id: 'contract', label: '判項金額' },
@@ -182,6 +184,8 @@ const Payments = {
       case 'invoice_date': return row.invoice_date || '';
       case 'invoice_no': return (row.invoice_no || '').toLowerCase();
       case 'sc_no': return (row.sc_no || '').toLowerCase();
+      case 'sub_ip_no': return (row.sub_ip_no || '').toLowerCase();
+      case 'mc_ip_no': return (row.mc_ip_no || '').toLowerCase();
       case 'company': return ((row.company_name_en || row.company_name_zh || '')).toLowerCase();
       case 'description': return (row.description || '').toLowerCase();
       case 'contract_amount':
@@ -268,6 +272,8 @@ const Payments = {
           <td class="td-muted pay-col-date" data-col="date">${fmtDate(r.invoice_date)}</td>
           <td class="td-mono td-muted pay-col-inv" data-col="inv" style="font-size:11px">${r.invoice_no || '—'}</td>
           <td class="pay-col-sc" data-col="sc">${fmtRefNo(r.sc_no)}${typeTag}</td>
+          <td class="td-mono td-muted pay-col-subip" data-col="subip" style="font-size:11px">${fmtRefNo(r.sub_ip_no) || '—'}</td>
+          <td class="td-mono td-muted pay-col-mcip" data-col="mcip" style="font-size:11px">${fmtRefNo(r.mc_ip_no) || '—'}</td>
           <td class="td-company-name pay-col-co" data-col="co">${paymentCompanyNameHtml(r)}</td>
           <td class="td-muted pay-col-desc" data-col="desc" title="${escHtml(r.description || '')}">${r.description || '—'}</td>
           <td class="td-amount pay-col-amt" data-col="contract">${fmt(r.contract_amount)}</td>
@@ -1007,9 +1013,9 @@ const Payments = {
       remainder_amount: parseAmtOrZero(document.getElementById('fRemAmt').value),
       oa_ref: document.getElementById('fOaRef').value || null,
       oa_no: document.getElementById('fOaNo').value || null,
-      mc_ip_no: null,
+      mc_ip_no: (document.getElementById('fMcIpNo').value || '').trim() || null,
       bc_to_sub: document.getElementById('fBcToSub').value || null,
-      sub_ip_no: null,
+      sub_ip_no: (document.getElementById('fSubIpNo').value || '').trim() || null,
       backcharge_amount: parseAmtOrZero(document.getElementById('fBackchargeAmt').value),
       remark: document.getElementById('fRemark').value || null,
       pdf_path: document.getElementById('fPdfPath').value || null,
@@ -1637,6 +1643,33 @@ const Payments = {
     group.style.display = pdfPath ? 'block' : 'none';
   },
 
+  inferSubIpNo(description, subIpNo) {
+    const raw = (subIpNo || '').trim();
+    if (raw) {
+      const m = /^IP[-\s]*(\d+)/i.exec(raw);
+      return m ? `IP-${parseInt(m[1], 10).toString().padStart(2, '0')}` : raw;
+    }
+    const desc = description || '';
+    let m = /whole\s*works\s*ip\s*-\s*(\d+)/i.exec(desc);
+    if (!m) m = /IP\s*-\s*(\d+)/i.exec(desc);
+    return m ? `IP-${parseInt(m[1], 10).toString().padStart(2, '0')}` : null;
+  },
+
+  syncSubIpHint() {
+    const hint = document.getElementById('fSubIpHint');
+    if (!hint) return;
+    const sub = (document.getElementById('fSubIpNo').value || '').trim();
+    const desc = document.getElementById('fDesc').value || '';
+    if (sub) {
+      hint.textContent = '已指定 Sub-IP，分包矩陣會歸入該期';
+      return;
+    }
+    const inferred = this.inferSubIpNo(desc, null);
+    hint.textContent = inferred
+      ? `描述可解析為 ${inferred}；儲存時若 Sub-IP 留空將自動填入`
+      : '請填 IP-01 等，或於描述寫 Whole works IP - 01';
+  },
+
   _resetFormFields() {
     ['fInvDate','fInvNo','fQuotNo','fCompanyEn','fCompanyZh','fDesc','fOaRef','fOaNo','fRemark','fBackchargeAmt'].forEach(id => {
       const el = document.getElementById(id);
@@ -1645,6 +1678,7 @@ const Payments = {
     document.getElementById('fBcToSub').value = '';
     document.getElementById('fMcIpNo').value = '';
     document.getElementById('fSubIpNo').value = '';
+    this.syncSubIpHint();
     ['fContractAmt','fPaidAmt','fRemAmt','fDeductionTotal','fVoTotal','fAddTotal','fAddSubtotal','fNetCertTotal'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
@@ -1709,6 +1743,9 @@ const Payments = {
     document.getElementById('fCompanyEn').value = r.company_name_en || '';
     document.getElementById('fCompanyZh').value = r.company_name_zh || '';
     document.getElementById('fDesc').value = r.description || '';
+    document.getElementById('fSubIpNo').value = r.sub_ip_no || '';
+    document.getElementById('fMcIpNo').value = r.mc_ip_no || '';
+    this.syncSubIpHint();
     document.getElementById('fContractAmt').value = fmtInputNum(r.contract_amount);
     document.getElementById('fPaidAmt').value = fmtInputNum(r.paid_amount);
     document.getElementById('fRemAmt').value = fmtInputNum(r.remainder_amount);
@@ -1792,6 +1829,9 @@ const Payments = {
       this.closeModal();
       await this.load();
       await Dashboard.load();
+      if (typeof IpPeriod !== 'undefined' && App.currentPage === 'ip-period') {
+        await IpPeriod.refresh();
+      }
     } catch (e) {}
   },
 
@@ -1807,6 +1847,9 @@ const Payments = {
       toast('已刪除', 'success');
       await this.load();
       await Dashboard.load();
+      if (typeof IpPeriod !== 'undefined' && App.currentPage === 'ip-period') {
+        await IpPeriod.refresh();
+      }
     } catch (e) {
       toast(e.message || '刪除失敗', 'error');
     }

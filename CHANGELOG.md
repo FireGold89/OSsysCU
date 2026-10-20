@@ -4,6 +4,65 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261020-q1161-sync` · 分支 `v2/portfolio`
+
+### 資料 / 修正
+- **MS/Q1161/25**：對照 QS `…_r1_20261015.xlsx` 同步付款／分判／Summary 總支出與墊支、地盤期間；**IP-03 分包支出維持 hold**（995,000，待 QS 確認後再對 Excel）。
+- **Excel 同步**：`sync_excel_data` 遇重複發票號略過該列並記錄 `[SKIP]`，避免整批中斷。
+
+`APP_VERSION`: `v2-20261020-sc-progress-zh` · 分支 `v2/portfolio`
+
+### 改善
+- **分包糧期明細**：矩陣上方進度摘要改繁中「已批／餘下」、主合約／分包標題，並加視覺進度條（對照 Excel Summary 紅框）。
+
+`APP_VERSION`: `v2-20261020-sc-progress-strip` · 分支 `v2/portfolio`
+
+### 改善
+- **分包糧期明細**：矩陣上方加入 MTR Cert/Remain、SubCon/Remain 進度條（對照 Excel Summary 紅框）。
+
+`APP_VERSION`: `v2-20261017-subcon-pct-auto` · 分支 `v2/portfolio`
+
+### 改善
+- **分包累計% 自動計算**：累計分包支出（按期）÷ 項目 SC 判項合約金額合計；付款／糧期變更後重算並寫入 `subcon_paid_pct`。
+
+`APP_VERSION`: `v2-20261017-system-ip-workflow` · 分支 `v2/portfolio`
+
+### 改善
+- **系統優先糧期／分包流程**：付款表單顯示 Sub-IP、MC IP；儲存時後端解析 Sub-IP；主糧期分包總支出可由付款匯總；付款變更後糧期頁自動刷新；文案改為不依賴 Excel 匯入。
+
+`APP_VERSION`: `v2-20261017-ip-summary-cols` · 分支 `v2/portfolio`
+
+### 改善
+- **糧期狀況**：主表顯示「申請%」「美博批款日」；分包矩陣加「美博批款日」列；Summary 匯入讀取灰區美博批數日期；編輯糧期可改美博批款日。
+
+`APP_VERSION`: `v2-20261017-summary-sc-matrix` · 分支 `v2/portfolio`
+
+### 修正
+- **糧期頁分包矩陣一直空**：`GET /reports/summary` 的 `ip_period.sc_matrix` 誤為 `null`；改為呼叫 `build_ip_sc_matrix`（與後端匯總／解析 Sub-IP 一致）。
+
+`APP_VERSION`: `v2-20261017-subip-infer-matrix` · 分支 `v2/portfolio`
+
+### 修正
+- **分包糧期矩陣仍空**：付款匯總 fallback 改為 Sub-IP 欄位空時亦從 `Whole works IP - NN` 解析；Summary sc_lines 無有效金額時啟用 fallback；drill-down 同步以解析 Sub-IP 對帳。
+
+`APP_VERSION`: `v2-20261017-sc-pay-matrix-ui` · 分支 `v2/portfolio`
+
+### 改善
+- **分判商登記 · 付款彈窗**：Sub-IP 欄（含描述解析標籤）、分包糧期「→ 糧期」跳轉；O-/M- 判項提示不納入 Summary 矩陣；糧期頁矩陣格高亮與 drill-down。
+
+`APP_VERSION`: `v2-20261017-subip-matrix` · 分支 `v2/portfolio`
+
+### 修正
+- **分包糧期矩陣（Q1161 等）**：Summary 單欄 SC 時勿誤讀 % 欄為分包總支出；匯入付款時 Sub-IP 空則從 `Whole works IP - NN` 解析；`interim_payment_sc_lines` 空時依 `(Sub-IP, 判項)` 匯總付款顯示矩陣（糧期頁標示來源）。
+
+### 改善
+- **付款登記列表**：新增 Sub-IP No.、MC IP 欄（可於欄位設定顯示／隱藏）。
+
+`APP_VERSION`: `v2-20261017-iso-rules-guide` · 分支 `v2/portfolio`
+
+### 改善
+- **ISO 文件上傳**：可展開「提交條件說明」，列出主合約／分判 tier 與本項目主合約金額提示（與 `_scTierSlots`、≥1,000 萬會議記錄規則一致）。
+
 `APP_VERSION`: `v2-20261016-qs-meeting-labels` · 分支 `v2/portfolio`
 
 ### 改善

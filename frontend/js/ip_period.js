@@ -7,6 +7,7 @@ const IpPeriod = {
   _pendingIpCertFile: null,
   _pendingIpAppFile: null,
   _searchQuery: '',
+  _pendingMatrixFocus: null,
   _reconcileData: null,
   _bankSelectReady: false,
   _receiptRows: [],
@@ -616,7 +617,7 @@ const IpPeriod = {
         <div class="empty-state" style="padding:24px">
           <div class="empty-icon">🏗️</div>
           <div class="empty-title">尚無糧期資料</div>
-          <div class="empty-sub">${editable ? '可手動新增，或從 Excel Summary 工作表匯入' : '請從 Excel Summary 工作表匯入'}</div>
+          <div class="empty-sub">${editable ? '按「新增糧期」建立 IP-01…，填業主批款與美博批款日' : '尚無糧期記錄'}</div>
           ${editable ? '<br><button type="button" class="btn btn-primary btn-sm" onclick="IpPeriod.openAdd()">➕ 新增第一期糧款</button>' : ''}
         </div>`;
       this._updateSearchCount(0, 0);
@@ -654,19 +655,20 @@ const IpPeriod = {
           ${this._ipAppCellHtml(r)}
           <td class="td-amount ${amtClass(r.application_amount)}">${fmt(r.application_amount)}</td>
           <td class="td-muted">${fmtDate(r.applied_date)}</td>
+          <td class="td-muted" style="text-align:right">${fmtPct(r.application_pct)}</td>
           ${this._ipCertCellHtml(r)}
           <td class="td-amount ${amtClass(r.certified_income, 'income')}">${fmt(r.certified_income)}</td>
           <td class="td-muted" style="text-align:right">${fmtPct(r.certified_income_pct)}</td>
           <td class="td-muted">${fmtDate(r.certificate_date)}</td>
+          <td class="td-muted">${fmtDate(r.subcon_cert_date)}</td>
           ${this._receiptCellHtml(r)}
-          <td class="td-muted ip-col-frozen-hidden" style="text-align:right">${fmtPct(r.application_pct)}</td>
           <td class="td-amount ip-col-frozen-hidden ${amtClass(r.subcon_paid, 'expense')}">${r.subcon_paid ? fmtExpense(r.subcon_paid) : '—'}</td>
           <td class="td-muted ip-col-frozen-hidden" style="text-align:right">${fmtPct(r.subcon_paid_pct)}</td>
           ${actions}
         </tr>`;
     }).join('')
       : (applySearch
-        ? `<tr><td colspan="${editable ? 13 : 12}" class="td-muted" style="padding:24px;text-align:center">無符合「${escHtml(this._searchQuery.trim())}」的糧期</td></tr>`
+        ? `<tr><td colspan="${editable ? 14 : 13}" class="td-muted" style="padding:24px;text-align:center">無符合「${escHtml(this._searchQuery.trim())}」的糧期</td></tr>`
         : '');
 
     const totalsHtml = hideTotals ? '' : `
@@ -694,12 +696,13 @@ const IpPeriod = {
               <th style="width:52px">IP Application</th>
               <th class="th-num">美博申請付款</th>
               <th>申請日期</th>
+              <th class="th-num">申請%</th>
               <th style="width:52px">IP Cert.</th>
               <th class="th-num">業主批款</th>
               <th class="th-num">批款%</th>
               <th>批款日期</th>
+              <th>美博批款日</th>
               <th>收款記錄<br><span class="th-sub">支票／過數</span></th>
-              <th class="th-num ip-col-frozen-hidden">申請%</th>
               <th class="th-num ip-col-frozen-hidden">分包總支出</th>
               <th class="th-num ip-col-frozen-hidden">支出%</th>
               ${actionTh}
@@ -719,8 +722,8 @@ const IpPeriod = {
     if (!raw.columns?.length) {
       const hasMainIp = options.hasMainIp || (this._data?.items?.length > 0);
       const hint = hasMainIp
-        ? '主糧期已有資料但分包矩陣為空：請重啟 Flask（載入新版本）後 Ctrl+F5 刷新，並重新匯入 Payment Excel Summary。'
-        : '從 Excel Summary 匯入後，會顯示各分判商（SC-004…）每期批款矩陣';
+        ? '請在「分判付款登記」為 SC 判項填 Sub-IP No.（如 IP-01）並登已付金額；矩陣會依付款自動匯總。'
+        : '請先新增主糧期（IP-01…），再在付款登記連結 Sub-IP 與判項編號 SC-xxx。';
       el.innerHTML = `
         <div class="empty-state" style="padding:24px">
           <div class="empty-icon">📊</div>
@@ -753,10 +756,94 @@ const IpPeriod = {
     });
   },
 
+  _matrixProgressPair(certAmt, base, certFmt, remFmt) {
+    if (!base || base <= 0) {
+      return { certHtml: '—', remHtml: '—', pct: 0 };
+    }
+    const cert = parseFloat(certAmt) || 0;
+    const pct = Math.min(100, Math.max(0, (cert / base) * 100));
+    const rem = base - cert;
+    const remPct = Math.max(0, 100 - pct);
+    return {
+      certHtml: `${certFmt(cert)} <span class="ip-sc-prog-pct">${fmtPct(pct)}</span>`,
+      remHtml: `${remFmt(rem)} <span class="ip-sc-prog-pct">${fmtPct(remPct)}</span>`,
+      pct,
+    };
+  },
+
+  _matrixProgressBar(pct, tone) {
+    const w = Math.min(100, Math.max(0, parseFloat(pct) || 0));
+    const cls = tone === 'expense' ? 'ip-sc-prog-bar-fill expense' : 'ip-sc-prog-bar-fill income';
+    return `<div class="ip-sc-prog-bar" role="presentation" aria-hidden="true"><div class="${cls}" style="width:${w.toFixed(2)}%"></div></div>`;
+  },
+
+  _matrixProgressStrip(m) {
+    const ip = this._data || {};
+    const items = ip.items || [];
+    const mtrBase = parseFloat(ip.contract_amount) || 0;
+    let mtrCert = 0;
+    for (const it of items) {
+      mtrCert += parseFloat(it.certified_income) || 0;
+    }
+
+    const sum = m.summary || {};
+    const subBase = parseFloat(sum.total_contract) || 0;
+    let subCert = 0;
+    for (const it of items) {
+      subCert += parseFloat(it.subcon_paid) || 0;
+    }
+    if (subCert <= 0 && sum.total_paid_matrix) {
+      subCert = parseFloat(sum.total_paid_matrix) || 0;
+    }
+
+    if (mtrBase <= 0 && subBase <= 0) {
+      return '';
+    }
+
+    const mtr = this._matrixProgressPair(mtrCert, mtrBase, fmt, fmt);
+    const sub = this._matrixProgressPair(subCert, subBase, fmtExpense, fmtExpense);
+
+    return `
+      <div class="ip-sc-progress-strip" role="region" aria-label="主合約與分包累計進度">
+        <div class="ip-sc-progress-block">
+          <div class="ip-sc-progress-title">主合約（業主批款）</div>
+          ${this._matrixProgressBar(mtr.pct, 'income')}
+          <div class="ip-sc-progress-row">
+            <span class="ip-sc-progress-label">已批</span>
+            <span class="ip-sc-progress-val ${amtClass(mtrCert, 'income')}">${mtr.certHtml}</span>
+          </div>
+          <div class="ip-sc-progress-row">
+            <span class="ip-sc-progress-label">餘下</span>
+            <span class="ip-sc-progress-val">${mtr.remHtml}</span>
+          </div>
+        </div>
+        <div class="ip-sc-progress-block">
+          <div class="ip-sc-progress-title">分包（判項合計基數）</div>
+          ${this._matrixProgressBar(sub.pct, 'expense')}
+          <div class="ip-sc-progress-row">
+            <span class="ip-sc-progress-label">已批</span>
+            <span class="ip-sc-progress-val ${amtClass(subCert, 'expense')}">${sub.certHtml}</span>
+          </div>
+          <div class="ip-sc-progress-row">
+            <span class="ip-sc-progress-label">餘下</span>
+            <span class="ip-sc-progress-val">${sub.remHtml}</span>
+          </div>
+        </div>
+        <div class="ip-sc-progress-hint form-hint">
+          對照 Payment Excel 紅框：主合約 = 各期業主批款累計 ÷ 承建金額；分包 = 各期分包支出累計 ÷ 下方矩陣 SC 判項合計
+        </div>
+      </div>`;
+  },
+
   _matrixToolbar(m) {
     const sum = m.summary || {};
     const details = m.columns_detail || [];
     let badges = '';
+    if (m.matrix_source === 'payments') {
+      badges += '<span class="badge badge-info" style="margin-left:8px">來源：付款登記匯總</span>';
+    } else if (details.length) {
+      badges += '<span class="badge badge-muted" style="margin-left:8px">來源：Summary</span>';
+    }
     if (sum.overpaid_count > 0) {
       badges += `<span class="badge badge-danger" style="margin-left:8px">超付 ${sum.overpaid_count} 個分判</span>`;
     } else if (details.length) {
@@ -772,7 +859,8 @@ const IpPeriod = {
     return `
       <div class="ip-sc-matrix-toolbar">
         <div style="font-size:12px;color:var(--text-secondary)">
-          美博批款 → 各分判商（Summary Sub-con）${badges}
+          美博批款 → 各分判商${badges}
+          <span class="form-hint" style="display:inline;margin-left:6px">累計% = 累計分包支出 ÷ SC 判項合計</span>
         </div>
         <div class="ip-sc-view-toggle">
           <button type="button" class="btn btn-sm ${byIpCls}" onclick="IpPeriod.setMatrixView('by-ip')">按期</button>
@@ -790,7 +878,36 @@ const IpPeriod = {
     const onclick = v
       ? ` onclick="IpPeriod.openScDrilldown('${safeIp}','${safeSc}',${v})"`
       : '';
-    return `<td class="td-amount ${amtClass(v, 'expense')}${clickable}"${onclick} title="${v ? '點擊查看付款明細' : ''}">${display}</td>`;
+    const dataAttr = ` data-ip="${escHtml((ipNo || '').toUpperCase())}" data-sc="${escHtml((scNo || '').toUpperCase())}"`;
+    return `<td class="td-amount ip-sc-matrix-cell ${amtClass(v, 'expense')}${clickable}"${dataAttr}${onclick} title="${v ? '點擊查看付款明細' : ''}">${display}</td>`;
+  },
+
+  _applyPendingMatrixFocus() {
+    const f = this._pendingMatrixFocus;
+    if (!f?.ipNo || !f?.scNo) return;
+    this._pendingMatrixFocus = null;
+    this._matrixView = 'by-ip';
+    const matrix = this._data?.sc_matrix;
+    if (matrix?.columns?.length) {
+      this.renderScMatrix('ipPeriodScMatrix', matrix, { hasMainIp: this._data?.items?.length > 0 });
+    }
+    const run = () => {
+      const panel = document.getElementById('ipPeriodScMatrix');
+      panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const ip = String(f.ipNo).toUpperCase();
+      const sc = String(f.scNo).toUpperCase();
+      const cell = panel?.querySelector(`td.ip-sc-matrix-cell[data-ip="${ip}"][data-sc="${sc}"]`);
+      if (cell) {
+        panel.querySelectorAll('.ip-sc-matrix-focus').forEach(el => el.classList.remove('ip-sc-matrix-focus'));
+        cell.classList.add('ip-sc-matrix-focus');
+        cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      }
+      if (f.openDrill) {
+        const amt = parseFloat(cell?.textContent?.replace(/[^\d.-]/g, '')) || 0;
+        this.openScDrilldown(ip, sc, amt);
+      }
+    };
+    setTimeout(run, 120);
   },
 
   _renderScMatrixByIp(m) {
@@ -849,10 +966,12 @@ const IpPeriod = {
           ${cells}
           <td class="td-amount ${amtClass(r.total, 'expense')}" style="font-weight:600">${r.total ? fmtExpense(r.total) : '—'}</td>
           <td class="td-muted" style="text-align:right">${fmtPct(r.subcon_paid_pct)}</td>
+          <td class="td-muted">${fmtDate(r.subcon_cert_date)}</td>
         </tr>`;
     }).join('');
 
     return `
+      ${this._matrixProgressStrip(m)}
       ${this._matrixToolbar(m)}
       <div class="ip-period-wrap">
         <table class="ip-period-table ip-sc-matrix">
@@ -862,6 +981,7 @@ const IpPeriod = {
               ${headScNo}
               <th class="th-num" rowspan="3">總支出</th>
               <th class="th-num" rowspan="3">累計%</th>
+              <th rowspan="3">美博批款日</th>
             </tr>
             <tr>${headScTrade}</tr>
             <tr>${headScCo}</tr>
@@ -869,13 +989,13 @@ const IpPeriod = {
           <tbody>${body}</tbody>
           <tfoot>
             <tr class="ip-sc-matrix-foot"><td style="font-weight:600">糧期合計</td>${footMatrix}
-              <td class="td-amount ${amtClass(grandTotal, 'expense')}" style="font-weight:600">${grandTotal ? fmtExpense(grandTotal) : '—'}</td><td></td></tr>
+              <td class="td-amount ${amtClass(grandTotal, 'expense')}" style="font-weight:600">${grandTotal ? fmtExpense(grandTotal) : '—'}</td><td></td><td></td></tr>
             <tr class="ip-sc-matrix-foot ip-sc-matrix-meta"><td class="td-muted">判項金額</td>${footContract}
-              <td class="td-amount td-muted">${sum.total_contract ? fmt(sum.total_contract) : '—'}</td><td></td></tr>
+              <td class="td-amount td-muted">${sum.total_contract ? fmt(sum.total_contract) : '—'}</td><td></td><td></td></tr>
             <tr class="ip-sc-matrix-foot ip-sc-matrix-meta"><td class="td-muted">付款登記</td>${footPaid}
-              <td class="td-amount ${amtClass(sum.total_paid_records, 'expense')}">${sum.total_paid_records ? fmtExpense(sum.total_paid_records) : '—'}</td><td></td></tr>
+              <td class="td-amount ${amtClass(sum.total_paid_records, 'expense')}">${sum.total_paid_records ? fmtExpense(sum.total_paid_records) : '—'}</td><td></td><td></td></tr>
             <tr class="ip-sc-matrix-foot ip-sc-matrix-meta"><td class="td-muted">餘額</td>${footRemain}
-              <td class="td-amount ${amtClass((sum.total_contract || 0) - (sum.total_paid_records || 0), 'expense')}">${sum.total_contract != null ? fmtExpense((sum.total_contract || 0) - (sum.total_paid_records || 0)) : '—'}</td><td></td></tr>
+              <td class="td-amount ${amtClass((sum.total_contract || 0) - (sum.total_paid_records || 0), 'expense')}">${sum.total_contract != null ? fmtExpense((sum.total_contract || 0) - (sum.total_paid_records || 0)) : '—'}</td><td></td><td></td></tr>
           </tfoot>
         </table>
       </div>
@@ -921,6 +1041,7 @@ const IpPeriod = {
     const sum = m.summary || {};
 
     return `
+      ${this._matrixProgressStrip(m)}
       ${this._matrixToolbar(m)}
       <div class="ip-period-wrap">
         <table class="ip-period-table ip-sc-matrix">
@@ -1606,6 +1727,7 @@ const IpPeriod = {
     this.render('ipPeriodMain', this._data, { editable: true, project: proj });
     this.renderScMatrix('ipPeriodScMatrix', this._data.sc_matrix, { hasMainIp: this._data?.items?.length > 0 });
     await this.loadReconcile(projectId);
+    this._applyPendingMatrixFocus();
   },
 
   async loadReconcile(projectId) {

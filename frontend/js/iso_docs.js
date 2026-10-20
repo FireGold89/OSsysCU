@@ -103,6 +103,73 @@ const IsoDocs = {
     return out;
   },
 
+  _scSlotLabels(slots) {
+    return (slots || [])
+      .map((slot) => this._colBySlot(slot, this.SC_FILE_COLS)?.short || slot)
+      .filter(Boolean);
+  },
+
+  _mainTierHint(amount) {
+    const a = Number(amount) || 0;
+    const needTmc = a >= this.MAIN_TMC_REQUIRED_AMOUNT;
+    const amtText = typeof fmt === 'function' ? fmt(a) : `HK$${a}`;
+    if (needTmc) {
+      return `本項目主合約 ${amtText}（≥ HK$10,000,000）→ 「招標／會議」分頁之美博招投標會議記錄、港澳招投標會議記錄為 <strong>必填</strong>。`;
+    }
+    if (a > 0) {
+      return `本項目主合約 ${amtText}（&lt; HK$10,000,000）→ 美博／港澳招投標會議記錄為 <strong>選填</strong>（如有）。`;
+    }
+    return '請先確認項目主合約金額；≥ HK$10,000,000 時美博／港澳招投標會議記錄為必填。';
+  },
+
+  _renderRulesGuide(b) {
+    const host = document.getElementById('isoDocsRulesGuideBody');
+    if (!host) return;
+    const mainAmt = this._mainContractAmount(b);
+    const scTiers = [
+      { range: '小於 HK$100,000', slots: this._scTierSlots(0) },
+      { range: 'HK$100,000 以上至 HK$300,000 未滿', slots: this._scTierSlots(100000) },
+      { range: 'HK$300,000 以上至 HK$1,000,000 未滿', slots: this._scTierSlots(300000) },
+      { range: 'HK$1,000,000 以上至 HK$3,000,000 未滿', slots: this._scTierSlots(1000000) },
+      { range: 'HK$3,000,000 或以上', slots: this._scTierSlots(3000000) },
+    ];
+    const scTierHtml = scTiers.map((t) => {
+      const labels = this._scSlotLabels(t.slots);
+      const docs = labels.length
+        ? labels.map((l) => `<span class="iso-rules-tag">${escHtml(l)}</span>`).join('')
+        : '<span class="iso-rules-muted">無需提交 ISO 文件</span>';
+      return `<li><span class="iso-rules-range">${escHtml(t.range)}</span><div class="iso-rules-tags">${docs}</div></li>`;
+    }).join('');
+
+    host.innerHTML = `
+      <p class="iso-rules-current">${this._mainTierHint(mainAmt)}</p>
+      <p class="iso-rules-lead">系統依<strong>主合約</strong>或<strong>分判商合約金額</strong>自動顯示槽位；標示「選填」者可不上傳；未出現的欄位代表該金額 tier 無需提交。</p>
+      <div class="iso-rules-cols">
+        <section class="iso-rules-section">
+          <h4>主合約 · 合約文件</h4>
+          <ul class="iso-rules-list">
+            <li><strong>必填</strong>：主合約或 LOA</li>
+            <li><strong>選填</strong>：補充合約或 Optional 工程（如有）</li>
+          </ul>
+        </section>
+        <section class="iso-rules-section">
+          <h4>主合約 · 招標／會議</h4>
+          <ul class="iso-rules-list">
+            <li><strong>必填</strong>：投標會簽表</li>
+            <li><strong>選填</strong>：工程及管理投標合作伙伴名單、合作備忘錄及保密協議、其他（如有）</li>
+            <li>主合約 <strong>≥ HK$10,000,000</strong>：<strong>必填</strong> 美博招投標會議記錄、港澳招投標會議記錄</li>
+            <li>主合約 <strong>&lt; HK$10,000,000</strong>：上述兩項為 <strong>選填</strong>（如有）</li>
+          </ul>
+        </section>
+        <section class="iso-rules-section iso-rules-section-wide">
+          <h4>分判商 · 依分判合約金額（每判項獨立計算）</h4>
+          <ul class="iso-rules-tier-list">${scTierHtml}</ul>
+          <p class="iso-rules-foot">分判列表僅顯示 SC 類主判項（不含 M／O 物料及其他支出）；<strong>≥ HK$300,000</strong> 的判項排序優先。各判項只顯示該 tier 需提交之欄位。</p>
+        </section>
+      </div>
+      <p class="iso-rules-legend"><span class="iso-rules-legend-req">必填</span> 缺件會計入 ISO 完成度 · <span class="iso-rules-legend-opt">選填</span> 可留空 · 可上傳 PDF／圖片或填 SharePoint 連結</p>`;
+  },
+
   _sortScRows(rows) {
     return [...(rows || [])].sort((a, b) => {
       const aa = this._scAmount(a);
@@ -435,6 +502,7 @@ const IsoDocs = {
 
     this._renderLibraryBar(b);
     this._renderProgress(b);
+    this._renderRulesGuide(b);
     this.setView(this._view);
     this.setMainSubTab(this._mainSubTab);
     this._renderMainMeta(b);

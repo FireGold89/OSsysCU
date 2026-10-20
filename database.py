@@ -3678,9 +3678,17 @@ def suggest_next_sc_number(project_id, prefix='SC', company=None):
     return suggest_next_sc_no(sc_list, prefix, company)
 
 
+def _apply_inferred_sub_ip(data):
+    if not data.get('sub_ip_no'):
+        inferred = infer_sub_ip_no(data.get('description'), data.get('sub_ip_no'))
+        if inferred:
+            data['sub_ip_no'] = inferred
+
+
 def create_payment(data):
     data.setdefault('payment_type', 'normal')
     data.setdefault('backcharge_amount', 0)
+    _apply_inferred_sub_ip(data)
     ensure_unique_payment_invoice(data.get('project_id'), data.get('invoice_no'))
     conn = get_conn()
     # 計算餘額
@@ -3732,12 +3740,14 @@ def create_payment(data):
             data['project_id'], data.get('sc_id'), data.get('sc_no'), 'invoice',
             data['pdf_path'], ocr_id=data.get('ocr_id'),
         )
+    _recalc_and_save_ip_pcts(data['project_id'])
     return new_id
 
 
 def update_payment(payment_id, data):
     data.setdefault('payment_type', 'normal')
     data.setdefault('backcharge_amount', 0)
+    _apply_inferred_sub_ip(data)
     data.setdefault('deduction_total', 0)
     if data.get('deduction_ids') is not None:
         data['deduction_ids_json'] = json.dumps(data.pop('deduction_ids') or [])
@@ -3789,7 +3799,9 @@ def update_payment(payment_id, data):
     )
     _apply_payment_sc_vo_records(conn, payment_id, data.get('vo_ids_json'), data.get('deduction_ids_json'))
     conn.commit()
+    project_id = existing['project_id']
     conn.close()
+    _recalc_and_save_ip_pcts(project_id)
 
 
 def _parse_id_json(raw):
@@ -4657,6 +4669,7 @@ def delete_payment(payment_id):
     conn.close()
     if project_id:
         compact_seq_numbers(project_id)
+        _recalc_and_save_ip_pcts(project_id)
 
 
 def replace_payments_for_project(project_id):
@@ -4885,8 +4898,87 @@ def enrich_interim_payment(row):
     return r
 
 
+def enrich_ip_subcon_from_payments(project_id, items):
+    """系統登記：主糧期分包總支出空時，依 Sub-IP 付款匯總補上"""
+    if not items:
+        return items
+    by_ip = {}
+    for ln in build_sc_lines_from_payments(project_id):
+        ip = (ln.get('ip_no') or '').upper()
+        by_ip[ip] = by_ip.get(ip, 0.0) + float(ln.get('amount') or 0)
+    if not by_ip:
+        return items
+    out = []
+    for it in items:
+        row = dict(it)
+        ip = (row.get('ip_no') or '').upper()
+        paid = float(row.get('subcon_paid') or 0)
+        if ip in by_ip and paid <= 0:
+            row['subcon_paid'] = by_ip[ip]
+        out.append(row)
+    return out
+
+
+def get_subcon_pct_base(project_id, sc_nos=None):
+    """分包累計% 分母：指定 SC 判項合約合計（預設全部 SC-%）"""
+    conn = get_conn()
+    normalized = [s.strip().upper() for s in (sc_nos or []) if s]
+    if normalized:
+        ph = ','.join('?' * len(normalized))
+        row = conn.execute(
+            f"""
+            SELECT COALESCE(SUM(contract_amount), 0) AS total
+            FROM subcontractors
+            WHERE project_id=? AND NOT is_excluded
+              AND UPPER(TRIM(sc_no)) IN ({ph})
+            """,
+            (project_id, *normalized),
+        ).fetchone()
+    else:
+        row = conn.execute("""
+            SELECT COALESCE(SUM(contract_amount), 0) AS total
+            FROM subcontractors
+            WHERE project_id=? AND NOT is_excluded
+              AND UPPER(TRIM(sc_no)) LIKE 'SC-%'
+        """, (project_id,)).fetchone()
+    conn.close()
+    total = float(row['total'] or 0)
+    if total > 0:
+        return total
+    project = get_project(project_id)
+    return float((project or {}).get('contract_amount') or 0)
+
+
+def resolve_subcon_pct_base(project_id, ip_items):
+    """分母優先：分包矩陣欄位 SC 判項合計（與表尾判項金額一致）"""
+    matrix = build_ip_sc_matrix(project_id, ip_items)
+    cols = matrix.get('columns') or []
+    if cols:
+        total = float((matrix.get('summary') or {}).get('total_contract') or 0)
+        if total > 0:
+            return total
+        return get_subcon_pct_base(project_id, cols)
+    return get_subcon_pct_base(project_id)
+
+
+def calc_ip_subcon_cumulative_pcts(items, subcon_contract_total):
+    """分包累計% = 累計分包支出 ÷ SC 判項合計 × 100（按期 seq 累加）"""
+    base = float(subcon_contract_total or 0)
+    cum = 0.0
+    out = []
+    for it in items:
+        row = dict(it)
+        cum += float(row.get('subcon_paid') or 0)
+        if base > 0:
+            row['subcon_paid_pct'] = round(cum / base * 100, 2)
+        else:
+            row['subcon_paid_pct'] = None
+        out.append(row)
+    return out
+
+
 def calc_ip_cumulative_pcts(items, contract_amount):
-    """申請% / 批款% = 累計金額 ÷ 承建金額 × 100（與 Excel Summary 一致）"""
+    """申請% / 批款% = 累計金額 ÷ 承建金額 × 100"""
     base = float(contract_amount or 0)
     cum_app = cum_cert = 0.0
     out = []
@@ -4932,16 +5024,24 @@ def get_ip_sc_drilldown(project_id, ip_no, sc_no):
         WHERE project_id=? AND UPPER(ip_no)=? AND UPPER(sc_no)=?
     """, (project_id, ip_key, sc_key)).fetchone()
     matrix_amt = float(row['amount']) if row else 0.0
-    payments = conn.execute("""
+    pay_rows = conn.execute("""
         SELECT id, seq_no, invoice_date, invoice_no, description,
                paid_amount, sub_ip_no, mc_ip_no, sc_no
         FROM payment_records
-        WHERE project_id=? AND UPPER(sc_no)=? AND UPPER(sub_ip_no)=?
+        WHERE project_id=? AND UPPER(TRIM(sc_no))=?
           AND (revoked_at IS NULL OR revoked_at = '')
         ORDER BY CAST(seq_no AS INTEGER), seq_no
-    """, (project_id, sc_key, ip_key)).fetchall()
+    """, (project_id, sc_key)).fetchall()
     conn.close()
-    items = [dict(r) for r in payments]
+    items = []
+    for r in pay_rows:
+        d = dict(r)
+        resolved = (infer_sub_ip_no(d.get('description'), d.get('sub_ip_no')) or '').upper()
+        if resolved != ip_key:
+            continue
+        items.append(d)
+    if matrix_amt <= 0 and items:
+        matrix_amt = sum(float(p.get('paid_amount') or 0) for p in items)
     records_total = sum(float(p.get('paid_amount') or 0) for p in items)
     diff = matrix_amt - records_total
     return {
@@ -4983,13 +5083,71 @@ def get_interim_payment_sc_lines(project_id):
     return [dict(r) for r in rows]
 
 
+_WHOLE_WORKS_IP_RE = re.compile(r'whole\s*works\s*ip\s*-\s*(\d+)', re.I)
+
+
+def infer_sub_ip_no(description, sub_ip_no=None):
+    """Sub-IP 空時從描述解析（Whole works IP - 01 → IP-01）"""
+    raw = (sub_ip_no or '').strip()
+    if raw:
+        m = re.match(r'^IP[-\s]*(\d+)', raw, re.I)
+        if m:
+            return f"IP-{int(m.group(1)):02d}"
+        return raw
+    desc = description or ''
+    m = _WHOLE_WORKS_IP_RE.search(desc)
+    if not m:
+        m = re.search(r'IP\s*-\s*(\d+)', desc, re.I)
+    if m:
+        return f"IP-{int(m.group(1)):02d}"
+    return None
+
+
+def build_sc_lines_from_payments(project_id):
+    """Summary 無 sc_lines 時，依付款登記 Sub-IP × 判項匯總已付金額（含描述解析）"""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT description, sub_ip_no, sc_no, paid_amount
+        FROM payment_records
+        WHERE project_id=?
+          AND (revoked_at IS NULL OR revoked_at = '')
+          AND sc_no IS NOT NULL AND TRIM(sc_no) != ''
+          AND UPPER(TRIM(sc_no)) LIKE 'SC-%'
+          AND COALESCE(paid_amount, 0) > 0
+    """, (project_id,)).fetchall()
+    conn.close()
+    agg = {}
+    for r in rows:
+        ip_no = infer_sub_ip_no(r['description'], r['sub_ip_no'])
+        sc_no = (r['sc_no'] or '').strip().upper()
+        if not ip_no or not sc_no:
+            continue
+        ip_key = ip_no.upper()
+        agg[(ip_key, sc_no)] = agg.get((ip_key, sc_no), 0.0) + float(r['paid_amount'] or 0)
+    return [
+        {'ip_no': ip, 'sc_no': sc, 'amount': amt}
+        for (ip, sc), amt in sorted(agg.items())
+        if amt > 0
+    ]
+
+
 def build_ip_sc_matrix(project_id, ip_items=None):
     """分包糧期矩陣：columns + 每期各 SC 金額 + 分判商主檔對照"""
     if ip_items is None:
         ip_items = get_interim_payments(project_id)
     lines = get_interim_payment_sc_lines(project_id)
+    line_total = sum(float(ln.get('amount') or 0) for ln in lines)
+    matrix_source = 'summary'
+    if (not lines or line_total <= 0) and ip_items:
+        pay_lines = build_sc_lines_from_payments(project_id)
+        if pay_lines:
+            lines = pay_lines
+            matrix_source = 'payments'
     if not lines and not ip_items:
-        return {'columns': [], 'columns_detail': [], 'rows': [], 'column_totals': {}}
+        return {
+            'columns': [], 'columns_detail': [], 'rows': [], 'column_totals': {},
+            'matrix_source': matrix_source,
+        }
 
     sc_set = set()
     by_ip = {}
@@ -5013,6 +5171,7 @@ def build_ip_sc_matrix(project_id, ip_items=None):
             'cells': cells,
             'total': row_total,
             'subcon_paid_pct': it.get('subcon_paid_pct'),
+            'subcon_cert_date': it.get('subcon_cert_date'),
         })
 
     conn = get_conn()
@@ -5057,6 +5216,7 @@ def build_ip_sc_matrix(project_id, ip_items=None):
         'columns_detail': columns_detail,
         'rows': rows,
         'column_totals': column_totals,
+        'matrix_source': matrix_source,
         'summary': {
             'total_contract': sum(d['contract_amount'] for d in columns_detail),
             'total_paid_matrix': sum(column_totals.values()),
@@ -5101,6 +5261,7 @@ def replace_interim_payments(project_id, items, meta=None, sc_lines=None):
     conn.close()
     if sc_lines is not None:
         replace_interim_payment_sc_lines(project_id, sc_lines)
+    _recalc_and_save_ip_pcts(project_id)
 
 
 def get_interim_payments(project_id):
@@ -5118,10 +5279,9 @@ def get_ip_period_summary(project_id):
     project = get_project(project_id)
     if not project:
         return None
-    items = calc_ip_cumulative_pcts(
-        get_interim_payments(project_id),
-        project.get('contract_amount'),
-    )
+    items = enrich_ip_subcon_from_payments(project_id, get_interim_payments(project_id))
+    items = calc_ip_subcon_cumulative_pcts(items, resolve_subcon_pct_base(project_id, items))
+    items = calc_ip_cumulative_pcts(items, project.get('contract_amount'))
     sc_matrix = build_ip_sc_matrix(project_id, items)
     return {
         'site_period_text': project.get('site_period_text'),
@@ -5278,13 +5438,25 @@ def _recalc_and_save_ip_pcts(project_id):
     project = get_project(project_id)
     if not project:
         return
-    items = get_interim_payments(project_id)
+    items = enrich_ip_subcon_from_payments(project_id, get_interim_payments(project_id))
+    items = calc_ip_subcon_cumulative_pcts(items, resolve_subcon_pct_base(project_id, items))
     calc_items = calc_ip_cumulative_pcts(items, project.get('contract_amount'))
     conn = get_conn()
     for it in calc_items:
         conn.execute(
-            "UPDATE interim_payments SET application_pct=?, certified_income_pct=? WHERE id=?",
-            (it.get('application_pct'), it.get('certified_income_pct'), it['id'])
+            """
+            UPDATE interim_payments SET
+                application_pct=?, certified_income_pct=?,
+                subcon_paid_pct=?, subcon_paid=?
+            WHERE id=?
+            """,
+            (
+                it.get('application_pct'),
+                it.get('certified_income_pct'),
+                it.get('subcon_paid_pct'),
+                it.get('subcon_paid'),
+                it['id'],
+            ),
         )
     conn.commit()
     conn.close()
@@ -5605,10 +5777,13 @@ def get_project_summary(project_id):
         SELECT * FROM interim_payments WHERE project_id=?
         ORDER BY seq_no, ip_no
     """, (project_id,)).fetchall()
-    ip_items = calc_ip_cumulative_pcts(
+    ip_items = enrich_ip_subcon_from_payments(
+        project_id,
         [enrich_interim_payment(r) for r in ip_rows],
-        contract_a,
     )
+    ip_items = calc_ip_subcon_cumulative_pcts(ip_items, resolve_subcon_pct_base(project_id, ip_items))
+    ip_items = calc_ip_cumulative_pcts(ip_items, contract_a)
+    sc_matrix = build_ip_sc_matrix(project_id, ip_items)
     ip_period = {
         'site_period_text': proj.get('site_period_text'),
         'project_name_en': proj.get('project_name_en'),
@@ -5617,7 +5792,7 @@ def get_project_summary(project_id):
         'project_code': proj.get('project_code'),
         'contract_amount': contract_a,
         'items': ip_items,
-        'sc_matrix': None,
+        'sc_matrix': sc_matrix,
         'totals': {
             'total_income': proj.get('ip_total_income') or 0,
             'total_expenditure': proj.get('ip_total_expenditure') or 0,

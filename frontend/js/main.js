@@ -2124,7 +2124,10 @@ const App = {
     else if (page === 'sc-vo-reg') { ScVoReg.populateScFilter(); ScVoReg.load(); }
     else if (page === 'main-con-fac') MainConFac.load();
     else if (page === 'sc-fac') ScFac.load();
-    else if (page === 'ip-period') IpPeriod.load();
+    else if (page === 'ip-period') {
+      if (options?.matrixFocus) IpPeriod._pendingMatrixFocus = options.matrixFocus;
+      IpPeriod.load();
+    }
     else if (page === 'reports') Reports.load();
     else if (page === 'projects') Projects.load();
     else if (page === 'master-list') MasterList.load();
