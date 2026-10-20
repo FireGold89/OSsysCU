@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 
 from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
 import auth
+import access_control
 import database as db
 import portfolio
 import portfolio_importer
@@ -50,6 +51,130 @@ def resp(data=None, error=None, status=200):
 @app.before_request
 def _require_login():
     return auth.check_request()
+
+
+@app.after_request
+def _log_write_activity(response):
+    """記錄已登入帳號的寫入（不含閒置 touch、不含密碼內容）"""
+    try:
+        if not auth.is_enabled():
+            return response
+        method = request.method or ''
+        if method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            return response
+        path = request.path or ''
+        if not path.startswith('/api/') or path == '/api/auth/touch':
+            return response
+        user = auth.current_user()
+        if not user:
+            return response
+        db.insert_activity_log(
+            user.get('username'),
+            user.get('role'),
+            method,
+            path,
+            response.status_code,
+        )
+    except Exception:
+        pass
+    return response
+
+
+@app.route('/api/admin/activity', methods=['GET'])
+def admin_activity():
+    try:
+        limit = int(request.args.get('limit') or 200)
+    except ValueError:
+        limit = 200
+    return resp(db.list_activity_log(limit))
+
+
+def _access_user_payload(body, creating, existing=None):
+    username = (body.get('username') or (existing or {}).get('username') or '').strip()
+    if creating:
+        if not re.fullmatch(r'[A-Za-z0-9._-]{2,40}', username):
+            return None, '帳號須為 2–40 位英數、點、底線或連字號'
+        if db.get_app_user_by_username(username):
+            return None, '帳號已存在'
+    role = (body.get('role') or 'qs').strip().lower()
+    if role not in access_control.PRESET_ROLES:
+        role = 'custom'
+    perms = access_control.normalize_matrix(body.get('permissions'), role)
+    if role == 'admin':
+        perms = access_control.preset_matrix('admin')
+    elif role != 'custom' and not access_control.matrix_matches(role, perms):
+        role = 'custom'
+    password = body.get('password') or ''
+    password_hash = None
+    if creating or str(password).strip():
+        if len(str(password)) < 6:
+            return None, '密碼至少 6 個字元'
+        password_hash = auth.hash_password(str(password))
+    elif creating:
+        return None, '請設定密碼'
+    display = (body.get('display_name') or '').strip() or username
+    active = body.get('is_active', True)
+    if isinstance(active, str):
+        active = active.strip().lower() not in ('0', 'false', 'no')
+    return {
+        'username': username,
+        'display_name': display,
+        'role': role,
+        'permissions': perms,
+        'is_active': bool(active),
+        'password_hash': password_hash,
+    }, None
+
+
+@app.route('/api/admin/permission-catalog', methods=['GET'])
+def admin_permission_catalog():
+    return resp(access_control.catalog_payload())
+
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_users_list():
+    return resp(db.list_app_users())
+
+
+@app.route('/api/admin/users', methods=['POST'])
+def admin_users_create():
+    data, err = _access_user_payload(request.json or {}, creating=True)
+    if err:
+        return resp(error=err, status=400)
+    row = db.save_app_user(data)
+    return resp(row)
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['PUT'])
+def admin_users_update(user_id):
+    existing = db.get_app_user(user_id)
+    if not existing:
+        return resp(error='找不到帳號', status=404)
+    data, err = _access_user_payload(request.json or {}, creating=False, existing=existing)
+    if err:
+        return resp(error=err, status=400)
+    actor = auth.actor_for_session() or {}
+    demote = existing.get('role') == 'admin' and existing.get('is_active') and (
+        data['role'] != 'admin' or not data['is_active']
+    )
+    if demote and db.count_active_admins() <= 1:
+        return resp(error='請先建立另一位啟用中的管理員，再調整這位管理員', status=400)
+    row = db.save_app_user(data, user_id=user_id)
+    return resp(row)
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+def admin_users_delete(user_id):
+    existing = db.get_app_user(user_id)
+    if not existing:
+        return resp(error='找不到帳號', status=404)
+    actor = auth.actor_for_session() or {}
+    if actor.get('id') == user_id:
+        return resp(error='不能刪除目前登入的帳號', status=400)
+    if existing.get('role') == 'admin' and existing.get('is_active') and db.count_active_admins() <= 1:
+        return resp(error='請先建立另一位啟用中的管理員', status=400)
+    db.delete_app_user(user_id)
+    return resp({'deleted': user_id})
 
 
 # ─── 登入 ────────────────────────────────────────────────────────────────

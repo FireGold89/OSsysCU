@@ -675,6 +675,184 @@ def _migrate_db(conn):
     _migrate_iso_documents_v3(conn)
     _migrate_iso_documents_v4(conn)
     _migrate_portfolio_tables(conn)
+    _migrate_activity_log(conn)
+    _migrate_app_users(conn)
+
+
+def _migrate_activity_log(conn):
+    """登入帳號的寫入操作紀錄（管理員查閱）"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            username     TEXT,
+            role         TEXT,
+            method       TEXT,
+            path         TEXT,
+            status_code  INTEGER,
+            created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_activity_log_created
+        ON activity_log(created_at)
+    """)
+    conn.commit()
+
+
+def insert_activity_log(username, role, method, path, status_code):
+    conn = get_conn()
+    conn.execute(
+        """
+        INSERT INTO activity_log (username, role, method, path, status_code)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            (username or '')[:80],
+            (role or '')[:40],
+            (method or '')[:12],
+            (path or '')[:400],
+            int(status_code or 0),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_activity_log(limit=200):
+    conn = get_conn()
+    rows = conn.execute(
+        """
+        SELECT id, username, role, method, path, status_code, created_at
+        FROM activity_log
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (max(1, min(int(limit or 200), 500)),),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _migrate_app_users(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT NOT NULL UNIQUE,
+            display_name  TEXT,
+            password_hash TEXT NOT NULL,
+            role          TEXT NOT NULL DEFAULT 'qs',
+            perm_json     TEXT,
+            is_active     INTEGER DEFAULT 1,
+            created_at    TEXT DEFAULT (datetime('now', 'localtime')),
+            updated_at    TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    conn.commit()
+
+
+def _app_user_public(row):
+    if not row:
+        return None
+    data = dict(row)
+    data.pop('password_hash', None)
+    raw = data.get('perm_json')
+    try:
+        data['permissions'] = json.loads(raw) if raw else None
+    except json.JSONDecodeError:
+        data['permissions'] = None
+    data['is_active'] = bool(data.get('is_active'))
+    return data
+
+
+def get_app_user_by_username(username):
+    name = (username or '').strip()
+    if not name:
+        return None
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM app_users WHERE username = ? COLLATE NOCASE",
+        (name,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_app_users():
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM app_users ORDER BY username COLLATE NOCASE"
+    ).fetchall()
+    conn.close()
+    return [_app_user_public(r) for r in rows]
+
+
+def get_app_user(user_id):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM app_users WHERE id=?", (user_id,)).fetchone()
+    conn.close()
+    return _app_user_public(row)
+
+
+def count_active_admins():
+    conn = get_conn()
+    n = conn.execute(
+        "SELECT COUNT(*) FROM app_users WHERE role='admin' AND is_active=1"
+    ).fetchone()[0]
+    conn.close()
+    return int(n or 0)
+
+
+def save_app_user(data, user_id=None):
+    conn = get_conn()
+    perm = data.get('permissions')
+    perm_text = json.dumps(perm, ensure_ascii=False) if isinstance(perm, dict) else None
+    if user_id:
+        conn.execute(
+            """
+            UPDATE app_users SET
+                display_name=:display_name, role=:role, perm_json=:perm_json,
+                is_active=:is_active, updated_at=datetime('now', 'localtime')
+            WHERE id=:id
+            """,
+            {
+                'id': user_id,
+                'display_name': data.get('display_name'),
+                'role': data.get('role') or 'qs',
+                'perm_json': perm_text,
+                'is_active': 1 if data.get('is_active', True) else 0,
+            },
+        )
+        if data.get('password_hash'):
+            conn.execute(
+                "UPDATE app_users SET password_hash=? WHERE id=?",
+                (data['password_hash'], user_id),
+            )
+    else:
+        conn.execute(
+            """
+            INSERT INTO app_users (username, display_name, password_hash, role, perm_json, is_active)
+            VALUES (:username, :display_name, :password_hash, :role, :perm_json, :is_active)
+            """,
+            {
+                'username': data['username'],
+                'display_name': data.get('display_name'),
+                'password_hash': data['password_hash'],
+                'role': data.get('role') or 'qs',
+                'perm_json': perm_text,
+                'is_active': 1 if data.get('is_active', True) else 0,
+            },
+        )
+        user_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+    conn.commit()
+    conn.close()
+    return get_app_user(user_id)
+
+
+def delete_app_user(user_id):
+    conn = get_conn()
+    conn.execute("DELETE FROM app_users WHERE id=?", (user_id,))
+    conn.commit()
+    conn.close()
 
 
 def _migrate_portfolio_tables(conn):

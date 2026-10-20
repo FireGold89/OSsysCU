@@ -1,11 +1,16 @@
 """簡易 Session 登入（Phase 1 — 環境變數用戶）"""
+import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 from functools import wraps
 
 from flask import jsonify, request, session
+
+import access_control
+import database as db
 
 SESSION_USER_KEY = 'auth_user'
 SESSION_ROLE_KEY = 'auth_role'
@@ -20,6 +25,15 @@ _ADMIN_API_PREFIXES = (
     '/api/settings',
     '/api/system/restore-db',
     '/api/system/restore-uploads',
+    '/api/admin',
+)
+
+_WRITE_METHODS = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
+_LOGIN_ROLES = frozenset({'admin', 'user', 'qs', 'finance', 'viewer'})
+# 財務帳號可改 Master List（開票／報價主檔），不可改地盤付款、ISO、系統設定
+_FINANCE_WRITE_PREFIXES = (
+    '/api/master/item',
+    '/api/master/quotations',
 )
 
 
@@ -116,7 +130,7 @@ def _parse_auth_users():
             role = (item.get('role') or 'user').strip().lower()
             if not username or not password:
                 continue
-            if role not in ('admin', 'user'):
+            if role not in _LOGIN_ROLES:
                 role = 'user'
             users.append({'username': username, 'password': password, 'role': role})
         if not users:
@@ -171,10 +185,35 @@ def _safe_eq(a, b):
     return hmac.compare_digest(str(a or ''), str(b or ''))
 
 
+def hash_password(password):
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('ascii'), 120_000)
+    return f'pbkdf2${salt}${dk.hex()}'
+
+
+def verify_password(password, stored):
+    parts = (stored or '').split('$')
+    if len(parts) != 3 or parts[0] != 'pbkdf2':
+        return False
+    salt, hexd = parts[1], parts[2]
+    dk = hashlib.pbkdf2_hmac('sha256', (password or '').encode('utf-8'), salt.encode('ascii'), 120_000)
+    return hmac.compare_digest(dk.hex(), hexd)
+
+
 def authenticate(username, password):
     name = (username or '').strip()
     pwd = password or ''
     if not name or not pwd:
+        return None
+    try:
+        row = db.get_app_user_by_username(name)
+    except Exception:
+        row = None
+    if row:
+        if not row.get('is_active'):
+            return None
+        if verify_password(pwd, row.get('password_hash')):
+            return {'username': row['username'], 'role': row.get('role') or 'qs', 'id': row['id']}
         return None
     name_lower = name.lower()
     for u in load_users():
@@ -196,6 +235,49 @@ def logout_user():
     session.pop(SESSION_ACTIVITY_KEY, None)
 
 
+def actor_for_session():
+    """目前登入者的有效權限（資料庫帳號即時讀取，環境變數帳號用角色預設）"""
+    user = current_user()
+    if not user:
+        return None
+    row = None
+    try:
+        row = db.get_app_user_by_username(user['username'])
+    except Exception:
+        row = None
+    if row:
+        if not row.get('is_active'):
+            return {'inactive': True, 'username': user['username']}
+        role = (row.get('role') or 'qs').strip().lower()
+        raw = None
+        if row.get('perm_json'):
+            try:
+                raw = json.loads(row['perm_json'])
+            except json.JSONDecodeError:
+                raw = None
+        is_admin = role == 'admin'
+        perms = access_control.preset_matrix('admin') if is_admin else access_control.normalize_matrix(raw, role)
+        return {
+            'username': row['username'],
+            'role': role,
+            'id': row['id'],
+            'display_name': row.get('display_name'),
+            'is_admin': is_admin,
+            'perms': perms,
+            'inactive': False,
+        }
+    role = (user.get('role') or 'user').strip().lower()
+    is_admin = role == 'admin'
+    return {
+        'username': user['username'],
+        'role': role,
+        'is_admin': is_admin,
+        'perms': access_control.preset_matrix('admin' if is_admin else role),
+        'inactive': False,
+        'from_env': True,
+    }
+
+
 def auth_status_payload(user=None):
     """供 /api/auth/me 回傳 Session 設定（不含密碼）"""
     u = user or current_user()
@@ -204,10 +286,24 @@ def auth_status_payload(user=None):
             'auth_required': is_enabled(),
             'user': None,
         }
+    actor = actor_for_session()
+    if not actor or actor.get('inactive'):
+        return {
+            'auth_required': True,
+            'user': None,
+        }
+    base_user = {
+        'username': actor.get('username'),
+        'role': actor.get('role'),
+        'display_name': actor.get('display_name'),
+        'is_admin': bool(actor.get('is_admin')),
+        'from_env': bool(actor.get('from_env')),
+    }
     return {
         'auth_required': True,
-        'user': u,
-        'idle_timeout_seconds': idle_timeout_seconds(u.get('role')),
+        'user': base_user,
+        'permissions': actor.get('perms') or {},
+        'idle_timeout_seconds': idle_timeout_seconds('admin' if actor.get('is_admin') else 'user'),
         'session_lifetime_days': session_lifetime_days(),
     }
 
@@ -243,6 +339,20 @@ def requires_admin(path, method):
     return False
 
 
+def role_allows_write(role, path):
+    """寫入權限：admin 全部；qs/user 除管理員 API；finance 僅 Master；viewer 只讀"""
+    role = (role or 'user').strip().lower()
+    if role == 'admin':
+        return True
+    if role == 'viewer':
+        return False
+    if requires_admin(path, 'POST'):
+        return False
+    if role == 'finance':
+        return any(path == p or path.startswith(p + '/') for p in _FINANCE_WRITE_PREFIXES)
+    return role in ('user', 'qs')
+
+
 def check_request():
     """before_request：回傳 None 或 (response, status)"""
     if not is_enabled():
@@ -265,8 +375,14 @@ def check_request():
     blocked = _enforce_idle_and_touch(user)
     if blocked:
         return blocked
-    if requires_admin(path, request.method) and user.get('role') != 'admin':
-        return jsonify({'success': False, 'error': '需要管理員權限'}), 403
+    actor = actor_for_session()
+    if not actor or actor.get('inactive'):
+        logout_user()
+        return jsonify({'success': False, 'error': '帳號已停用，請重新登入'}), 401
+    if path != '/api/auth/logout':
+        err = access_control.decide(actor, request.method, path)
+        if err:
+            return jsonify({'success': False, 'error': err}), 403
     return None
 
 

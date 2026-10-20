@@ -1328,6 +1328,7 @@ const Sidebar = {
 // ─── 登入 ─────────────────────────────────────────────────
 const Auth = {
   user: null,
+  permissions: null,
   authRequired: false,
   idleTimeoutSec: null,
   _lastActivity: 0,
@@ -1369,6 +1370,7 @@ const Auth = {
       const data = json.data || {};
       this.authRequired = !!data.auth_required;
       this.user = data.user || null;
+      this.permissions = data.permissions || null;
       if (data.idle_expired) {
         toast('閒置逾時，請重新登入', 'warning');
         window.location.href = '/login.html?reason=idle';
@@ -1491,7 +1493,31 @@ const Auth = {
   },
 
   isAdmin() {
-    return this.user?.role === 'admin';
+    return !!(this.user?.is_admin || this.user?.role === 'admin');
+  },
+
+  canSeeArea(area) {
+    if (!this.authRequired || !this.user) return true;
+    if (area === 'system') return this.isAdmin();
+    const level = this.permissions?.[area];
+    return level === 'view' || level === 'edit';
+  },
+
+  canEditArea(area) {
+    if (!this.authRequired || !this.user) return true;
+    if (area === 'system') return this.isAdmin();
+    return this.permissions?.[area] === 'edit';
+  },
+
+  roleLabel(role) {
+    const map = {
+      admin: '管理員',
+      qs: 'QS',
+      user: 'QS',
+      finance: '財務',
+      viewer: '唯讀',
+    };
+    return map[role] || role || '';
   },
 
   applyUi() {
@@ -1504,7 +1530,7 @@ const Auth = {
     if (logoutBtn) logoutBtn.style.display = showAuth ? '' : 'none';
     if (badge) {
       if (showAuth) {
-        badge.textContent = this.user.username + (this.isAdmin() ? ' · 管理員' : '');
+        badge.textContent = `${this.user.username} · ${this.roleLabel(this.user.role)}`;
         badge.style.display = '';
       } else {
         badge.style.display = 'none';
@@ -1512,6 +1538,41 @@ const Auth = {
     }
     if (settingsNav) {
       settingsNav.style.display = this.authRequired && !this.isAdmin() ? 'none' : '';
+    }
+    const activityNav = document.querySelector('.nav-item[data-page="activity-log"]');
+    if (activityNav) {
+      activityNav.style.display = this.authRequired && !this.isAdmin() ? 'none' : '';
+    }
+    const pageArea = {
+      dashboard: 'projects',
+      'project-lens': 'reports',
+      'iso-docs': 'iso',
+      payments: 'payments',
+      'sc-vo-reg': 'vo',
+      'ip-period': 'ip',
+      'main-con-fac': 'fac',
+      'sc-fac': 'fac',
+      reports: 'reports',
+      projects: 'projects',
+      'project-settlement': 'projects',
+      'master-list': 'master',
+      'sc-contract-registry': 'sc_contract',
+      staff: 'staff',
+      'portfolio-fac': 'portfolio',
+      'portfolio-progress': 'portfolio',
+      'eng-intake': 'eng',
+      settings: 'system',
+      'activity-log': 'system',
+      'access-admin': 'system',
+    };
+    document.querySelectorAll('.nav-item[data-page]').forEach((el) => {
+      const area = pageArea[el.dataset.page];
+      if (!area || !this.authRequired || !this.user) return;
+      el.style.display = this.canSeeArea(area) ? '' : 'none';
+    });
+    const importBtn = document.getElementById('navImportExcel');
+    if (importBtn && this.authRequired && this.user) {
+      importBtn.style.display = this.canEditArea('payments') ? '' : 'none';
     }
   },
 
@@ -1593,6 +1654,35 @@ const VaultEntry = {
       this._doneTimer = setTimeout(() => el.classList.add('vault-entry-done'), total - 200);
       this._timer = setTimeout(() => this._finish(el), total + 300);
     });
+  },
+};
+
+const ActivityLog = {
+  async load() {
+    const body = document.getElementById('activityLogBody');
+    if (!body) return;
+    if (typeof Auth !== 'undefined' && Auth.authRequired && !Auth.isAdmin()) {
+      body.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:32px">需要管理員帳號</div></td></tr>';
+      return;
+    }
+    body.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>';
+    try {
+      const rows = await api('GET', '/admin/activity?limit=200') || [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:32px">尚無紀錄。此功能上線之後的新增、修改、刪除與上傳才會列在這裡。</div></td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map((r) => `<tr>
+        <td class="td-muted">${escHtml(r.created_at || '')}</td>
+        <td>${escHtml(r.username || '')}</td>
+        <td>${escHtml(Auth.roleLabel(r.role))}</td>
+        <td class="td-mono">${escHtml(r.method || '')}</td>
+        <td class="td-mono">${escHtml(r.path || '')}</td>
+        <td>${escHtml(String(r.status_code ?? ''))}</td>
+      </tr>`).join('');
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:32px">${escHtml(e?.message || '載入失敗')}</div></td></tr>`;
+    }
   },
 };
 
@@ -2113,6 +2203,8 @@ const App = {
       'sc-contract-registry': ['分判合約編號', 'MS/C 分判工程合約編號表 · P1 PDF'],
       staff: ['項目負責人管理', 'Master List 項目負責人 · 工程項目選人'],
       settings: ['系統設定', 'OCR與系統配置'],
+      'activity-log': ['操作紀錄', '管理員查閱已登入帳號的寫入'],
+      'access-admin': ['帳號與權限', '新增人員並設定可看／可編輯範圍'],
       'portfolio-fac': ['N 項目結算總表', '全公司主合約及分判 FAC 狀態'],
       'portfolio-progress': ['進行中項目', 'On Progress Projects 快照'],
       'eng-intake': ['項目登記·會簽出表', 'NN1 匯入 · Master 比對 · Word/PDF 會簽表'],
@@ -2145,6 +2237,8 @@ const App = {
     else if (page === 'sc-contract-registry') ScContractRegistry.load();
     else if (page === 'staff') StaffRoster.refresh();
     else if (page === 'settings') Settings.load();
+    else if (page === 'activity-log') ActivityLog.load();
+    else if (page === 'access-admin') AccessAdmin.load();
     else if (page === 'project-settlement') Projects.loadSettlement();
     else if (page === 'portfolio-fac') PortfolioFac.load();
     else if (page === 'portfolio-progress') PortfolioProgress.load();

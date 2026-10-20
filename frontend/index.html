@@ -175,6 +175,12 @@
       <div class="nav-item" data-page="project-lens" onclick="App.navigate('project-lens')" title="項目視角(臨時) · 財務 KPI 與糧期">
         <span class="nav-icon">🔭</span><span class="nav-label">項目視角(臨時)</span>
       </div>
+      <div class="nav-item" data-page="access-admin" onclick="App.navigate('access-admin')" title="帳號與權限">
+        <span class="nav-icon">🔐</span><span class="nav-label">帳號與權限</span>
+      </div>
+      <div class="nav-item" data-page="activity-log" onclick="App.navigate('activity-log')" title="操作紀錄（管理員）">
+        <span class="nav-icon">👁</span><span class="nav-label">操作紀錄</span>
+      </div>
       <div class="nav-item" data-page="settings" onclick="App.navigate('settings')" title="系統設定">
         <span class="nav-icon">⚙️</span><span class="nav-label">系統設定</span>
       </div>
@@ -186,7 +192,7 @@
         <button type="button" class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;font-size:12px"
           onclick="Auth.logout()" id="authLogoutBtn">登出</button>
       </div>
-      <button type="button" class="btn btn-secondary sidebar-expand-only" style="width:100%;font-size:12px" onclick="App.importExcel()">
+      <button type="button" class="btn btn-secondary sidebar-expand-only" id="navImportExcel" style="width:100%;font-size:12px" onclick="App.importExcel()">
         📥 匯入Excel
       </button>
       <button type="button" class="btn btn-secondary sidebar-collapse-toggle" id="sidebarToggleFoot" title="收合側欄" aria-label="收合側欄">
@@ -1865,7 +1871,94 @@
             <p><strong>項目負責人</strong>名單以 Master List「項目負責人」欄為準自動列出；「建立對應」可補充電郵、部門等聯絡資料供工程項目選用。</p>
             <p>已略過縮寫（如 jy、km）及多人並列（如 Joe Yu, Neelson）等非正式寫法；同一負責人多種拼寫會合併統計。</p>
             <p>報價編號尾碼（如 <code>/kp</code>）僅為編號規則，<strong>不等同</strong>現時跟進人；同一報價可由不同負責人接手。</p>
-            <p><strong>權限角色</strong>現僅作記錄；日後登入時將依角色控制 QS／財務／管理等功能範圍。</p>
+            <p><strong>權限角色</strong>是負責人名單上的標籤。真正登入權限以 Zeabur 帳號為準：管理員可看「操作紀錄」與系統設定；QS 帳號可改地盤資料；財務只可改 Master List；唯讀不可寫入。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 帳號與權限 ──────────────────────── -->
+      <div class="page" id="page-access-admin">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">帳號與權限</div>
+            <div class="card-sub">新增人員並設定每個範圍是不可見、只看或可編輯。Zeabur 環境變數裡的管理員帳號不在此表，仍可登入。</div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="AccessAdmin.openCreate()">新增帳號</button>
+          </div>
+          <div class="table-wrap">
+            <table class="master-preview-table">
+              <thead>
+                <tr><th>帳號</th><th>姓名</th><th>角色</th><th>狀態</th><th></th></tr>
+              </thead>
+              <tbody id="accessUserBody">
+                <tr><td colspan="5"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" id="accessEditor" style="display:none;margin-top:16px">
+          <div class="card-header"><div class="card-title" id="accessEditorTitle">帳號</div></div>
+          <div class="card-body" style="padding:16px">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">登入帳號</label>
+                <input class="form-input" id="accessUsername" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label class="form-label">顯示姓名</label>
+                <input class="form-input" id="accessDisplayName">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">密碼</label>
+                <input class="form-input" id="accessPassword" type="password" autocomplete="new-password">
+                <div class="form-hint" id="accessPasswordHint"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">角色範本</label>
+                <select class="form-input" id="accessRole" onchange="AccessAdmin.applyPreset()"></select>
+              </div>
+            </div>
+            <label class="form-label" style="display:flex;gap:8px;align-items:center">
+              <input type="checkbox" id="accessActive" checked> 啟用
+            </label>
+            <div class="table-wrap" style="margin-top:12px">
+              <table class="master-preview-table">
+                <thead><tr><th>範圍</th><th>權限</th></tr></thead>
+                <tbody id="accessMatrix" onchange="AccessAdmin.markCustom()"></tbody>
+              </table>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button type="button" class="btn btn-primary btn-sm" onclick="AccessAdmin.save()">儲存</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="AccessAdmin.closeEditor()">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── 操作紀錄 ──────────────────────── -->
+      <div class="page" id="page-activity-log">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">操作紀錄</div>
+            <div class="card-sub">已登入帳號的新增／修改／刪除／上傳（此功能上線後才有紀錄）</div>
+          </div>
+          <div class="table-wrap">
+            <table class="master-preview-table">
+              <thead>
+                <tr>
+                  <th>時間</th>
+                  <th>帳號</th>
+                  <th>角色</th>
+                  <th>動作</th>
+                  <th>路徑</th>
+                  <th>結果</th>
+                </tr>
+              </thead>
+              <tbody id="activityLogBody">
+                <tr><td colspan="6"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -3734,6 +3827,7 @@
 <!-- Scripts -->
 <script src="js/load_perf.js?v=__APP_BUILD__"></script>
 <script src="js/main.js?v=__APP_BUILD__"></script>
+<script src="js/access_admin.js?v=__APP_BUILD__"></script>
 <script src="js/nav_layout.js?v=__APP_BUILD__"></script>
 <script src="js/col_picker.js?v=__APP_BUILD__"></script>
 <script src="js/iso_docs.js?v=__APP_BUILD__"></script>
