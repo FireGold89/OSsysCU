@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261021-progress-toolbar` · 分支 `v2/portfolio`
+
+### 修正
+- **進行中項目**：篩選列改與 N 項目結算總表相同兩行排版（狀態 Tab、PM、搜尋同一行；匯入／匯出／同步在下一行）。
+
 `APP_VERSION`: `v2-20261021-portfolio-tabs` · 分支 `v2/portfolio`
 
 ### 修正

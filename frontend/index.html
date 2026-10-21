@@ -1579,21 +1579,21 @@
 
       <!-- ─── 進行中項目 ──────────────────────── -->
       <div class="page" id="page-portfolio-progress">
-        <div class="toolbar portfolio-toolbar">
-          <div class="toolbar-left">
+        <div class="toolbar portfolio-toolbar pf-toolbar">
+          <div class="pf-toolbar-main">
             <div class="portfolio-tabs" role="tablist">
               <button type="button" class="portfolio-tab active" data-status="On Progress" onclick="PortfolioProgress.setStatus('On Progress')">進行中</button>
               <button type="button" class="portfolio-tab" data-status="Completed" onclick="PortfolioProgress.setStatus('Completed')">已完成</button>
               <button type="button" class="portfolio-tab" data-status="all" onclick="PortfolioProgress.setStatus('all')">全部</button>
             </div>
-            <select class="form-input master-filter" id="ppPmFilter" onchange="PortfolioProgress.load()">
+            <select class="form-input master-filter pf-toolbar-pm" id="ppPmFilter" onchange="PortfolioProgress.load()">
               <option value="">全部 PM</option>
             </select>
-            <input type="text" class="form-input master-search" id="ppSearch" placeholder="搜尋 Project / 業主…" onkeydown="if(event.key==='Enter')PortfolioProgress.load()">
+            <input type="text" class="form-input master-search pf-toolbar-search" id="ppSearch" placeholder="搜尋 Project / 業主…" onkeydown="if(event.key==='Enter')PortfolioProgress.load()">
             <button class="btn btn-secondary btn-sm" onclick="PortfolioProgress.load()">搜尋</button>
           </div>
-          <div class="toolbar-right">
-            <span class="form-hint" id="ppLastImport">尚未匯入 Excel</span>
+          <div class="pf-toolbar-actions">
+            <span class="form-hint pf-toolbar-import-hint" id="ppLastImport">尚未匯入 Excel</span>
             <button class="btn btn-secondary btn-sm" onclick="PortfolioCommon.pickImport('progress')">📤 匯入 Excel</button>
             <button class="btn btn-secondary btn-sm" onclick="PortfolioCommon.downloadExport('/portfolio/export/progress-list', '進行中項目.xlsx')">📥 匯出 Excel</button>
             <button class="btn btn-secondary btn-sm" onclick="PortfolioProgress.syncFromProjects()">🔄 從系統同步</button>
