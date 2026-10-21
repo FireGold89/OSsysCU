@@ -12,8 +12,7 @@ const IsoDocs = {
   _view: 'main',
   _mainSubTab: 'contract',
   _dragBound: false,
-  /** 暫隱藏頂部「ISO 附件完成度」卡片 */
-  _SHOW_PROGRESS: false,
+  _lastMissingItems: [],
 
   /** 主合約分 Tab 槽位（Sprint B） */
   MAIN_SLOT_GROUPS: {
@@ -232,6 +231,130 @@ const IsoDocs = {
     if (this._board) this._renderMainGrid(this._board);
   },
 
+  _mainSubTabForSlot(slot) {
+    if ((this.MAIN_SLOT_GROUPS.tender || []).includes(slot)) return 'tender';
+    return 'contract';
+  },
+
+  /** 必填缺件清單（不含選填、載入中不算） */
+  _listMissingRequired(b) {
+    if (!b || b._filesPending) return [];
+    const out = [];
+    const mainFiles = b.main_files || {};
+    this._mainColsResolved(b).forEach((col) => {
+      if (!col.slot || col.optional) return;
+      if (this._hasFile(mainFiles[col.slot])) return;
+      out.push({
+        kind: 'main',
+        view: 'main',
+        mainSubTab: this._mainSubTabForSlot(col.slot),
+        slot: col.slot,
+        label: col.short || col.label,
+      });
+    });
+    (b.subcontractors || []).forEach((sc) => {
+      this._scColsForAmount(this._scAmount(sc)).forEach((col) => {
+        if (this._hasFile(sc.files?.[col.slot])) return;
+        const who = (sc.sc_no || sc.company_name_zh || '分判').trim();
+        out.push({
+          kind: 'sc',
+          view: 'sc',
+          scId: sc.id,
+          slot: col.slot,
+          label: `${who} · ${col.short || col.label}`,
+        });
+      });
+    });
+    return out;
+  },
+
+  _missingCountsByTab(b) {
+    const items = this._listMissingRequired(b);
+    const counts = { main: 0, sc: 0, contract: 0, tender: 0 };
+    items.forEach((it) => {
+      if (it.kind === 'sc') {
+        counts.sc += 1;
+        return;
+      }
+      counts.main += 1;
+      if (it.mainSubTab === 'tender') counts.tender += 1;
+      else counts.contract += 1;
+    });
+    return { items, counts };
+  },
+
+  _setTabBadge(btnId, count) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    let badge = btn.querySelector('.iso-tab-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'iso-tab-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      btn.appendChild(badge);
+    }
+    if (count > 0) {
+      badge.textContent = String(count);
+      badge.hidden = false;
+      badge.title = `必填尚欠 ${count} 項`;
+    } else {
+      badge.textContent = '';
+      badge.hidden = true;
+      badge.removeAttribute('title');
+    }
+  },
+
+  _renderTabBadges(b) {
+    if (!b || b._filesPending) {
+      ['isoTabMain', 'isoTabSc', 'isoSubTabContract', 'isoSubTabTender'].forEach((id) => {
+        this._setTabBadge(id, 0);
+      });
+      return;
+    }
+    const { counts } = this._missingCountsByTab(b);
+    this._setTabBadge('isoTabMain', counts.main);
+    this._setTabBadge('isoTabSc', counts.sc);
+    this._setTabBadge('isoSubTabContract', counts.contract);
+    this._setTabBadge('isoSubTabTender', counts.tender);
+  },
+
+  jumpToMissing(index) {
+    const item = this._lastMissingItems?.[index];
+    if (item) this._focusMissing(item);
+  },
+
+  _focusMissing(entry) {
+    if (!entry) return;
+    if (entry.view === 'sc') {
+      this.setView('sc');
+    } else {
+      this.setView('main');
+      this.setMainSubTab(entry.mainSubTab || 'contract');
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        let tile = null;
+        if (entry.kind === 'sc') {
+          tile = document.querySelector(
+            `#isoScCards .iso-slot-tile[data-iso-scope="subcontractor"][data-iso-sc-id="${entry.scId}"][data-iso-slot="${entry.slot}"]`,
+          );
+        } else {
+          tile = document.querySelector(
+            `#isoMainGrid .iso-slot-tile[data-iso-slot="${entry.slot}"]`,
+          );
+        }
+        this._highlightTile(tile);
+      });
+    });
+  },
+
+  _highlightTile(tile) {
+    if (!tile) return;
+    tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tile.classList.add('iso-slot-flash');
+    window.setTimeout(() => tile.classList.remove('iso-slot-flash'), 2600);
+  },
+
   _fileList(fileOrList) {
     if (!fileOrList) return [];
     return Array.isArray(fileOrList) ? fileOrList : [fileOrList];
@@ -411,39 +534,14 @@ const IsoDocs = {
     el.innerHTML = parts.join('');
   },
 
+  /** 頂部完成度大卡片已停用；缺件僅以 Tab 角標提示 */
   _renderProgress(b) {
     const el = document.getElementById('isoDocsProgress');
     if (!el) return;
-    if (!this._SHOW_PROGRESS) {
-      el.hidden = true;
-      el.innerHTML = '';
-      return;
-    }
-    if (b._filesPending) {
-      el.hidden = true;
-      return;
-    }
-    el.hidden = false;
-    const s = this._computeStats(b);
-    const barCls = s.pct >= 100 ? 'iso-progress-bar-fill iso-progress-complete'
-      : s.pct >= 60 ? 'iso-progress-bar-fill'
-        : 'iso-progress-bar-fill iso-progress-low';
-    const missCls = s.missingRequired > 0 ? 'iso-stat-warn' : 'iso-stat-ok';
-
-    el.innerHTML = `
-      <div class="iso-progress-top">
-        <div class="iso-progress-title">ISO 附件完成度</div>
-        <div class="iso-progress-pct">${s.pct}%</div>
-      </div>
-      <div class="iso-progress-bar" role="progressbar" aria-valuenow="${s.pct}" aria-valuemin="0" aria-valuemax="100">
-        <div class="${barCls}" style="width:${s.pct}%"></div>
-      </div>
-      <div class="iso-progress-stats">
-        <div class="iso-stat"><span class="iso-stat-label">主合約</span><strong>${s.mainDone}/${s.mainTotal}</strong></div>
-        <div class="iso-stat"><span class="iso-stat-label">分判（${s.scRows} 判項）</span><strong>${s.scDone}/${s.scTotal || 0}</strong></div>
-        <div class="iso-stat"><span class="iso-stat-label">必填缺件</span><strong class="${missCls}">${s.missingRequired}</strong></div>
-        <div class="iso-stat"><span class="iso-stat-label">必填已齊</span><strong>${s.requiredDone}/${s.requiredTotal}</strong></div>
-      </div>`;
+    const { items: missingItems } = this._missingCountsByTab(b || {});
+    this._lastMissingItems = missingItems;
+    el.hidden = true;
+    el.innerHTML = '';
   },
 
   async load() {
@@ -480,6 +578,7 @@ const IsoDocs = {
       this.render();
     } catch (e) {
       if (seq !== this._loadSeq) return;
+      if (e?.name === 'AbortError') return;
       this._board._filesPending = false;
       this._board._loadError = e.message || '無法載入附件';
       this.render();
@@ -502,6 +601,7 @@ const IsoDocs = {
 
     this._renderLibraryBar(b);
     this._renderProgress(b);
+    this._renderTabBadges(b);
     this._renderRulesGuide(b);
     this.setView(this._view);
     this.setMainSubTab(this._mainSubTab);

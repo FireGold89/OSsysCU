@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261021-iso-missing-ui` · 分支 `v2/portfolio`
+
+### 改善
+- **ISO 文件**：主合約／分判、合約／招標 Tab 顯示必填缺件數角標（頂部長清單暫不顯示，避免判項多時版面雜亂）。
+
 `APP_VERSION`: `v2-20261021-nav-loading` · 分支 `v2/portfolio`
 
 ### 修正
