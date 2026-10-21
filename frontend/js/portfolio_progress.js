@@ -448,7 +448,7 @@ const PortfolioCommon = {
   },
 
   async downloadExport(apiPath, filename) {
-    showContentLoading('匯出 Excel…');
+    const loadSeq = showContentLoading('匯出 Excel…');
     try {
       const r = await fetch(API + apiPath, { credentials: 'include' });
       if (!r.ok) throw new Error('匯出失敗');
@@ -462,7 +462,7 @@ const PortfolioCommon = {
     } catch (e) {
       toast(e.message || '匯出失敗', 'error');
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 
@@ -487,7 +487,7 @@ const PortfolioCommon = {
     const path = isFa
       ? '/portfolio/import/fa-list?preview=1'
       : '/portfolio/import/progress-list?preview=1';
-    showContentLoading('預覽 Excel…');
+    const loadSeq = showContentLoading('預覽 Excel…');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -499,7 +499,7 @@ const PortfolioCommon = {
       toast(e.message || '預覽失敗', 'error');
       this._pendingFile = null;
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 
@@ -542,7 +542,7 @@ const PortfolioCommon = {
     }
     const isFa = this._importKind === 'fa';
     const path = isFa ? '/portfolio/import/fa-list' : '/portfolio/import/progress-list';
-    showContentLoading('寫入資料庫…');
+    const loadSeq = showContentLoading('寫入資料庫…');
     try {
       const fd = new FormData();
       fd.append('file', this._pendingFile);
@@ -557,7 +557,7 @@ const PortfolioCommon = {
     } catch (e) {
       toast(e.message || '匯入失敗', 'error');
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 
@@ -594,7 +594,7 @@ const PortfolioProgress = {
     const qEl = document.getElementById('ppSearch');
     this.q = (qEl?.value || '').trim();
     this.pmFilter = document.getElementById('ppPmFilter')?.value || '';
-    showContentLoading('載入進行中項目…');
+    const loadSeq = showContentLoading('載入進行中項目…');
     try {
       const data = await api('GET', `/portfolio/progress${PortfolioCommon.queryString(this.statusFilter, this.pmFilter, this.q)}`);
       this.items = data?.items || [];
@@ -605,10 +605,11 @@ const PortfolioProgress = {
       this._renderStats();
       this.render();
     } catch (e) {
+      if (e?.name === 'AbortError') return;
       const body = document.getElementById('ppTableBody');
       if (body) body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">載入失敗</div></td></tr>`;
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 
@@ -646,13 +647,13 @@ const PortfolioProgress = {
   },
 
   async syncFromProjects() {
-    showContentLoading('從工程項目補列…');
+    const loadSeq = showContentLoading('從工程項目補列…');
     try {
       const r = await api('POST', '/portfolio/sync-from-projects');
       toast(`已同步：新增 ${r.created} 項，合共 ${r.total} 項`, 'success');
       await this.load();
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 

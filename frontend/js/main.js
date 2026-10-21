@@ -1096,6 +1096,7 @@ const CONTENT_SLOW_LOAD_MS = 12000;
 const PROJECT_SWITCH_FULL_OVERLAY_MS = 12000;
 let _contentLoadingSlowTimer = null;
 let _projectSwitchOverlayTimer = null;
+let _contentLoadingSeq = 0;
 
 function _resetContentLoadingSlowUi() {
   clearTimeout(_contentLoadingSlowTimer);
@@ -1107,22 +1108,32 @@ function _resetContentLoadingSlowUi() {
 }
 
 function showContentLoading(text = '載入項目資料…') {
+  const seq = ++_contentLoadingSeq;
   const content = document.querySelector('.content');
   const hint = document.getElementById('contentLoadingHint');
   if (hint) hint.textContent = text;
   _resetContentLoadingSlowUi();
   content?.classList.add('content-loading');
   _contentLoadingSlowTimer = setTimeout(() => {
+    if (seq !== _contentLoadingSeq) return;
     if (!content?.classList.contains('content-loading')) return;
     content.classList.add('content-loading-interactive');
     const actions = document.getElementById('contentLoadingSlowActions');
     if (actions) actions.hidden = false;
   }, CONTENT_SLOW_LOAD_MS);
+  return seq;
 }
 
-function hideContentLoading() {
+function hideContentLoading(seq) {
+  if (typeof seq === 'number' && seq !== _contentLoadingSeq) return;
   _resetContentLoadingSlowUi();
   document.querySelector('.content')?.classList.remove('content-loading');
+}
+
+/** 切頁時收起上一頁的遮罩，並讓那個載入的 finally 不能再關掉新頁面的遮罩。 */
+function dismissContentLoading() {
+  _contentLoadingSeq += 1;
+  hideContentLoading();
 }
 
 function showProjectSwitchLoading() {
@@ -1150,7 +1161,7 @@ function hideProjectSwitchLoading() {
 }
 
 async function downloadExcelExport(apiPath, filename) {
-  showContentLoading('匯出 Excel…');
+  const loadSeq = showContentLoading('匯出 Excel…');
   try {
     const r = await fetch(`${API}${apiPath}`, { credentials: 'include' });
     if (!r.ok) throw new Error('匯出失敗');
@@ -1164,7 +1175,7 @@ async function downloadExcelExport(apiPath, filename) {
   } catch (e) {
     toast(e.message || '匯出失敗', 'error');
   } finally {
-    hideContentLoading();
+    hideContentLoading(loadSeq);
   }
 }
 
@@ -1248,7 +1259,11 @@ async function api(method, path, body, opts = {}) {
       && App._projectSwitchAbort
       ? App._projectSwitchAbort.signal
       : null;
-    const sig = opts.signal || switchSig;
+    const pageSig = !opts.signal && !switchSig && method === 'GET' && opts.noPageAbort !== true
+      && typeof App !== 'undefined' && App._pageAbort
+      ? App._pageAbort.signal
+      : null;
+    const sig = opts.signal || switchSig || pageSig;
     if (sig) fetchOpts.signal = sig;
     if (body) fetchOpts.body = JSON.stringify(body);
     const r = await fetch(API + path, fetchOpts);
@@ -1694,6 +1709,7 @@ const App = {
   scList: [],
   _projectSwitchSeq: 0,
   _projectSwitchAbort: null,
+  _pageAbort: null,
   PROJECT_ID_STORAGE_KEY: 'qs_project_id',
   AUTO_RESTORE_STORAGE_KEY: 'qs_auto_restore_project',
   APP_BUILD_STORAGE_KEY: 'qs_app_build',
@@ -2169,6 +2185,13 @@ const App = {
     OCR.reset();
   },
 
+  _beginPageRequests() {
+    if (this._pageAbort) {
+      try { this._pageAbort.abort(); } catch (_) { /* ignore */ }
+    }
+    this._pageAbort = new AbortController();
+  },
+
   navigate(page, options = null) {
     Sidebar.closeMobile();
     if (page === 'settings' && Auth.authRequired && !Auth.isAdmin()) {
@@ -2186,6 +2209,8 @@ const App = {
       page = 'payments';
     }
     if (page === 'sc-vo') page = 'sc-vo-reg';
+    this._beginPageRequests();
+    dismissContentLoading();
     this.currentPage = page;
     // 隱藏所有頁面
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));

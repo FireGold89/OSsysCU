@@ -854,12 +854,14 @@ const MasterList = {
       return;
     }
     try {
-      showContentLoading('加入會簽清單…');
-      await EngIntake.addFromMaster(rowId, { navigate: true });
+      const loadSeq = showContentLoading('加入會簽清單…');
+      try {
+        await EngIntake.addFromMaster(rowId, { navigate: true });
+      } finally {
+        hideContentLoading(loadSeq);
+      }
     } catch (e) {
       toast(e.message || '加入失敗', 'error');
-    } finally {
-      hideContentLoading();
     }
   },
 

@@ -96,13 +96,12 @@ const PortfolioFac = {
     const qEl = document.getElementById('pfSearch');
     this.q = (qEl?.value || '').trim();
     this.pmFilter = document.getElementById('pfPmFilter')?.value || '';
-    showContentLoading('載入結算總表…');
+    const loadSeq = showContentLoading('載入結算總表…');
     try {
       const data = await api('GET', `/portfolio/fac${PortfolioCommon.queryString(this.statusFilter, this.pmFilter, this.q)}`);
       this.items = data?.items || [];
       this.stats = data?.stats || {};
       this.lastImport = data?.last_import || null;
-      await this._prefetchScLists(this.items);
       PortfolioCommon.fillPmSelect('pfPmFilter', data?.pms, this.pmFilter);
       if (!this._visibleCols) this._initColPrefs();
       if (this.showMatrix) this._applyMatrixCols();
@@ -118,10 +117,11 @@ const PortfolioFac = {
         else this.closeDrawer();
       }
     } catch (e) {
+      if (e?.name === 'AbortError') return;
       const body = document.getElementById('pfTableBody');
       if (body) body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">載入失敗</div></td></tr>`;
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 
@@ -295,7 +295,7 @@ const PortfolioFac = {
   },
 
   async syncFromProjects() {
-    showContentLoading('從系統同步…');
+    const loadSeq = showContentLoading('從系統同步…');
     try {
       const r = await api('POST', '/portfolio/sync-from-projects');
       this._projectScCache = {};
@@ -314,7 +314,7 @@ const PortfolioFac = {
       toast(msg, 'success');
       await this.load();
     } finally {
-      hideContentLoading();
+      hideContentLoading(loadSeq);
     }
   },
 

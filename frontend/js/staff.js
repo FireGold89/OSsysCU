@@ -178,8 +178,18 @@ const StaffRoster = {
   },
 
   async refresh() {
-    await this.loadRoles();
-    await this.load();
+    const tbody = document.getElementById('staffTableBody');
+    try {
+      await this.loadRoles();
+      await this.load();
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      if (tbody && App.currentPage === 'staff') {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="padding:32px">載入失敗，請再打開本頁</div></td></tr>';
+      }
+      return;
+    }
+    if (App.currentPage !== 'staff') return;
     this.render();
   },
 
