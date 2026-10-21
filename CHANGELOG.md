@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261021-portfolio-tabs` · 分支 `v2/portfolio`
+
+### 修正
+- **進行中項目**：狀態 Tab（進行中／已完成／全部）不再被壓成直排文字。
+
 `APP_VERSION`: `v2-20261021-iso-missing-ui` · 分支 `v2/portfolio`
 
 ### 改善

@@ -5807,7 +5807,10 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   }
 }
 .portfolio-tabs {
-  display: flex;
+  display: inline-flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 4px;
   background: var(--bg-hover);
   border: 1px solid var(--border);
@@ -5823,6 +5826,13 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   padding: 5px 12px;
   border-radius: 4px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.25;
+  writing-mode: horizontal-tb;
+}
+#page-portfolio-progress .toolbar-left .portfolio-tabs {
+  align-self: center;
 }
 .portfolio-tab:hover { color: var(--text-primary); }
 .portfolio-tab.active {
