@@ -1795,8 +1795,11 @@ const App = {
       toast(`頁面仍是舊版 ${metaBuild}，請在此分頁按 Ctrl+Shift+R`, 'warning');
     }
     const prev = localStorage.getItem(this.APP_BUILD_STORAGE_KEY);
-    if (prev && prev !== ver && typeof LoadPerf !== 'undefined') {
-      LoadPerf.invalidateProjectCaches();
+    if (prev && prev !== ver) {
+      localStorage.removeItem(this.PROJECT_ID_STORAGE_KEY);
+      localStorage.setItem(this.AUTO_RESTORE_STORAGE_KEY, '0');
+      try { sessionStorage.setItem('qs_profile_cleaned', '1'); } catch (_) { /* private mode */ }
+      if (typeof LoadPerf !== 'undefined') LoadPerf.invalidateProjectCaches();
     }
     localStorage.setItem(this.APP_BUILD_STORAGE_KEY, ver);
   },
@@ -1828,6 +1831,9 @@ const App = {
   },
 
   async init() {
+    if (window.qsProfileSweep) {
+      try { await qsProfileSweep.prepare(); } catch (_) { /* 檢查失敗仍進入系統 */ }
+    }
     VaultEntry.showHoldOpenFromLogin();
     const ok = await Auth.ensure();
     if (!ok) return;
@@ -1886,6 +1892,9 @@ const App = {
       if (initialId) void this._restoreInitialProject(initialId);
     } else {
       this._applySavedProjectSelectionWithoutLoad();
+    }
+    if (window.qsProfileSweep && qsProfileSweep.consumeNote()) {
+      toast('已清掉這個瀏覽器的舊快取與記住的項目，請在上方重新選擇', 'info');
     }
   },
 

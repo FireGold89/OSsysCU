@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261021-profile-sweep` · 分支 `v2/portfolio`
+
+### 改善
+- **登入前自動清理**：原 Chrome Profile 若留著舊快取或記住的項目，登入頁會先清掉 Cache Storage、Service Worker，並取消自動載入上次項目，再進入系統。主題、側欄與開門動畫偏好保留。
+
 `APP_VERSION`: `v2-20261020-access-admin` · 分支 `v2/portfolio`
 
 ### 新增

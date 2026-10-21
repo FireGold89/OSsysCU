@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登入 — QS管理系統</title>
+  <meta name="ossyscu-build" content="__APP_BUILD__">
+  <script src="js/profile_sweep.js?v=__APP_BUILD__"></script>
   <script>
     (function () {
       var saved = localStorage.getItem('qs_theme');
@@ -61,6 +63,17 @@
       font-size: 13px;
     }
     .login-error.show { display: block; }
+    .login-sweep {
+      display: none;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .login-sweep.show { display: block; }
     .login-submit { width: 100%; margin-top: 8px; }
     .login-foot {
       margin-top: 16px;
@@ -92,6 +105,7 @@
         <h1>QS管理系統</h1>
         <p>Mepork Engineering</p>
       </div>
+      <div class="login-sweep" id="loginSweepNote">已清掉這個瀏覽器的舊快取與記住的項目。請登入；進入後在上方選擇項目。</div>
       <div class="login-error" id="loginError"></div>
       <form id="loginForm" autocomplete="on">
         <div class="form-group">
@@ -206,15 +220,18 @@
         const json = await r.json();
         if (json.success && json.data?.user) {
           window.location.replace(nextUrl.startsWith('/') ? nextUrl : '/');
+          return true;
         }
         if (json.success && json.data?.auth_required === false) {
           window.location.replace('/');
+          return true;
         }
       } catch (e) {
         /* 逾時或離線時留在登入頁 */
       } finally {
         clearTimeout(timer);
       }
+      return false;
     }
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -250,7 +267,26 @@
       }
     });
 
-    checkAlreadyIn();
+    (async function bootLogin() {
+      const btn = document.getElementById('loginBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '檢查本機資料…';
+      }
+      let result = { reloading: false };
+      if (window.qsProfileSweep) {
+        try { result = await qsProfileSweep.prepare(); } catch (_) { /* 檢查失敗仍可登入 */ }
+      }
+      if (result && result.reloading) return;
+      const redirected = await checkAlreadyIn();
+      if (!redirected && window.qsProfileSweep && qsProfileSweep.consumeNote()) {
+        document.getElementById('loginSweepNote')?.classList.add('show');
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '登入';
+      }
+    })();
     if (params.get('reason') === 'idle') {
       const errEl = document.getElementById('loginError');
       if (errEl) {
