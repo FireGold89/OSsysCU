@@ -32,10 +32,17 @@
       display: flex !important;
     }
   </style>
-  <script>document.documentElement.classList.add('auth-pending');</script>
+  <script>
+    document.documentElement.classList.add('auth-pending');
+    setTimeout(function () {
+      if (!document.documentElement.classList.contains('auth-pending')) return;
+      document.documentElement.classList.remove('auth-pending');
+      var ov = document.getElementById('loadingOverlay');
+      if (ov) ov.classList.remove('show');
+    }, 12000);
+  </script>
     <link rel="stylesheet" href="css/style.css?v=__APP_BUILD__">
   <link rel="stylesheet" href="css/vault-login.css?v=__APP_BUILD__">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 

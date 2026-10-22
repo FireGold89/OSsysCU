@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261022-boot-cdn` · 分支 `v2/portfolio`
+
+### 修正
+- **進系統全頁載入**：不再等 jsDelivr Chart.js 與 Google Fonts。Edge 追蹤防護擋外連時，遮罩最長約 12 秒會收起。概覽圖表改為需要時才載入。
+
 `APP_VERSION`: `v2-20261022-spin-pages` · 分支 `v2/portfolio`
 
 ### 修正

@@ -2499,7 +2499,7 @@ const Dashboard = {
     }
 
     this._lastScStats = summary.sc_stats || [];
-    this.renderCharts(this._lastScStats);
+    void this.renderCharts(this._lastScStats);
     return true;
   },
 
@@ -2527,8 +2527,13 @@ const Dashboard = {
     await Promise.all([statsP, facP]);
   },
 
-  renderCharts(scStats) {
-    const stats = scStats.filter(s => s.contract_amount > 0).slice(0, 10);
+  async renderCharts(scStats) {
+    const ready = await ensureChartLib();
+    if (!ready || typeof Chart === 'undefined') return;
+    const chartPay = document.getElementById('chartPayment');
+    const chartCat = document.getElementById('chartCategory');
+    if (!chartPay || !chartCat) return;
+    const stats = (scStats || []).filter(s => s.contract_amount > 0).slice(0, 10);
     const labels = stats.map(s => s.sc_no || s.company_name_en?.substring(0, 15));
     const paid = stats.map(s => s.total_paid || 0);
     const remaining = stats.map(s => Math.max(0, (s.contract_amount || 0) - (s.total_paid || 0)));
@@ -2539,7 +2544,7 @@ const Dashboard = {
     this.charts = {};
 
     // 橫條圖 - 付款狀況
-    const ctx1 = document.getElementById('chartPayment').getContext('2d');
+    const ctx1 = chartPay.getContext('2d');
     this.charts.payment = new Chart(ctx1, {
       type: 'bar',
       data: {
@@ -2574,7 +2579,7 @@ const Dashboard = {
       categories[key] = (categories[key] || 0) + (s.total_paid || 0);
     });
 
-    const ctx2 = document.getElementById('chartCategory').getContext('2d');
+    const ctx2 = chartCat.getContext('2d');
     this.charts.category = new Chart(ctx2, {
       type: 'doughnut',
       data: {
@@ -2805,4 +2810,28 @@ const Settings = {
 };
 
 // ─── 初始化 ────────────────────────────────────────────────
-window.addEventListener('load', () => App.init());
+function ensureChartLib() {
+  if (typeof Chart !== 'undefined') return Promise.resolve(true);
+  if (window._chartLibPromise) return window._chartLibPromise;
+  window._chartLibPromise = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    script.async = true;
+    const finish = (ok) => {
+      clearTimeout(timer);
+      if (!ok) window._chartLibPromise = null;
+      resolve(!!ok);
+    };
+    const timer = setTimeout(() => finish(false), 8000);
+    script.onload = () => finish(typeof Chart !== 'undefined');
+    script.onerror = () => finish(false);
+    document.head.appendChild(script);
+  });
+  return window._chartLibPromise;
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => App.init());
+} else {
+  App.init();
+}
