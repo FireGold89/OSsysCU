@@ -117,9 +117,16 @@ const PortfolioFac = {
         else this.closeDrawer();
       }
     } catch (e) {
-      if (e?.name === 'AbortError') return;
+      if (e?.name === 'AbortError') {
+        const body = document.getElementById('pfTableBody');
+        if (body && App.currentPage === 'portfolio-fac') {
+          body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">載入已中斷，請再點一次「N 項目結算總表」</div></td></tr>`;
+        }
+        return;
+      }
       const body = document.getElementById('pfTableBody');
-      if (body) body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">載入失敗</div></td></tr>`;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次本頁' : '載入失敗';
+      if (body) body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">${msg}</div></td></tr>`;
     } finally {
       hideContentLoading(loadSeq);
     }

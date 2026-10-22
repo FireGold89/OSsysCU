@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261022-load-timeout` · 分支 `v2/portfolio`
+
+### 修正
+- **切頁／切項目卡住**：讀取逾時會取消瀏覽器連線，避免 Edge／Chrome 把後面的請求排死。糧期、結算總表、進行中項目逾時或中斷時會離開「載入中」，並提示再點一次。切換項目不再重複載入糧期與付款頁。
+
 `APP_VERSION`: `v2-20261021-progress-toolbar` · 分支 `v2/portfolio`
 
 ### 修正

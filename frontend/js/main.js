@@ -1246,8 +1246,22 @@ const ModalA11y = {
   },
 };
 
+function _linkAbort(parentSig, childCtrl) {
+  if (!parentSig) return () => {};
+  const fn = () => {
+    try { childCtrl.abort(); } catch (_) { /* ignore */ }
+  };
+  if (parentSig.aborted) fn();
+  else parentSig.addEventListener('abort', fn, { once: true });
+  return () => parentSig.removeEventListener('abort', fn);
+}
+
 async function api(method, path, body, opts = {}) {
   const silent = opts.silent === true;
+  const timeoutCtrl = new AbortController();
+  let timedOut = false;
+  let timer = null;
+  const unlinks = [];
   try {
     const fetchOpts = {
       method,
@@ -1263,8 +1277,19 @@ async function api(method, path, body, opts = {}) {
       && typeof App !== 'undefined' && App._pageAbort
       ? App._pageAbort.signal
       : null;
-    const sig = opts.signal || switchSig || pageSig;
-    if (sig) fetchOpts.signal = sig;
+    const parentSig = opts.signal || switchSig || pageSig;
+    if (method === 'GET' && opts.noTimeout !== true) {
+      if (parentSig) unlinks.push(_linkAbort(parentSig, timeoutCtrl));
+      const ms = opts.timeoutMs
+        || (typeof LoadPerf !== 'undefined' ? LoadPerf.PROJECT_GET_TIMEOUT_MS : 22000);
+      timer = setTimeout(() => {
+        timedOut = true;
+        try { timeoutCtrl.abort(); } catch (_) { /* ignore */ }
+      }, ms);
+      fetchOpts.signal = timeoutCtrl.signal;
+    } else if (parentSig) {
+      fetchOpts.signal = parentSig;
+    }
     if (body) fetchOpts.body = JSON.stringify(body);
     const r = await fetch(API + path, fetchOpts);
     const text = await r.text();
@@ -1292,9 +1317,20 @@ async function api(method, path, body, opts = {}) {
     }
     return json.data;
   } catch (e) {
+    if (timedOut) {
+      const err = new Error('載入逾時，請再點一次此頁');
+      err.code = 'LOAD_TIMEOUT';
+      if (!silent) toast(err.message, 'warning');
+      throw err;
+    }
     if (e?.name === 'AbortError') throw e;
     if (!silent) toast(e.message, 'error');
     throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+    unlinks.forEach((fn) => {
+      try { fn(); } catch (_) { /* ignore */ }
+    });
   }
 }
 
@@ -2053,7 +2089,7 @@ const App = {
           this.scList = scList;
           const scCountEl = document.getElementById('dashScCount');
           if (scCountEl) scCountEl.textContent = scList.length;
-          void this._refreshProjectViews(switchSeq);
+          void this._refreshProjectViews(switchSeq, { onlySc: true });
           if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
         } catch (e) {
           if (switchSeq !== this._projectSwitchSeq) return;
@@ -2083,7 +2119,7 @@ const App = {
         hideProjectSwitchLoading();
         this._projectSwitchSeq += 1;
         this._abortProjectSwitch();
-        toast('切換項目逾時，請再試一次；若僅 Chrome 發生可清除本站快取或改用 Edge', 'warning');
+        toast('切換項目逾時，請再選一次項目', 'warning');
         return;
       }
       toast(e?.message || '載入項目失敗', 'error');
@@ -2148,7 +2184,22 @@ const App = {
     if (svrFilterType) svrFilterType.value = '';
   },
 
-  async _refreshProjectViews(switchSeq) {
+  async _refreshProjectViews(switchSeq, opts = null) {
+    const onlySc = opts?.onlySc === true;
+    if (onlySc) {
+      if (switchSeq !== this._projectSwitchSeq) return;
+      const active = this._getActivePage();
+      const runLoader = (fn) => {
+        void Promise.resolve(fn()).catch(() => {});
+      };
+      if (active === 'iso-docs') runLoader(() => IsoDocs.load());
+      if (active === 'sc-vo-reg') {
+        ScVoReg.populateScFilter();
+        runLoader(() => ScVoReg.load());
+      }
+      if (active === 'sc-fac') runLoader(() => ScFac.load());
+      return;
+    }
     Payments.populateScFilter();
     OCR.populateScOptions();
 

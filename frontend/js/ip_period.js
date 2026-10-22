@@ -1719,15 +1719,29 @@ const IpPeriod = {
     this._reconcileData = null;
     const searchEl = document.getElementById('ipPeriodSearch');
     if (searchEl) searchEl.value = '';
-    const summary = await api('GET', `/reports/summary/${projectId}`);
-    if (!summary || !App.currentProject || App.currentProject.id != projectId) return;
-    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-    const proj = summary.project || p;
-    this._data = this._mergeIpProject(summary.ip_period || this._ipFallbackData(proj), proj);
-    this.render('ipPeriodMain', this._data, { editable: true, project: proj });
-    this.renderScMatrix('ipPeriodScMatrix', this._data.sc_matrix, { hasMainIp: this._data?.items?.length > 0 });
-    await this.loadReconcile(projectId);
-    this._applyPendingMatrixFocus();
+    try {
+      const summary = await api('GET', `/reports/summary/${projectId}`);
+      if (!summary || !App.currentProject || App.currentProject.id != projectId) return;
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      const proj = summary.project || p;
+      this._data = this._mergeIpProject(summary.ip_period || this._ipFallbackData(proj), proj);
+      this.render('ipPeriodMain', this._data, { editable: true, project: proj });
+      this.renderScMatrix('ipPeriodScMatrix', this._data.sc_matrix, { hasMainIp: this._data?.items?.length > 0 });
+      await this.loadReconcile(projectId);
+      this._applyPendingMatrixFocus();
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      if (!App.currentProject || App.currentProject.id != projectId) return;
+      const msg = e?.code === 'LOAD_TIMEOUT'
+        ? '載入逾時，請再點一次「糧期狀況」'
+        : (e?.message || '載入失敗');
+      const html = `<div class="empty-state" style="padding:24px">${escHtml(msg)}</div>`;
+      ['ipPeriodMain', 'ipPeriodScMatrix', 'ipReconcilePanel'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+      });
+    }
   },
 
   async loadReconcile(projectId) {
@@ -1739,6 +1753,7 @@ const IpPeriod = {
       this._reconcileData = data;
       IpReconcile.render(el, data, { search: this._searchQuery });
     } catch (e) {
+      if (e?.name === 'AbortError') return;
       if (!App.currentProject || App.currentProject.id != projectId) return;
       const hint = (e?.message || '').includes('404')
         ? '後端尚未更新糧期核對 API，請重啟 python app.py 後 Ctrl+F5 刷新。'

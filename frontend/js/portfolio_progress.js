@@ -605,9 +605,16 @@ const PortfolioProgress = {
       this._renderStats();
       this.render();
     } catch (e) {
-      if (e?.name === 'AbortError') return;
+      if (e?.name === 'AbortError') {
+        const body = document.getElementById('ppTableBody');
+        if (body && App.currentPage === 'portfolio-progress') {
+          body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">載入已中斷，請再點一次「進行中項目」</div></td></tr>`;
+        }
+        return;
+      }
       const body = document.getElementById('ppTableBody');
-      if (body) body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">載入失敗</div></td></tr>`;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次本頁' : '載入失敗';
+      if (body) body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">${msg}</div></td></tr>`;
     } finally {
       hideContentLoading(loadSeq);
     }
