@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261022-a11y-labels` · 分支 `v2/portfolio`
+
+### 修正
+- **無障礙**：表單 `<label>` 對上輸入欄；概覽上只作標題的欄名改為普通文字，不再被標成未關聯標籤。
+
 `APP_VERSION`: `v2-20261022-boot-cdn` · 分支 `v2/portfolio`
 
 ### 修正

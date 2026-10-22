@@ -364,7 +364,7 @@ const MainConFac = {
             </table>
           </div>
           <div class="mcf-upload-row">
-            <label class="form-label">工程帳目總結算書 Final account statement</label>
+            <label class="form-label" for="mcfStatementFile">工程帳目總結算書 Final account statement</label>
             <div class="mcf-upload-cell">
               <input type="file" class="form-input" id="mcfStatementFile" accept=".pdf,.png,.jpg,.jpeg">
               <div id="mcfStatementExisting">${this._attachLink(d.attachments.statement)}</div>
@@ -399,12 +399,12 @@ const MainConFac = {
           </div>
           <div class="form-row mcf-upload-row">
             <div class="form-group">
-              <label class="form-label">實際完工證書 PC Certificate</label>
+              <label class="form-label" for="mcfPcCertFile">實際完工證書 PC Certificate</label>
               <input type="file" class="form-input" id="mcfPcCertFile" accept=".pdf,.png,.jpg,.jpeg">
               <div id="mcfPcExisting">${this._attachLink(d.attachments.pc_cert)}</div>
             </div>
             <div class="form-group">
-              <label class="form-label">修補缺陷完工證書 Defect Correction Certificate</label>
+              <label class="form-label" for="mcfMgCertFile">修補缺陷完工證書 Defect Correction Certificate</label>
               <input type="file" class="form-input" id="mcfMgCertFile" accept=".pdf,.png,.jpg,.jpeg">
               <div id="mcfMgExisting">${this._attachLink(d.attachments.mg_cert)}</div>
             </div>

@@ -1310,24 +1310,24 @@ const Projects = {
         </div>
         <div class="settle-side">
           <div class="form-group">
-            <label class="form-label">覆寫 C — 物料及其他支出 (HK$)</label>
+            <label class="form-label" for="settleMaterialC">覆寫 C — 物料及其他支出 (HK$)</label>
             <input type="number" class="form-input" id="settleMaterialC" placeholder="留空則自動計算" step="0.01"
               value="${storedManualC != null && storedManualC !== '' ? fmtInputNum(storedManualC) : ''}">
             <div class="form-hint">Cover Page 結算用；含 M/O 判項、除外 (C) 扣減（不含上表人工分攤）</div>
           </div>
           <div class="form-group">
-            <label class="form-label">財務會作調撥（人工分攤）(HK$)</label>
+            <label class="form-label" for="settleLabour">財務會作調撥（人工分攤）(HK$)</label>
             <input type="number" class="form-input" id="settleLabour" placeholder="0" step="0.01"
               value="${project?.labour_allocation != null && project?.labour_allocation !== '' ? fmtInputNum(project.labour_allocation) : (labour ? fmtInputNum(labour) : '')}">
             <div class="form-hint">與項目編輯表單「待辦」欄位同步</div>
           </div>
           <div class="form-group">
-            <label class="form-label">結算工程總額 (HK$)</label>
+            <label class="form-label" for="settleFinalSub">結算工程總額 (HK$)</label>
             <input type="number" class="form-input" id="settleFinalSub" step="0.01"
               value="${fmtInputNum(project?.final_subcontract_sum ?? s.final_subcontract_sum ?? s.subcontract_sum_b ?? '')}">
           </div>
           <div class="form-group">
-            <label class="form-label">分判商工程帳目總結算日</label>
+            <label class="form-label" for="settleScFacDate">分判商工程帳目總結算日</label>
             <input type="date" class="form-input" id="settleScFacDate" value="${project?.sc_fac_signed_date || ''}">
           </div>
         </div>

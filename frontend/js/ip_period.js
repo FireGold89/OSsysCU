@@ -1240,27 +1240,27 @@ const IpPeriod = {
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">方式</label>
-          <select class="form-input ip-receipt-method" onchange="IpPeriod.onReceiptMethodChange(${idx})">
+          <label class="form-label" for="ipReceiptMethod-${idx}">方式</label>
+          <select class="form-input ip-receipt-method" id="ipReceiptMethod-${idx}" onchange="IpPeriod.onReceiptMethodChange(${idx})">
             <option value=""${method === '' ? ' selected' : ''}>— 未填 —</option>
             <option value="cheque"${method === 'cheque' ? ' selected' : ''}>支票</option>
             <option value="transfer"${method === 'transfer' ? ' selected' : ''}>過數</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">收款日期</label>
-          <input type="date" class="form-input ip-receipt-date" value="${escHtml(row.date || '')}"
+          <label class="form-label" for="ipReceiptDate-${idx}">收款日期</label>
+          <input type="date" class="form-input ip-receipt-date" id="ipReceiptDate-${idx}" value="${escHtml(row.date || '')}"
             onchange="IpPeriod._updateReceiptPreview(${idx})">
         </div>
       </div>
       <div class="form-row ip-receipt-cheque-fields" style="display:${showCheque ? '' : 'none'}">
         <div class="form-group">
-          <label class="form-label">支票號碼</label>
-          <input type="text" class="form-input ip-receipt-cheque-no" placeholder="#828310"
+          <label class="form-label" for="ipReceiptCheque-${idx}">支票號碼</label>
+          <input type="text" class="form-input ip-receipt-cheque-no" id="ipReceiptCheque-${idx}" placeholder="#828310"
             value="${escHtml(row.cheque_no || '')}" oninput="IpPeriod._updateReceiptPreview(${idx})">
         </div>
         <div class="form-group">
-          <label class="form-label">銀行</label>
+          <label class="form-label" for="ipReceiptBank-${idx}">銀行</label>
           <div class="ip-bank-combo ip-receipt-bank-combo" data-idx="${idx}">
             <button type="button" class="form-input ip-bank-combo-trigger ip-receipt-bank-trigger" data-idx="${idx}"
               onclick="IpPeriod.toggleBankDropdown(event, ${idx})" aria-haspopup="listbox" aria-expanded="false">
@@ -1271,7 +1271,7 @@ const IpPeriod = {
           </div>
           <div class="ip-bank-custom-row">
             <span class="ip-bank-custom-label">或自填</span>
-            <input type="text" class="form-input ip-bank-custom ip-receipt-bank-custom" data-idx="${idx}"
+            <input type="text" class="form-input ip-bank-custom ip-receipt-bank-custom" id="ipReceiptBank-${idx}" data-idx="${idx}"
               inputmode="numeric" maxlength="3" placeholder="3 位代碼，如 061"
               value="${escHtml(customBank)}" oninput="IpPeriod.onBankCustomInput(${idx})">
           </div>
@@ -1279,8 +1279,8 @@ const IpPeriod = {
         </div>
       </div>
       <div class="form-group ip-receipt-transfer-fields" style="display:${showTransfer ? '' : 'none'}">
-        <label class="form-label">過數備註</label>
-        <input type="text" class="form-input ip-receipt-note" placeholder="轉帳參考／備註"
+        <label class="form-label" for="ipReceiptNote-${idx}">過數備註</label>
+        <input type="text" class="form-input ip-receipt-note" id="ipReceiptNote-${idx}" placeholder="轉帳參考／備註"
           value="${escHtml(row.note || '')}" oninput="IpPeriod._updateReceiptPreview(${idx})">
       </div>
       <div class="form-hint ip-receipt-preview"></div>
