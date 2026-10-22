@@ -462,7 +462,19 @@ const Projects = {
     if (cards) {
       cards.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:40px">載入中...</div>';
     }
-    this._rows = await api('GET', '/company-summary') || [];
+    try {
+      this._rows = await api('GET', '/company-summary') || [];
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次「工程項目」' : '載入失敗';
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:24px">${escHtml(msg)}</div></td></tr>`;
+      }
+      if (cards) {
+        cards.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:40px">${escHtml(msg)}</div>`;
+      }
+      return;
+    }
     this.renderView();
   },
 

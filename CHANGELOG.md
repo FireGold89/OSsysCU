@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261022-spin-pages` · 分支 `v2/portfolio`
+
+### 修正
+- **付款登記、工程項目、分判合約編號**：讀取逾時或被取消後改顯示再試，不再停在「載入中」。
+
 `APP_VERSION`: `v2-20261022-load-timeout` · 分支 `v2/portfolio`
 
 ### 修正

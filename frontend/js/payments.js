@@ -129,7 +129,18 @@ const Payments = {
     if (filters.sc_no) params.append('sc_no', filters.sc_no);
     if (filters.search) params.append('search', filters.search);
 
-    this.data = await api('GET', `/projects/${projectId}/payments?${params}`) || [];
+    try {
+      this.data = await api('GET', `/projects/${projectId}/payments?${params}`) || [];
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      if (!App.currentProject || App.currentProject.id != projectId) return;
+      const body = document.getElementById('payTableBody');
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次此頁' : (e?.message || '載入失敗');
+      if (body) {
+        body.innerHTML = `<tr><td colspan="13"><div class="empty-state" style="padding:40px">${escHtml(msg)}</div></td></tr>`;
+      }
+      return;
+    }
     if (!App.currentProject || App.currentProject.id != projectId) return;
     if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
     const typeFilter = document.getElementById('payFilterType')?.value || '';

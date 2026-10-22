@@ -167,8 +167,9 @@ const ScContractRegistry = {
       this._applyFilters(data?.filters);
       this.render();
     } catch (e) {
-      if (e?.name === 'AbortError') return;
-      root.innerHTML = `<tr><td colspan="${this.COLS}"><div class="empty-state" style="padding:40px"><div class="empty-title">載入失敗</div></div></td></tr>`;
+      if (e?.name === 'AbortError' && App.currentPage !== 'sc-contract-registry') return;
+      const title = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次此頁' : '載入失敗';
+      root.innerHTML = `<tr><td colspan="${this.COLS}"><div class="empty-state" style="padding:40px"><div class="empty-title">${escHtml(title)}</div></div></td></tr>`;
     }
   },
 
