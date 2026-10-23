@@ -7,6 +7,7 @@
  */
 const LoadPerf = {
   SUMMARY_SLOT: 'reports-summary',
+  CONTRACT_CALC_SLOT: 'contract-calc',
   BUNDLE_SLOT: 'dashboard-overview',
   BUNDLE_LITE_SLOT: 'dashboard-overview-lite',
   SC_VO_TEMPLATES_SLOT: 'sc-vo-templates',
@@ -85,6 +86,7 @@ const LoadPerf = {
   /** 換項目、寫入後：清 summary + 概覽 bundle */
   invalidateProjectCaches(projectId) {
     this.invalidate(this.SUMMARY_SLOT, projectId ?? null);
+    this.invalidate(this.CONTRACT_CALC_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_LITE_SLOT, projectId ?? null);
     this.invalidate(this.SUBCONTRACTORS_SLOT, projectId ?? null);
@@ -168,6 +170,20 @@ const LoadPerf = {
       });
     }
     return run();
+  },
+
+  fetchContractCalc(projectId, { silent = true } = {}) {
+    const pid = Number(projectId);
+    if (!pid) return Promise.resolve(null);
+    return this.fetchDeduped(
+      this.CONTRACT_CALC_SLOT,
+      pid,
+      () => this._apiGet(`/projects/${pid}/contract-calc`, {
+        silent,
+        timeoutMs: this.OVERVIEW_FETCH_TIMEOUT_MS,
+      }),
+      { shouldCommit: (sid) => this._isCurrentProject(sid) },
+    );
   },
 
   fetchProjectSummary(projectId, { silent = true } = {}) {

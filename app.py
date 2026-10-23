@@ -1099,7 +1099,8 @@ def sc_fac_docx_api(project_id, sc_id):
 
 @app.route('/api/projects/<int:project_id>/documents', methods=['GET'])
 def get_project_documents(project_id):
-    return resp(db.get_project_documents(project_id))
+    category = (request.args.get('doc_category') or '').strip() or None
+    return resp(db.get_project_documents(project_id, category))
 
 
 @app.route('/api/projects/<int:project_id>/documents', methods=['POST'])
@@ -1185,23 +1186,42 @@ def _iso_disk_filename(doc_slot, original_filename):
     return f"{label}_{date}_{uid}.{ext}"
 
 
+@app.route('/api/projects/<int:project_id>/contract-calc', methods=['GET'])
+def project_contract_calc(project_id):
+    """合約金額結算。不組糧期、不等 ISO。"""
+    calc = db.get_contract_calc(project_id)
+    if calc is None:
+        return resp(error='項目不存在', status=404)
+    return resp(calc)
+
+
 @app.route('/api/projects/<int:project_id>/dashboard-overview', methods=['GET'])
 def project_dashboard_overview(project_id):
-    """項目概覽一次載入：ISO 板、legacy 文件、主合約 FAC、財務 summary（減少首屏 round-trip）"""
+    """項目概覽：lite 只取主合約／LOA 與 SOT／SOR、FAC。結算表另走 contract-calc。"""
     if not db.get_project(project_id):
         return resp(error='項目不存在', status=404)
+    lite = request.args.get('lite') in ('1', 'true', 'yes')
+    if lite:
+        overview = db.get_iso_overview_bundle(project_id)
+        if not overview:
+            return resp(error='項目不存在', status=404)
+        return resp({
+            'iso_board': {
+                'main_files': overview['main_files'],
+                'subcontractors': [],
+            },
+            'documents': overview['documents'],
+            'main_con_fac': db.get_main_con_fac(project_id),
+            'report_summary': None,
+        })
     board = db.get_iso_documents_board(project_id)
     if not board:
         return resp(error='項目不存在', status=404)
-    lite = request.args.get('lite') in ('1', 'true', 'yes')
     payload = {
         'iso_board': board,
         'documents': db.get_project_documents(project_id),
         'main_con_fac': db.get_main_con_fac(project_id),
     }
-    if lite:
-        payload['report_summary'] = None
-        return resp(payload)
     summary = db.get_project_summary(project_id)
     if not summary:
         return resp(error='項目不存在', status=404)
@@ -1211,7 +1231,15 @@ def project_dashboard_overview(project_id):
 
 @app.route('/api/projects/<int:project_id>/iso-documents', methods=['GET'])
 def get_iso_documents(project_id):
-    board = db.get_iso_documents_board(project_id)
+    part = (request.args.get('part') or 'full').strip()
+    if part == 'main':
+        board = db.get_iso_documents_main(project_id)
+    elif part == 'sc':
+        offset = max(request.args.get('offset', 0, type=int) or 0, 0)
+        limit = request.args.get('limit', 8, type=int) or 8
+        board = db.get_iso_documents_sc_batch(project_id, offset, limit)
+    else:
+        board = db.get_iso_documents_board(project_id)
     if not board:
         return resp(error='項目不存在', status=404)
     return resp(board)

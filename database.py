@@ -2715,15 +2715,17 @@ def update_main_fac_attachment(project_id, att_type, file_path, original_name):
     return True
 
 
-def get_project_documents(project_id):
+def get_project_documents(project_id, doc_category=None):
     conn = get_conn()
-    rows = conn.execute(
-        """SELECT id, project_id, doc_category, file_path, original_filename,
+    sql = """SELECT id, project_id, doc_category, file_path, original_filename,
                   notes, created_at
-           FROM project_documents WHERE project_id=?
-           ORDER BY created_at DESC""",
-        (project_id,),
-    ).fetchall()
+           FROM project_documents WHERE project_id=?"""
+    params = [project_id]
+    if doc_category:
+        sql += " AND doc_category=?"
+        params.append(doc_category)
+    sql += " ORDER BY created_at DESC"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -2791,6 +2793,200 @@ def _iso_sc_rows(project_id):
         return _iso_sc_rows_from_conn(conn, project_id)
     finally:
         conn.close()
+
+
+_OVERVIEW_ISO_SLOTS = ('main_contract_loa', 'supplemental_optional')
+
+
+def _iso_version_counts(conn, project_id, where_sql='', params=()):
+    version_counts = {}
+    sql = """
+        SELECT scope, subcontractor_id, doc_slot, COUNT(*) AS n
+        FROM iso_document_versions WHERE project_id=?
+    """
+    qparams = [project_id]
+    if where_sql:
+        sql += where_sql
+        qparams.extend(params)
+    sql += " GROUP BY scope, IFNULL(subcontractor_id, 0), doc_slot"
+    for r in conn.execute(sql, qparams).fetchall():
+        d = dict(r)
+        key = (d['scope'], d.get('subcontractor_id') or 0, d['doc_slot'])
+        version_counts[key] = d['n']
+    return version_counts
+
+
+def _iso_enrich_file(d, version_counts):
+    key = (d['scope'], d.get('subcontractor_id') or 0, d['doc_slot'])
+    d['version_count'] = version_counts.get(key, 0)
+    if not d.get('storage_type'):
+        d['storage_type'] = 'link' if d.get('external_url') else 'file'
+    return d
+
+
+def _iso_project_header(project):
+    return {
+        'project': {
+            'id': project['id'],
+            'project_code': project.get('project_code'),
+            'project_name_zh': project.get('project_name_zh') or project.get('project_name_en'),
+            'contract_amount': float(project.get('contract_amount') or 0),
+            'supplemental_contract_amount': float(project.get('supplemental_contract_amount') or 0),
+            'doc_library_url': (project.get('doc_library_url') or '').strip() or None,
+        },
+        'doc_library': {
+            'project_url': (project.get('doc_library_url') or '').strip() or None,
+            'global_url': (get_setting('doc_library_url', '') or '').strip() or None,
+        },
+    }
+
+
+def _iso_sort_sc_rows(rows):
+    """與 IsoDocs._sortScRows 相同：≥30萬優先，金額由高至低。"""
+    def key(sc):
+        amt = float(sc.get('contract_sum') or sc.get('contract_amount') or 0)
+        return (0 if amt >= 300000 else 1, -amt, (sc.get('sc_no') or ''))
+    return sorted(rows, key=key)
+
+
+def _iso_sc_stub(sc, files=None):
+    amt = float(sc.get('contract_sum') or sc.get('contract_amount') or 0)
+    return {
+        'id': sc['id'],
+        'sc_no': sc.get('sc_no'),
+        'company_name_zh': sc.get('company_name_zh') or sc.get('company_name_en') or sc.get('sc_no'),
+        'contract_amount': amt,
+        'files': files or {},
+    }
+
+
+def get_iso_overview_bundle(project_id):
+    """概覽只要主合約／LOA 與 SOT／SOR，不拉分判附件。"""
+    conn = get_conn()
+    project = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+    if not project:
+        conn.close()
+        return None
+    project = dict(project)
+    ph = ','.join('?' * len(_OVERVIEW_ISO_SLOTS))
+    file_rows = conn.execute(
+        f"""
+        SELECT id, scope, subcontractor_id, doc_slot, file_path, original_filename,
+               storage_type, external_url, link_label, updated_at
+        FROM iso_document_files
+        WHERE project_id=? AND scope='main' AND doc_slot IN ({ph})
+        """,
+        (project_id, *_OVERVIEW_ISO_SLOTS),
+    ).fetchall()
+    version_counts = _iso_version_counts(
+        conn, project_id,
+        f" AND scope='main' AND doc_slot IN ({ph})",
+        _OVERVIEW_ISO_SLOTS,
+    )
+    docs = conn.execute(
+        """SELECT id, project_id, doc_category, file_path, original_filename,
+                  notes, created_at
+           FROM project_documents
+           WHERE project_id=? AND doc_category='attachment3_sot_sor'
+           ORDER BY created_at DESC""",
+        (project_id,),
+    ).fetchall()
+    conn.close()
+
+    main_files = {}
+    for r in file_rows:
+        d = _iso_enrich_file(dict(r), version_counts)
+        main_files.setdefault(d['doc_slot'], []).append(d)
+    for slot_list in main_files.values():
+        slot_list.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+    return {
+        'main_files': main_files,
+        'documents': [dict(r) for r in docs],
+    }
+
+
+def get_iso_documents_main(project_id):
+    """ISO 頁第一段：主合約附件 + 分判名單，不含各判項檔案。"""
+    conn = get_conn()
+    project = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+    if not project:
+        conn.close()
+        return None
+    project = dict(project)
+    file_rows = conn.execute(
+        """
+        SELECT id, scope, subcontractor_id, doc_slot, file_path, original_filename,
+               storage_type, external_url, link_label, updated_at
+        FROM iso_document_files
+        WHERE project_id=? AND scope='main'
+        """,
+        (project_id,),
+    ).fetchall()
+    version_counts = _iso_version_counts(conn, project_id, " AND scope='main'")
+    sc_list = _iso_sort_sc_rows(_iso_sc_rows_from_conn(conn, project_id))
+    conn.close()
+
+    main_files = {}
+    for r in file_rows:
+        d = _iso_enrich_file(dict(r), version_counts)
+        main_files.setdefault(d['doc_slot'], []).append(d)
+    for slot_list in main_files.values():
+        slot_list.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+
+    header = _iso_project_header(project)
+    header['main_files'] = main_files
+    header['subcontractors'] = [_iso_sc_stub(sc) for sc in sc_list]
+    header['sc_total'] = len(sc_list)
+    return header
+
+
+def get_iso_documents_sc_batch(project_id, offset=0, limit=8):
+    """ISO 頁分判附件，按判項分批。只回傳清單欄位，不讀檔案內容。"""
+    conn = get_conn()
+    project = conn.execute("SELECT id FROM projects WHERE id=?", (project_id,)).fetchone()
+    if not project:
+        conn.close()
+        return None
+    sc_list = _iso_sort_sc_rows(_iso_sc_rows_from_conn(conn, project_id))
+    total = len(sc_list)
+    offset = max(int(offset or 0), 0)
+    limit = min(max(int(limit or 8), 1), 30)
+    chunk = sc_list[offset:offset + limit]
+    ids = [sc['id'] for sc in chunk]
+    file_rows = []
+    version_counts = {}
+    if ids:
+        ph = ','.join('?' * len(ids))
+        file_rows = conn.execute(
+            f"""
+            SELECT id, scope, subcontractor_id, doc_slot, file_path, original_filename,
+                   storage_type, external_url, link_label, updated_at
+            FROM iso_document_files
+            WHERE project_id=? AND scope='subcontractor' AND subcontractor_id IN ({ph})
+            """,
+            (project_id, *ids),
+        ).fetchall()
+        version_counts = _iso_version_counts(
+            conn, project_id,
+            f" AND scope='subcontractor' AND subcontractor_id IN ({ph})",
+            ids,
+        )
+    conn.close()
+
+    sc_files = {}
+    for r in file_rows:
+        d = _iso_enrich_file(dict(r), version_counts)
+        sc_files.setdefault(d['subcontractor_id'], {}).setdefault(d['doc_slot'], []).append(d)
+    for sc_map in sc_files.values():
+        for slot_list in sc_map.values():
+            slot_list.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+
+    return {
+        'subcontractors': [_iso_sc_stub(sc, sc_files.get(sc['id'], {})) for sc in chunk],
+        'sc_total': total,
+        'offset': offset,
+        'limit': limit,
+    }
 
 
 def get_iso_documents_board(project_id):
@@ -5912,6 +6108,19 @@ def build_contract_calc(conn, project_id, proj):
         'profit_e': profit_e,
         'profit_rate': profit_rate,
     }
+
+
+def get_contract_calc(project_id):
+    """合約金額結算 A–F。不組糧期矩陣。"""
+    conn = get_conn()
+    project = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+    if not project:
+        conn.close()
+        return None
+    try:
+        return build_contract_calc(conn, project_id, dict(project))
+    finally:
+        conn.close()
 
 
 def get_project_summary(project_id):

@@ -119,6 +119,36 @@ const ProjectDashboard = {
     if (persist) localStorage.setItem(this.LAYOUT_KEY, layout);
   },
 
+  /** 合約結算自己載，不等 ISO，也不走糧期 summary。 */
+  async _loadContractCalc(p, switchSeq) {
+    const calcHost = document.getElementById('pdContractCalc');
+    if (!calcHost || !p?.id) return;
+    const projectId = p.id;
+    try {
+      const calc = typeof LoadPerf !== 'undefined' && LoadPerf.fetchContractCalc
+        ? await LoadPerf.fetchContractCalc(projectId, { silent: true })
+        : await api('GET', `/projects/${projectId}/contract-calc`, null, {
+          silent: true,
+          useProjectSwitchSignal: true,
+        });
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      if (String(this._calcProjectId || '') !== String(projectId)) return;
+      if (calc && typeof contractCalcTableHtml === 'function') {
+        calcHost.innerHTML = contractCalcTableHtml(calc);
+      } else {
+        calcHost.innerHTML = '<p class="form-hint">載入失敗</p>';
+      }
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+      if (String(this._calcProjectId || '') !== String(projectId)) return;
+      calcHost.innerHTML = '<p class="form-hint">載入失敗</p>';
+    }
+    this._syncProContractCalc();
+    const done = document.getElementById('pdContractCalc');
+    if (done) done.dataset.heavyLoaded = '1';
+  },
+
   _syncProContractCalc() {
     const src = document.getElementById('pdContractCalc');
     const dst = document.getElementById('pdContractCalcPro');
@@ -292,6 +322,8 @@ const ProjectDashboard = {
       return;
     }
 
+    const calcTask = this._loadContractCalc(p, switchSeq);
+
     let board = null;
     let legacyRaw = [];
     let facData = null;
@@ -324,17 +356,14 @@ const ProjectDashboard = {
         }
         return run().catch(() => null);
       };
-      const summaryP = typeof LoadPerf !== 'undefined'
-        ? LoadPerf.fetchProjectSummary(p.id, { silent: true }).catch(() => null)
-        : timedGet(`/reports/summary/${p.id}`);
       const rows = await Promise.all([
-        timedGet(`/projects/${p.id}/iso-documents`),
-        timedGet(`/projects/${p.id}/documents`).then((r) => r || []),
+        timedGet(`/projects/${p.id}/iso-documents?part=main`),
+        timedGet(`/projects/${p.id}/documents?doc_category=attachment3_sot_sor`).then((r) => r || []),
         timedGet(`/projects/${p.id}/main-con-fac`),
-        summaryP,
       ]);
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-      [board, legacyRaw, facData, summaryEarly] = rows;
+      [board, legacyRaw, facData] = rows;
+      if (board?.documents && !legacyRaw.length) legacyRaw = board.documents;
     }
 
     let merged = [];
@@ -360,30 +389,7 @@ const ProjectDashboard = {
       this._setHtml('pdDocsSotSor', ProjIsoAttach.readonlyHtml(ProjIsoAttach.docsForGroup(merged, 'sotSor')));
     }
     this._renderProLayout(p, facDates, merged);
-
-    const calcHost = document.getElementById('pdContractCalc');
-    if (calcHost) {
-      try {
-        const summary = summaryEarly
-          || await (typeof LoadPerf !== 'undefined'
-            ? LoadPerf.fetchProjectSummary(p.id, { silent: true })
-            : api('GET', `/reports/summary/${p.id}`, null, { silent: true }));
-        if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-        const calc = summary?.contract_calc;
-        if (calc && typeof contractCalcTableHtml === 'function') {
-          calcHost.innerHTML = contractCalcTableHtml(calc);
-        } else {
-          calcHost.innerHTML = '<p class="form-hint">尚無結算資料</p>';
-        }
-      } catch (_) {
-        if (switchSeq == null || switchSeq === App._projectSwitchSeq) {
-          calcHost.innerHTML = '<p class="form-hint">載入失敗</p>';
-        }
-      }
-    }
-    this._syncProContractCalc();
-    const calcHostDone = document.getElementById('pdContractCalc');
-    if (calcHostDone) calcHostDone.dataset.heavyLoaded = '1';
+    if (calcTask) await calcTask;
   },
 
   async load(switchSeq) {

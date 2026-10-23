@@ -4,6 +4,13 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261023-overview-split` · 分支 `v2/portfolio`
+
+### 修正
+- **合約金額結算**：自己先載，不再等 ISO，也不為這張表組糧期。
+- **項目概覽**：只取主合約／LOA 與 SOT／SOR，不拉全部分判附件。
+- **ISO 文件**：進頁先載該項目清單；分判附件按判項分批載；預覽與下載才讀檔案。
+
 `APP_VERSION`: `v2-20261023-master-load` · 分支 `v2/portfolio`
 
 ### 修正

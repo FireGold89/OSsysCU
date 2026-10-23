@@ -9,6 +9,8 @@ const IsoDocs = {
   _linkCtx: null,
   _versionsCtx: null,
   _loadSeq: 0,
+  /** 分判附件每批判項數 */
+  SC_BATCH: 8,
   _view: 'main',
   _mainSubTab: 'contract',
   _dragBound: false,
@@ -569,21 +571,63 @@ const IsoDocs = {
     if (seq !== this._loadSeq) return;
 
     this._board = this._boardFromCache();
+    this._board.subcontractors = [];
+    this._board._scLoading = true;
     this.render();
 
+    let shell;
     try {
-      const data = await api('GET', `/projects/${pid}/iso-documents`, null, { silent: true });
-      if (seq !== this._loadSeq) return;
-      this._board = data;
-      this.render();
+      shell = await api('GET', `/projects/${pid}/iso-documents?part=main`, null, { silent: true });
     } catch (e) {
-      if (seq !== this._loadSeq) return;
-      if (e?.name === 'AbortError') return;
+      if (seq !== this._loadSeq || e?.name === 'AbortError') return;
       this._board._filesPending = false;
+      this._board._scLoading = false;
       this._board._loadError = e.message || '無法載入附件';
       this.render();
       toast(this._board._loadError + '（表格已顯示，可稍後重新整理）', 'warning');
+      return;
     }
+    if (seq !== this._loadSeq || !shell) return;
+
+    const queue = shell.subcontractors || [];
+    this._board = shell;
+    this._board.subcontractors = [];
+    this._board._scQueue = queue;
+    this._board._scTotal = queue.length;
+    this._board._filesPending = false;
+    this._board._scLoading = queue.length > 0;
+    this._scFileCols = this._scColsUnion(queue);
+    this.render();
+
+    const batch = this.SC_BATCH || 8;
+    for (let offset = 0; offset < queue.length; offset += batch) {
+      let part;
+      try {
+        part = await api(
+          'GET',
+          `/projects/${pid}/iso-documents?part=sc&offset=${offset}&limit=${batch}`,
+          null,
+          { silent: true },
+        );
+      } catch (e) {
+        if (seq !== this._loadSeq || e?.name === 'AbortError') return;
+        this._board._scLoading = false;
+        this._board._loadError = e.message || '分判附件載入中斷';
+        this._refreshIsoHint();
+        toast(this._board._loadError, 'warning');
+        return;
+      }
+      if (seq !== this._loadSeq) return;
+      const rows = part?.subcontractors || [];
+      this._board.subcontractors.push(...rows);
+      this._appendScBatch(rows, offset === 0);
+      this._refreshIsoHint();
+    }
+    if (seq !== this._loadSeq) return;
+    this._board._scLoading = false;
+    this._renderProgress(this._board);
+    this._renderTabBadges(this._board);
+    this._refreshIsoHint();
   },
 
   render() {
@@ -612,26 +656,33 @@ const IsoDocs = {
     this._renderScTable(b);
     this._bindDragDrop();
 
+    this._refreshIsoHint();
+  },
+
+  _refreshIsoHint() {
+    const b = this._board || {};
+    const n = b._scTotal != null ? b._scTotal : (b.subcontractors || []).length;
+    const loaded = (b.subcontractors || []).length;
     const filterNote = document.getElementById('isoDocsFilterNote');
     if (filterNote) {
-      const n = (b.subcontractors || []).length;
-      filterNote.textContent = n
-        ? `分判顯示 SC 類主判項 ${n} 項 · ≥30萬優先 · 附件依合約金額自動顯示`
-        : '';
+      if (!n) filterNote.textContent = '';
+      else if (b._scLoading) filterNote.textContent = `分判附件載入中（${loaded}/${n}）`;
+      else filterNote.textContent = `分判顯示 SC 類主判項 ${n} 項 · ≥30萬優先 · 附件依合約金額自動顯示`;
     }
-
     const hint = document.getElementById('isoDocsHint');
-    if (hint) {
-      if (b._loadError) {
-        hint.textContent = `⚠️ ${b._loadError} · 請重新啟動後端或 Ctrl+F5 後再試`;
-        hint.classList.add('iso-docs-hint-warn');
-      } else if (b._filesPending) {
-        hint.textContent = '主合約及分判招標／合約 ISO 附件 · 附件列表載入中…';
-        hint.classList.remove('iso-docs-hint-warn');
-      } else {
-        hint.textContent = '可拖放 PDF／圖片到各槽位 · 上傳、填連結或點檔名預覽 · 換檔保留舊版 · 下方可展開寬表格檢視';
-        hint.classList.remove('iso-docs-hint-warn');
-      }
+    if (!hint) return;
+    if (b._loadError) {
+      hint.textContent = `⚠️ ${b._loadError} · 請重新啟動後端或 Ctrl+F5 後再試`;
+      hint.classList.add('iso-docs-hint-warn');
+    } else if (b._filesPending) {
+      hint.textContent = '主合約及分判招標／合約 ISO 附件 · 附件列表載入中…';
+      hint.classList.remove('iso-docs-hint-warn');
+    } else if (b._scLoading) {
+      hint.textContent = `分判附件載入中（${loaded}/${n}）· 點檔名才預覽或下載`;
+      hint.classList.remove('iso-docs-hint-warn');
+    } else {
+      hint.textContent = '可拖放 PDF／圖片到各槽位 · 上傳、填連結或點檔名預覽 · 換檔保留舊版 · 下方可展開寬表格檢視';
+      hint.classList.remove('iso-docs-hint-warn');
     }
   },
 
@@ -669,29 +720,59 @@ const IsoDocs = {
     const rows = b.subcontractors || [];
     const pending = b._filesPending;
 
-    if (!rows.length) {
+    if (b._scLoading && !rows.length) {
+      el.innerHTML = `<div class="iso-sc-empty">載入分判附件…</div>`;
+      return;
+    }
+    if (!rows.length && !(b._scTotal > 0)) {
       el.innerHTML = `<div class="iso-sc-empty">尚無分判資料 · 請先在「分判商登記」新增判項</div>`;
       return;
     }
+    if (!rows.length) return;
 
-    el.innerHTML = rows.map(sc => {
-      const slots = this._scColsForAmount(this._scAmount(sc));
-      const rs = this._scRowStats(sc);
-      const pct = rs.total ? Math.round((rs.done / rs.total) * 100) : 0;
-      const badgeCls = rs.requiredDone >= rs.requiredTotal ? 'iso-row-badge iso-row-badge-ok' : 'iso-row-badge iso-row-badge-warn';
-      const badge = pending || !rs.total ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total}">${pct}%</span>`;
-      const tiles = slots.length
-        ? slots.map(col => this._slotTile('subcontractor', sc.id, col, sc.files?.[col.slot], pending)).join('')
-        : '<div class="iso-sc-empty-tier">無需提交 ISO 文件（合約金額 HK$100,000 以下）</div>';
-      return `<article class="iso-sc-card">
-        <header class="iso-sc-card-head">
-          <div><strong>${escHtml(sc.company_name_zh || '—')}</strong>
-            ${sc.sc_no ? `<div class="iso-cell-sub">${escHtml(sc.sc_no)}</div>` : ''}</div>
-          <div class="iso-sc-card-meta">${badge}<span class="iso-sc-amt">${fmt(sc.contract_amount)}</span></div>
-        </header>
-        <div class="iso-slot-grid iso-slot-grid-compact">${tiles}</div>
-      </article>`;
-    }).join('');
+    el.innerHTML = rows.map(sc => this._scCardHtml(sc, pending)).join('');
+  },
+
+  _scCardHtml(sc, pending) {
+    const slots = this._scColsForAmount(this._scAmount(sc));
+    const rs = this._scRowStats(sc);
+    const pct = rs.total ? Math.round((rs.done / rs.total) * 100) : 0;
+    const badgeCls = rs.requiredDone >= rs.requiredTotal ? 'iso-row-badge iso-row-badge-ok' : 'iso-row-badge iso-row-badge-warn';
+    const badge = pending || !rs.total ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total}">${pct}%</span>`;
+    const tiles = slots.length
+      ? slots.map(col => this._slotTile('subcontractor', sc.id, col, sc.files?.[col.slot], pending)).join('')
+      : '<div class="iso-sc-empty-tier">無需提交 ISO 文件（合約金額 HK$100,000 以下）</div>';
+    return `<article class="iso-sc-card">
+      <header class="iso-sc-card-head">
+        <div><strong>${escHtml(sc.company_name_zh || '—')}</strong>
+          ${sc.sc_no ? `<div class="iso-cell-sub">${escHtml(sc.sc_no)}</div>` : ''}</div>
+        <div class="iso-sc-card-meta">${badge}<span class="iso-sc-amt">${fmt(sc.contract_amount)}</span></div>
+      </header>
+      <div class="iso-slot-grid iso-slot-grid-compact">${tiles}</div>
+    </article>`;
+  },
+
+  _appendScBatch(rows, reset) {
+    if (!rows.length) return;
+    const pending = false;
+    const cards = document.getElementById('isoScCards');
+    if (cards) {
+      const html = rows.map(sc => this._scCardHtml(sc, pending)).join('');
+      if (reset) cards.innerHTML = html;
+      else cards.insertAdjacentHTML('beforeend', html);
+    }
+    const table = document.getElementById('isoScTable');
+    if (!table) return;
+    const fileCols = this._scFileCols || this._scColsUnion(rows);
+    const rowHtml = rows.map(sc => this._scTableRow(sc, fileCols, pending)).join('');
+    if (reset) {
+      const stickyCols = this.SC_COLS.filter(c => c.kind);
+      const head = `<thead><tr>${stickyCols.map(c => this._thCell(c)).join('')}${fileCols.map(c => this._thCell(c)).join('')}</tr></thead>`;
+      table.innerHTML = `${head}<tbody>${rowHtml}</tbody>`;
+      return;
+    }
+    const tbody = table.querySelector('tbody');
+    if (tbody) tbody.insertAdjacentHTML('beforeend', rowHtml);
   },
 
   _slotTile(scope, scId, col, file, pending) {
@@ -805,50 +886,57 @@ const IsoDocs = {
     const el = document.getElementById('isoScTable');
     if (!el) return;
     const rows = b.subcontractors || [];
-    const pending = b._filesPending ? ' iso-cell-pending' : '';
+    const pending = !!b._filesPending;
     const stickyCols = this.SC_COLS.filter(c => c.kind);
-    const fileCols = this._scColsUnion(rows);
+    const fileCols = (b._scLoading && this._scFileCols) ? this._scFileCols : this._scColsUnion(rows.length ? rows : (b._scQueue || []));
     const colCount = stickyCols.length + Math.max(fileCols.length, 1);
     const head = `<thead><tr>${stickyCols.map(c => this._thCell(c)).join('')}${fileCols.map(c => this._thCell(c)).join('')}</tr></thead>`;
 
+    if (b._scLoading && !rows.length) {
+      el.innerHTML = `${head}<tbody><tr><td colspan="${colCount}" class="td-muted" style="padding:20px;text-align:center">載入分判附件…</td></tr></tbody>`;
+      return;
+    }
     if (!rows.length) {
       el.innerHTML = `${head}<tbody><tr><td colspan="${colCount}" class="td-muted" style="padding:20px;text-align:center">尚無分判資料 · 請先在「分判商登記」新增判項</td></tr></tbody>`;
       return;
     }
 
-    const body = rows.map(sc => {
-      const tierSlots = new Set(this._scTierSlots(this._scAmount(sc)));
-      const rs = this._scRowStats(sc);
-      const pct = rs.total ? Math.round((rs.done / rs.total) * 100) : 0;
-      const badgeCls = rs.requiredDone >= rs.requiredTotal ? 'iso-row-badge iso-row-badge-ok' : 'iso-row-badge iso-row-badge-warn';
-      const stickyCells = stickyCols.map(col => {
-        if (col.kind === 'label') {
-          const sub = sc.sc_no ? `<div class="iso-cell-sub">${escHtml(sc.sc_no)}</div>` : '';
-          const badge = b._filesPending || !rs.total ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total} · 必填 ${rs.requiredDone}/${rs.requiredTotal}">${pct}%</span>`;
-          return this._tdSticky(col, `<div class="iso-label-wrap">${escHtml(sc.company_name_zh || '—')}${badge}</div>${sub}`);
-        }
-        if (col.kind === 'amount') {
-          return this._tdSticky(col, fmt(sc.contract_amount));
-        }
-        return '';
-      }).join('');
+    const body = rows.map(sc => this._scTableRow(sc, fileCols, pending)).join('');
+    el.innerHTML = `${head}<tbody>${body}</tbody>`;
+  },
 
-      if (!tierSlots.size) {
-        const span = Math.max(fileCols.length, 1);
-        return `<tr>${stickyCells}<td colspan="${span}" class="td-muted iso-file-cell-na">無需提交 ISO 文件</td></tr>`;
+  _scTableRow(sc, fileCols, pending) {
+    const stickyCols = this.SC_COLS.filter(c => c.kind);
+    const tierSlots = new Set(this._scTierSlots(this._scAmount(sc)));
+    const rs = this._scRowStats(sc);
+    const pct = rs.total ? Math.round((rs.done / rs.total) * 100) : 0;
+    const badgeCls = rs.requiredDone >= rs.requiredTotal ? 'iso-row-badge iso-row-badge-ok' : 'iso-row-badge iso-row-badge-warn';
+    const pendingCls = pending ? ' iso-cell-pending' : '';
+    const stickyCells = stickyCols.map(col => {
+      if (col.kind === 'label') {
+        const sub = sc.sc_no ? `<div class="iso-cell-sub">${escHtml(sc.sc_no)}</div>` : '';
+        const badge = pending || !rs.total ? '' : `<span class="${badgeCls}" title="附件 ${rs.done}/${rs.total} · 必填 ${rs.requiredDone}/${rs.requiredTotal}">${pct}%</span>`;
+        return this._tdSticky(col, `<div class="iso-label-wrap">${escHtml(sc.company_name_zh || '—')}${badge}</div>${sub}`);
       }
-
-      const fileCells = (fileCols.length ? fileCols : this._scColsForAmount(this._scAmount(sc))).map(col => {
-        if (!tierSlots.has(col.slot)) {
-          return '<td class="iso-file-cell iso-file-cell-na">—</td>';
-        }
-        const file = sc.files?.[col.slot];
-        return `<td class="iso-file-cell${pending}${this._fileCellClass(file, col)}">${this._fileCell('subcontractor', sc.id, col.slot, file, b._filesPending, false)}</td>`;
-      }).join('');
-      return `<tr>${stickyCells}${fileCells}</tr>`;
+      if (col.kind === 'amount') {
+        return this._tdSticky(col, fmt(sc.contract_amount));
+      }
+      return '';
     }).join('');
 
-    el.innerHTML = `${head}<tbody>${body}</tbody>`;
+    if (!tierSlots.size) {
+      const span = Math.max(fileCols.length, 1);
+      return `<tr>${stickyCells}<td colspan="${span}" class="td-muted iso-file-cell-na">無需提交 ISO 文件</td></tr>`;
+    }
+
+    const fileCells = (fileCols.length ? fileCols : this._scColsForAmount(this._scAmount(sc))).map(col => {
+      if (!tierSlots.has(col.slot)) {
+        return '<td class="iso-file-cell iso-file-cell-na">—</td>';
+      }
+      const file = sc.files?.[col.slot];
+      return `<td class="iso-file-cell${pendingCls}${this._fileCellClass(file, col)}">${this._fileCell('subcontractor', sc.id, col.slot, file, pending, false)}</td>`;
+    }).join('');
+    return `<tr>${stickyCells}${fileCells}</tr>`;
   },
 
   _fileCellClass(file, col) {
