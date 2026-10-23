@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261023-dash-pro` · 分支 `v2/portfolio`
+
+### 修正
+- **項目概覽 · 專業版**：切換項目時立即更新專業版內容，不再停在上一個項目。
+
 `APP_VERSION`: `v2-20261022-a11y-labels` · 分支 `v2/portfolio`
 
 ### 修正

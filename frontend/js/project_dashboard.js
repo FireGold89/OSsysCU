@@ -125,6 +125,27 @@ const ProjectDashboard = {
     if (src && dst) dst.innerHTML = src.innerHTML;
   },
 
+  _facDatesFor(p, facData) {
+    if (typeof MainConFac !== 'undefined' && MainConFac.overviewDates) {
+      return MainConFac.overviewDates(facData, p);
+    }
+    return {};
+  },
+
+  /** 換項目時清掉上一份結算表，避免專業版繼續顯示舊項目。 */
+  _resetCalcForProject(projectId) {
+    if (String(this._calcProjectId || '') === String(projectId || '')) return;
+    this._calcProjectId = projectId || '';
+    const placeholder = '<p class="form-hint">載入合約結算表…</p>';
+    const calcHost = document.getElementById('pdContractCalc');
+    const calcPro = document.getElementById('pdContractCalcPro');
+    if (calcHost) {
+      delete calcHost.dataset.heavyLoaded;
+      calcHost.innerHTML = placeholder;
+    }
+    if (calcPro) calcPro.innerHTML = placeholder;
+  },
+
   _proHeroChipsHtml(p) {
     const items = [];
     const push = (label, val) => {
@@ -211,6 +232,7 @@ const ProjectDashboard = {
     if (noEl) noEl.style.display = 'none';
     if (card) card.style.display = '';
     this.initLayoutToggle();
+    this._resetCalcForProject(p.id);
 
     const code = p.quotation_no || p.project_code || '—';
     this._setText('projectDashTitle', code);
@@ -266,10 +288,7 @@ const ProjectDashboard = {
     }
 
     if (coreOnly) {
-      const calcHost = document.getElementById('pdContractCalc');
-      if (calcHost && !calcHost.dataset.heavyLoaded) {
-        calcHost.innerHTML = '<p class="form-hint">載入合約結算表…</p>';
-      }
+      this._renderProLayout(p, this._facDatesFor(p, null), []);
       return;
     }
 
@@ -330,9 +349,7 @@ const ProjectDashboard = {
       merged = [];
     }
 
-    const facDates = typeof MainConFac !== 'undefined' && MainConFac.overviewDates
-      ? MainConFac.overviewDates(facData, p)
-      : {};
+    const facDates = this._facDatesFor(p, facData);
     this._setText('pdPcCertDate', this._dashDate(facDates.pcCertDate));
     this._setText('pdExtendedCompletion', this._dashDate(facDates.extendedCompletionDate));
     this._setText('pdDlpCertDate', this._dashDate(facDates.warrantyCompleteDate));
