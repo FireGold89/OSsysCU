@@ -12,6 +12,8 @@ const MasterList = {
   _personSuggestTimer: null,
   _fieldSuggestions: null,
   _lastDescSite: '',
+  _loadSeq: 0,
+  _tableCache: null,
 
   SORT_COLUMNS: [
     { id: 'quotation_no', key: 'quotation_no', label: '報價編號' },
@@ -40,9 +42,28 @@ const MasterList = {
     return api('GET', this._itemPath(rowId));
   },
 
+  _bumpLoad() {
+    this._loadSeq += 1;
+    return this._loadSeq;
+  },
+
+  _tableCacheKey() {
+    return this._filterParams(true).toString();
+  },
+
+  _showTableNotice(message, retry) {
+    const tbody = document.getElementById('masterTableBody');
+    if (!tbody) return;
+    const colSpan = this._visibleColCount ? this._visibleColCount() : 11;
+    const btn = retry
+      ? '<div style="margin-top:12px"><button type="button" class="btn btn-secondary btn-sm" onclick="MasterList.load()">再試</button></div>'
+      : '';
+    tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:40px">${escHtml(message)}${btn}</div></td></tr>`;
+  },
+
   async load() {
+    const seq = this._bumpLoad();
     this._initDefaultYear();
-    await this.loadStats();
     if (this._pendingPersonFilter) {
       const person = this._pendingPersonFilter;
       this._pendingPersonFilter = null;
@@ -53,7 +74,16 @@ const MasterList = {
       }
       this.offset = 0;
     }
-    await this.loadTable();
+    const key = this._tableCacheKey();
+    if (this._tableCache && this._tableCache.key === key) {
+      this._paintTable(this._tableCache.data);
+    } else {
+      this._showTableNotice('載入中...');
+    }
+    await Promise.all([
+      this.loadStats(seq),
+      this.loadTable(seq),
+    ]);
   },
 
   _initDefaultYear() {
@@ -134,7 +164,7 @@ const MasterList = {
       this.sortDir = (col === 'quote_date' || col === 'awarded_amount') ? 'desc' : 'asc';
     }
     this.offset = 0;
-    this.loadTable();
+    this.loadTable(this._bumpLoad());
   },
 
   exportExcel() {
@@ -165,8 +195,19 @@ const MasterList = {
     return parts.length ? parts.join(' · ') : '';
   },
 
-  async loadStats() {
-    const stats = await api('GET', `/master/stats?${this._filterParams()}`);
+  async loadStats(seq) {
+    if (seq == null) seq = this._loadSeq;
+    let stats;
+    try {
+      stats = await api('GET', `/master/stats?${this._filterParams()}`, null, { silent: true });
+    } catch (e) {
+      if (e?.name === 'AbortError' || seq !== this._loadSeq) return;
+      if (App.currentPage !== 'master-list') return;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '統計載入逾時，清單仍可先看' : (e?.message || '統計載入失敗');
+      toast(msg, 'warning');
+      return;
+    }
+    if (seq !== this._loadSeq || App.currentPage !== 'master-list') return;
     if (!stats) return;
     document.getElementById('masterStatTotal').textContent = stats.total ?? '0';
     document.getElementById('masterStatAwarded').textContent = stats.awarded_count ?? '0';
@@ -254,10 +295,23 @@ const MasterList = {
     return `<span class="sc-no-chip" title="${escHtml(label)}">${escHtml(label)}</span>`;
   },
 
-  async loadTable() {
+  async loadTable(seq) {
+    if (seq == null) seq = this._bumpLoad();
     if (!this._visibleCols) this._initColPrefs();
     this.renderTableHead();
-    const data = await api('GET', `/master/quotations?${this._filterParams(true)}`);
+    let data;
+    try {
+      data = await api('GET', `/master/quotations?${this._filterParams(true)}`);
+    } catch (e) {
+      if (e?.name === 'AbortError' || seq !== this._loadSeq) return;
+      if (App.currentPage !== 'master-list') return;
+      const key = this._tableCacheKey();
+      if (this._tableCache && this._tableCache.key === key) return;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再試一次' : (e?.message || '載入失敗');
+      this._showTableNotice(msg, true);
+      return;
+    }
+    if (seq !== this._loadSeq || App.currentPage !== 'master-list') return;
     if (!data) return;
 
     this._rowMap = {};
@@ -266,14 +320,19 @@ const MasterList = {
     // 篩選後總筆數變少時，避免停在超出範圍的頁碼（例：9 / 8）
     if (data.total > 0 && !data.items.length && this.offset > 0) {
       this.offset = 0;
-      return this.loadTable();
+      return this.loadTable(seq);
     }
     const maxOffset = Math.max(0, Math.ceil(data.total / this.limit) - 1) * this.limit;
     if (this.offset > maxOffset) {
       this.offset = maxOffset;
-      return this.loadTable();
+      return this.loadTable(seq);
     }
 
+    this._tableCache = { key: this._tableCacheKey(), data };
+    this._paintTable(data);
+  },
+
+  _paintTable(data) {
     const tbody = document.getElementById('masterTableBody');
     const colSpan = this._visibleColCount();
     document.getElementById('masterListCount').textContent =

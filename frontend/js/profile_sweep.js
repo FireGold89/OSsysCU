@@ -58,6 +58,28 @@
 
   clearStaleMemory(metaBuild());
 
+  function withTimeout(promise, ms, fallback) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        resolve(fallback);
+      }, ms);
+      promise.then(function (value) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(value);
+      }, function () {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+    });
+  }
+
   function purgeCaches() {
     var jobs = [];
     var removed = 0;
@@ -73,7 +95,11 @@
         return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
       }).catch(function () {}));
     }
-    return Promise.all(jobs).then(function () { return removed; }).catch(function () { return 0; });
+    return withTimeout(
+      Promise.all(jobs).then(function () { return removed; }).catch(function () { return 0; }),
+      2500,
+      0,
+    );
   }
 
   function reloadOnce(ver) {
@@ -90,7 +116,7 @@
   }
 
   function prepare() {
-    return purgeCaches().then(function (removed) {
+    return withTimeout(purgeCaches().then(function (removed) {
       if (removed > 0) markCleaned();
       var ctrl = new AbortController();
       var timer = setTimeout(function () { ctrl.abort(); }, STATUS_MS);
@@ -112,7 +138,7 @@
       });
     }).catch(function () {
       return { cleaned: false };
-    });
+    }), 7000, { cleaned: false });
   }
 
   window.qsProfileSweep = {

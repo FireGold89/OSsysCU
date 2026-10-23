@@ -4,6 +4,21 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261023-master-load` · 分支 `v2/portfolio`
+
+### 修正
+- **Master List**：切頁讀取逾時不再停在「載入中」；清單與統計同時讀取，再次進入先顯示上次結果。
+
+`APP_VERSION`: `v2-20261023-list-toolbar` · 分支 `v2/portfolio`
+
+### 修正
+- **Master List、分判合約編號**：搜尋與篩選固定同一行，視窗縮窄時不再拆開走位；功能按鈕另排一行。
+
+`APP_VERSION`: `v2-20261023-boot-sweep` · 分支 `v2/portfolio`
+
+### 修正
+- **進系統**：清瀏覽器快取若被 Edge 拖住，最多約 7 秒仍繼續登入，不再停在載入遮罩。
+
 `APP_VERSION`: `v2-20261023-dash-pro` · 分支 `v2/portfolio`
 
 ### 修正

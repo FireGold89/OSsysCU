@@ -1704,7 +1704,7 @@
       <!-- ─── Master List ──────────────────────── -->
       <div class="page" id="page-master-list">
         <div class="toolbar master-toolbar">
-          <div class="toolbar-left">
+          <div class="toolbar-left master-toolbar-filters">
             <input type="text" class="form-input master-search" id="masterSearch" placeholder="搜尋報價編號、屋苑、內容、業主…" onkeydown="if(event.key==='Enter')MasterList.search()">
             <select class="form-input master-filter" id="masterYearFilter" onchange="MasterList.onYearFilterChange()">
               <option value="">全部年份</option>
@@ -1721,7 +1721,7 @@
             <label class="master-check"><input type="checkbox" id="masterUnlinkedOnly" onchange="MasterList.resetAndLoad()"> 未配對項目</label>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.search()">搜尋</button>
           </div>
-          <div class="toolbar-right">
+          <div class="toolbar-right master-toolbar-actions">
             <button class="btn btn-primary btn-sm" onclick="MasterList.openAdd()">➕ 新增報價／標書</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.openPreview()">📤 上傳預覽</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.openAutoLink()">🔗 自動配對</button>
@@ -1774,9 +1774,9 @@
 
       <!-- ─── 分判工程合約編號（MS/C）──────────────── -->
       <div class="page" id="page-sc-contract-registry">
-        <div class="toolbar">
+        <div class="toolbar scr-toolbar">
           <div class="toolbar-left scr-toolbar-filters">
-            <input type="text" class="form-input" id="scrSearch" placeholder="搜尋 MS/C、分判商、項目編號…" style="max-width:220px" onkeydown="if(event.key==='Enter')ScContractRegistry.search()">
+            <input type="text" class="form-input scr-search" id="scrSearch" placeholder="搜尋 MS/C、分判商、項目編號…" onkeydown="if(event.key==='Enter')ScContractRegistry.search()">
             <select class="form-input scr-filter-select" id="scrYearFilter" onchange="ScContractRegistry.search()">
               <option value="">全部年份</option>
             </select>
@@ -1788,7 +1788,7 @@
             </select>
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.search()">搜尋</button>
           </div>
-          <div class="toolbar-right">
+          <div class="toolbar-right scr-toolbar-actions">
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.syncFromRef()">🔄 同步 Ref Excel</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.exportExcel()">📥 匯出 Excel</button>
             <button type="button" class="btn btn-primary btn-sm" onclick="ScContractRegistry.openAdd()">➕ 新增 MS/C</button>
