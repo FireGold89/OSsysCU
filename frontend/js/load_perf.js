@@ -8,6 +8,7 @@
 const LoadPerf = {
   SUMMARY_SLOT: 'reports-summary',
   CONTRACT_CALC_SLOT: 'contract-calc',
+  IP_PERIOD_SLOT: 'ip-period-summary',
   BUNDLE_SLOT: 'dashboard-overview',
   BUNDLE_LITE_SLOT: 'dashboard-overview-lite',
   SC_VO_TEMPLATES_SLOT: 'sc-vo-templates',
@@ -87,6 +88,7 @@ const LoadPerf = {
   invalidateProjectCaches(projectId) {
     this.invalidate(this.SUMMARY_SLOT, projectId ?? null);
     this.invalidate(this.CONTRACT_CALC_SLOT, projectId ?? null);
+    this.invalidate(this.IP_PERIOD_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_SLOT, projectId ?? null);
     this.invalidate(this.BUNDLE_LITE_SLOT, projectId ?? null);
     this.invalidate(this.SUBCONTRACTORS_SLOT, projectId ?? null);
@@ -170,6 +172,21 @@ const LoadPerf = {
       });
     }
     return run();
+  },
+
+  fetchIpPeriodSummary(projectId, { silent = true, useProjectSwitchSignal = false } = {}) {
+    const pid = Number(projectId);
+    if (!pid) return Promise.resolve(null);
+    return this.fetchDeduped(
+      this.IP_PERIOD_SLOT,
+      pid,
+      () => api('GET', `/projects/${pid}/interim-payments`, null, {
+        silent,
+        useProjectSwitchSignal,
+        timeoutMs: this.OVERVIEW_FETCH_TIMEOUT_MS,
+      }),
+      { shouldCommit: (sid) => this._isCurrentProject(sid) },
+    );
   },
 
   fetchContractCalc(projectId, { silent = true } = {}) {

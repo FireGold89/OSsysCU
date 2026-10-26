@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261026-ip-load` · 分支 `v2/portfolio`
+
+### 修正
+- **糧期狀況**：改讀輕量糧期 API，不再每次拉完整財務 summary；切換項目會取消舊請求，核對區與主表並行載入。
+
 `APP_VERSION`: `v2-20261023-overview-split` · 分支 `v2/portfolio`
 
 ### 修正

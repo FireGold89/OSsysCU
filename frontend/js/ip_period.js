@@ -594,6 +594,18 @@ const IpPeriod = {
     };
   },
 
+  _switchFetchOpts(switchSeq) {
+    return switchSeq != null ? { useProjectSwitchSignal: true } : {};
+  },
+
+  async _fetchPeriodPayload(projectId, switchSeq) {
+    const opts = { silent: true, ...this._switchFetchOpts(switchSeq) };
+    if (typeof LoadPerf !== 'undefined' && LoadPerf.fetchIpPeriodSummary) {
+      return LoadPerf.fetchIpPeriodSummary(projectId, opts);
+    }
+    return api('GET', `/projects/${projectId}/interim-payments`, null, opts);
+  },
+
   render(containerId, ip, options = {}) {
     this._containerId = containerId;
     const project = options.project || App.currentProject;
@@ -1720,14 +1732,17 @@ const IpPeriod = {
     const searchEl = document.getElementById('ipPeriodSearch');
     if (searchEl) searchEl.value = '';
     try {
-      const summary = await api('GET', `/reports/summary/${projectId}`);
-      if (!summary || !App.currentProject || App.currentProject.id != projectId) return;
+      const fetchOpts = this._switchFetchOpts(switchSeq);
+      const reconcileP = this.loadReconcile(projectId, fetchOpts);
+      const ipPayload = await this._fetchPeriodPayload(projectId, switchSeq);
+      if (!App.currentProject || App.currentProject.id != projectId) return;
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
-      const proj = summary.project || p;
-      this._data = this._mergeIpProject(summary.ip_period || this._ipFallbackData(proj), proj);
+      const proj = App.currentProject;
+      this._data = this._mergeIpProject(ipPayload || this._ipFallbackData(proj), proj);
       this.render('ipPeriodMain', this._data, { editable: true, project: proj });
       this.renderScMatrix('ipPeriodScMatrix', this._data.sc_matrix, { hasMainIp: this._data?.items?.length > 0 });
-      await this.loadReconcile(projectId);
+      await reconcileP;
+      if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
       this._applyPendingMatrixFocus();
     } catch (e) {
       if (e?.name === 'AbortError') return;
@@ -1744,11 +1759,14 @@ const IpPeriod = {
     }
   },
 
-  async loadReconcile(projectId) {
+  async loadReconcile(projectId, fetchOpts = {}) {
     const el = document.getElementById('ipReconcilePanel');
     if (!el) return;
     try {
-      const data = await api('GET', `/projects/${projectId}/ip-reconciliation`, null, { silent: true });
+      const data = await api('GET', `/projects/${projectId}/ip-reconciliation`, null, {
+        silent: true,
+        ...fetchOpts,
+      });
       if (!App.currentProject || App.currentProject.id != projectId) return;
       this._reconcileData = data;
       IpReconcile.render(el, data, { search: this._searchQuery });
@@ -1765,10 +1783,11 @@ const IpPeriod = {
   async refresh() {
     const p = App.currentProject;
     if (!p) return;
-    const summary = await api('GET', `/reports/summary/${p.id}`);
-    if (!summary) return;
-    const proj = summary.project || p;
-    this._data = this._mergeIpProject(summary.ip_period || this._ipFallbackData(proj), proj);
+    const reconcileP = this.loadReconcile(p.id);
+    const ipPayload = await this._fetchPeriodPayload(p.id, null);
+    if (!ipPayload || !App.currentProject || App.currentProject.id != p.id) return;
+    const proj = App.currentProject;
+    this._data = this._mergeIpProject(ipPayload, proj);
     if (this._containerId) {
       this.render(this._containerId, this._data, { editable: this._editable, project: proj });
     }
@@ -1776,14 +1795,14 @@ const IpPeriod = {
     // 同步項目概覽唯讀顯示
     if (typeof updateDashIpTotals === 'function') {
       updateDashIpTotals(this._data);
-      updateDashProjectHero(summary.project || p, this._data);
+      updateDashProjectHero(proj, this._data);
     }
-    renderSiteIpPeriod(this._data, 'dashSiteIp', { editable: false, hideProjectMeta: true, project: summary.project || p });
+    renderSiteIpPeriod(this._data, 'dashSiteIp', { editable: false, hideProjectMeta: true, project: proj });
     if (typeof Reports !== 'undefined' && Reports.data) {
       Reports.data.ip_period = this._data;
-      renderSiteIpPeriod(this._data, 'rptSiteIp', { editable: false, hideProjectMeta: true, project: summary.project || p });
+      renderSiteIpPeriod(this._data, 'rptSiteIp', { editable: false, hideProjectMeta: true, project: proj });
     }
-    await this.loadReconcile(p.id);
+    await reconcileP;
   },
 };
 
