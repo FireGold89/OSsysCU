@@ -290,6 +290,11 @@ body {
   border: 1px solid transparent;
   user-select: none;
 }
+/* 工程部 · 項目登記·會簽出表暫時隱藏（待獨立工程系統） */
+.nav-section-title.nav-eng-hidden,
+.nav-item[data-page="eng-intake"] {
+  display: none !important;
+}
 .nav-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);

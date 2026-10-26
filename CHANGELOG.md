@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261026-hide-signoff` · 分支 `v2/portfolio`
+
+### 變更
+- **工程部**：側欄「項目登記·會簽出表」與 Master List「加入會簽出表」暫時隱藏，功能程式保留。
+
 `APP_VERSION`: `v2-20261026-ip-switch` · 分支 `v2/portfolio`
 
 ### 修正

@@ -369,7 +369,6 @@ const MasterList = {
         <td data-col="act">
           <div class="table-row-actions">
             <button type="button" class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="MasterList.openEdit(${r.id})">✏️</button>
-            <button type="button" class="btn btn-icon btn-secondary btn-sm" title="加入會簽出表" onclick="MasterList.addToSignoff(${r.id})">📋</button>
             <button type="button" class="btn btn-icon btn-secondary btn-sm" title="配對項目" onclick="MasterList.openLink(${r.id})">🔗</button>
             ${r.project_id ? `<button type="button" class="btn btn-icon btn-secondary btn-sm" title="解除配對" onclick="MasterList.unlink(${r.id})">🔓</button>` : ''}
           </div>

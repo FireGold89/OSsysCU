@@ -2260,6 +2260,7 @@ const App = {
       page = 'payments';
     }
     if (page === 'sc-vo') page = 'sc-vo-reg';
+    if (page === 'eng-intake') return;
     this._beginPageRequests();
     dismissContentLoading();
     this.currentPage = page;
