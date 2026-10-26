@@ -1969,7 +1969,8 @@ def serve_upload(filepath):
 
 @app.route('/api/projects/<int:project_id>/interim-payments', methods=['GET'])
 def get_interim_payments_api(project_id):
-    summary = db.get_ip_period_summary(project_id)
+    part = (request.args.get('part') or 'full').strip().lower()
+    summary = db.get_ip_period_summary(project_id, part=part)
     if summary is None:
         return resp(error='項目不存在', status=404)
     return resp(summary)

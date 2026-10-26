@@ -13,6 +13,8 @@ const IpPeriod = {
   _receiptRows: [],
   _bankDropdownIdx: null,
   _receiptUploadIdx: null,
+  _payloadCache: {},
+  _paintedProjectId: null,
 
   _formatReceiptPreview(method, chequeNo, bank, date, note) {
     const fmtD = (iso) => {
@@ -594,16 +596,39 @@ const IpPeriod = {
     };
   },
 
+  _paintPending(project) {
+    const code = project?.quotation_no || project?.project_code || '此項目';
+    const html = `<div class="empty-state" style="padding:24px">正在讀取 ${escHtml(code)}…</div>`;
+    ['ipPeriodMain', 'ipPeriodScMatrix', 'ipReconcilePanel'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    });
+  },
+
+  _paintPeriod(projectId, payload, project, options = {}) {
+    const proj = project || App.currentProject || {};
+    this._data = this._mergeIpProject(payload || this._ipFallbackData(proj), proj);
+    this._paintedProjectId = projectId;
+    this.render('ipPeriodMain', this._data, { editable: true, project: proj });
+    const matrixEl = document.getElementById('ipPeriodScMatrix');
+    if (options.matrixPending) {
+      if (matrixEl) matrixEl.innerHTML = '<div class="empty-state" style="padding:24px">正在整理分包明細…</div>';
+      return;
+    }
+    this.renderScMatrix('ipPeriodScMatrix', this._data.sc_matrix, { hasMainIp: this._data?.items?.length > 0 });
+  },
+
   _switchFetchOpts(switchSeq) {
     return switchSeq != null ? { useProjectSwitchSignal: true } : {};
   },
 
-  async _fetchPeriodPayload(projectId, switchSeq) {
+  async _fetchPeriodPayload(projectId, switchSeq, part = 'full') {
     const opts = { silent: true, ...this._switchFetchOpts(switchSeq) };
-    if (typeof LoadPerf !== 'undefined' && LoadPerf.fetchIpPeriodSummary) {
+    const q = part && part !== 'full' ? `?part=${encodeURIComponent(part)}` : '';
+    if (part === 'full' && typeof LoadPerf !== 'undefined' && LoadPerf.fetchIpPeriodSummary) {
       return LoadPerf.fetchIpPeriodSummary(projectId, opts);
     }
-    return api('GET', `/projects/${projectId}/interim-payments`, null, opts);
+    return api('GET', `/projects/${projectId}/interim-payments${q}`, null, opts);
   },
 
   render(containerId, ip, options = {}) {
@@ -1728,26 +1753,55 @@ const IpPeriod = {
     this._containerId = 'ipPeriodMain';
     this._editable = true;
     this._searchQuery = '';
-    this._reconcileData = null;
     const searchEl = document.getElementById('ipPeriodSearch');
     if (searchEl) searchEl.value = '';
+    const cacheKey = String(projectId);
+    const cached = this._payloadCache[cacheKey];
+    const hasCachedMatrix = !!(cached?.sc_matrix?.columns?.length || cached?.sc_matrix?.rows?.length);
+    this._reconcileData = null;
+    if (cached) {
+      this._paintPeriod(projectId, cached, p);
+      const reconEl = document.getElementById('ipReconcilePanel');
+      if (reconEl) reconEl.innerHTML = '<div class="empty-state" style="padding:24px">正在核對…</div>';
+    } else if (String(this._paintedProjectId) !== cacheKey) {
+      this._reconcileData = null;
+      this._paintPending(p);
+    }
+    let paintedMain = !!cached;
     try {
-      const fetchOpts = this._switchFetchOpts(switchSeq);
-      const reconcileP = this.loadReconcile(projectId, fetchOpts);
-      const ipPayload = await this._fetchPeriodPayload(projectId, switchSeq);
+      if (!cached) {
+        const mainPayload = await this._fetchPeriodPayload(projectId, switchSeq, 'main');
+        if (!App.currentProject || App.currentProject.id != projectId) return;
+        if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+        if (mainPayload) {
+          this._paintPeriod(projectId, mainPayload, App.currentProject, { matrixPending: true });
+          paintedMain = true;
+        }
+      }
+      const ipPayload = await this._fetchPeriodPayload(projectId, switchSeq, 'full');
       if (!App.currentProject || App.currentProject.id != projectId) return;
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
       const proj = App.currentProject;
-      this._data = this._mergeIpProject(ipPayload || this._ipFallbackData(proj), proj);
-      this.render('ipPeriodMain', this._data, { editable: true, project: proj });
-      this.renderScMatrix('ipPeriodScMatrix', this._data.sc_matrix, { hasMainIp: this._data?.items?.length > 0 });
-      await reconcileP;
+      if (ipPayload) this._payloadCache[cacheKey] = ipPayload;
+      if (ipPayload || !paintedMain) this._paintPeriod(projectId, ipPayload, proj);
+      await this.loadReconcile(projectId, this._switchFetchOpts(switchSeq));
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
       this._applyPendingMatrixFocus();
     } catch (e) {
       if (e?.name === 'AbortError') return;
       if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
       if (!App.currentProject || App.currentProject.id != projectId) return;
+      if (paintedMain) {
+        const el = document.getElementById('ipPeriodScMatrix');
+        if (el && !hasCachedMatrix) {
+          el.innerHTML = '<p class="form-hint" style="padding:12px">分包明細尚未更新，主表已顯示。</p>';
+        }
+        const reconEl = document.getElementById('ipReconcilePanel');
+        if (reconEl && !this._reconcileData) {
+          reconEl.innerHTML = '<p class="form-hint" style="padding:12px">糧期核對尚未更新。</p>';
+        }
+        return;
+      }
       const msg = e?.code === 'LOAD_TIMEOUT'
         ? '載入逾時，請再點一次「糧期狀況」'
         : (e?.message || '載入失敗');
@@ -1783,9 +1837,9 @@ const IpPeriod = {
   async refresh() {
     const p = App.currentProject;
     if (!p) return;
-    const reconcileP = this.loadReconcile(p.id);
     const ipPayload = await this._fetchPeriodPayload(p.id, null);
     if (!ipPayload || !App.currentProject || App.currentProject.id != p.id) return;
+    this._payloadCache[String(p.id)] = ipPayload;
     const proj = App.currentProject;
     this._data = this._mergeIpProject(ipPayload, proj);
     if (this._containerId) {
@@ -1802,7 +1856,7 @@ const IpPeriod = {
       Reports.data.ip_period = this._data;
       renderSiteIpPeriod(this._data, 'rptSiteIp', { editable: false, hideProjectMeta: true, project: proj });
     }
-    await reconcileP;
+    await this.loadReconcile(p.id);
   },
 };
 

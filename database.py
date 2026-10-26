@@ -5272,12 +5272,13 @@ def enrich_interim_payment(row):
     return r
 
 
-def enrich_ip_subcon_from_payments(project_id, items):
+def enrich_ip_subcon_from_payments(project_id, items, pay_lines=None):
     """系統登記：主糧期分包總支出空時，依 Sub-IP 付款匯總補上"""
     if not items:
         return items
+    lines = pay_lines if pay_lines is not None else build_sc_lines_from_payments(project_id)
     by_ip = {}
-    for ln in build_sc_lines_from_payments(project_id):
+    for ln in lines:
         ip = (ln.get('ip_no') or '').upper()
         by_ip[ip] = by_ip.get(ip, 0.0) + float(ln.get('amount') or 0)
     if not by_ip:
@@ -5505,7 +5506,7 @@ def build_sc_lines_from_payments(project_id):
     ]
 
 
-def build_ip_sc_matrix(project_id, ip_items=None):
+def build_ip_sc_matrix(project_id, ip_items=None, pay_lines=None):
     """分包糧期矩陣：columns + 每期各 SC 金額 + 分判商主檔對照"""
     if ip_items is None:
         ip_items = get_interim_payments(project_id)
@@ -5513,7 +5514,8 @@ def build_ip_sc_matrix(project_id, ip_items=None):
     line_total = sum(float(ln.get('amount') or 0) for ln in lines)
     matrix_source = 'summary'
     if (not lines or line_total <= 0) and ip_items:
-        pay_lines = build_sc_lines_from_payments(project_id)
+        if pay_lines is None:
+            pay_lines = build_sc_lines_from_payments(project_id)
         if pay_lines:
             lines = pay_lines
             matrix_source = 'payments'
@@ -5648,15 +5650,61 @@ def get_interim_payments(project_id):
     return [enrich_interim_payment(r) for r in rows]
 
 
-def get_ip_period_summary(project_id):
-    """地盤糧期狀況（項目概覽用）"""
-    project = get_project(project_id)
-    if not project:
+_IP_SUMMARY_CACHE = {}
+_IP_SUMMARY_CACHE_MAX = 16
+
+
+def _ip_data_stamp(project_id):
+    """糧期相關資料指紋。沒變就沿用上次結果。"""
+    conn = get_conn()
+    row = conn.execute(
+        """
+        SELECT
+          (SELECT COALESCE(contract_amount, 0) || '|' || COALESCE(site_period_text, '')
+             FROM projects WHERE id=?) AS proj,
+          (SELECT COALESCE(SUM(LENGTH(
+              COALESCE(ip_no, '') || COALESCE(applied_date, '') || COALESCE(certificate_date, '')
+              || COALESCE(subcon_cert_date, '') || COALESCE(receipt_date, '')
+              || COALESCE(receipt_records_json, '')
+              || COALESCE(CAST(application_amount AS TEXT), '')
+              || COALESCE(CAST(certified_income AS TEXT), '')
+              || COALESCE(CAST(subcon_paid AS TEXT), '')
+            )), 0) FROM interim_payments WHERE project_id=?) AS ips,
+          (SELECT COUNT(*) FROM interim_payment_sc_lines WHERE project_id=?) AS lines,
+          (SELECT COUNT(*) || '|' || COALESCE(ROUND(SUM(paid_amount), 2), 0) || '|' ||
+                  COALESCE(SUM(LENGTH(COALESCE(description, '') || COALESCE(sub_ip_no, '') || COALESCE(sc_no, ''))), 0)
+             FROM payment_records
+             WHERE project_id=? AND (revoked_at IS NULL OR revoked_at = '')) AS pays,
+          (SELECT COUNT(*) || '|' || COALESCE(ROUND(SUM(contract_amount), 2), 0)
+             FROM subcontractors WHERE project_id=? AND NOT is_excluded) AS scs
+        """,
+        (project_id, project_id, project_id, project_id, project_id),
+    ).fetchone()
+    conn.close()
+    return tuple(row) if row else None
+
+
+def _ip_cache_get(project_id):
+    hit = _IP_SUMMARY_CACHE.get(project_id)
+    if not hit:
         return None
-    items = enrich_ip_subcon_from_payments(project_id, get_interim_payments(project_id))
-    items = calc_ip_subcon_cumulative_pcts(items, resolve_subcon_pct_base(project_id, items))
-    items = calc_ip_cumulative_pcts(items, project.get('contract_amount'))
-    sc_matrix = build_ip_sc_matrix(project_id, items)
+    stamp, payload = hit
+    if stamp != _ip_data_stamp(project_id):
+        _IP_SUMMARY_CACHE.pop(project_id, None)
+        return None
+    return payload
+
+
+def _ip_cache_put(project_id, payload):
+    stamp = _ip_data_stamp(project_id)
+    if stamp is None:
+        return
+    _IP_SUMMARY_CACHE[project_id] = (stamp, payload)
+    while len(_IP_SUMMARY_CACHE) > _IP_SUMMARY_CACHE_MAX:
+        _IP_SUMMARY_CACHE.pop(next(iter(_IP_SUMMARY_CACHE)))
+
+
+def _pack_ip_period(project, items, sc_matrix=None):
     return {
         'site_period_text': project.get('site_period_text'),
         'project_name_en': project.get('project_name_en'),
@@ -5672,6 +5720,75 @@ def get_ip_period_summary(project_id):
             'advance': project.get('ip_advance') or 0,
         },
     }
+
+
+def _slice_ip_summary(payload, part):
+    if not payload or part == 'full':
+        return payload
+    if part == 'main':
+        data = dict(payload)
+        data['sc_matrix'] = None
+        return data
+    if part == 'matrix':
+        return {'sc_matrix': payload.get('sc_matrix'), 'items': payload.get('items')}
+    return payload
+
+
+def _build_ip_period_main(project_id):
+    """主糧期表，不掃付款、不組分包矩陣。"""
+    project = get_project(project_id)
+    if not project:
+        return None
+    items = get_interim_payments(project_id)
+    items = calc_ip_subcon_cumulative_pcts(items, get_subcon_pct_base(project_id))
+    items = calc_ip_cumulative_pcts(items, project.get('contract_amount'))
+    return _pack_ip_period(project, items, None)
+
+
+def _build_ip_period_full(project_id):
+    """地盤糧期狀況。付款匯總與分包矩陣只算一次。"""
+    project = get_project(project_id)
+    if not project:
+        return None
+    items = get_interim_payments(project_id)
+    needs_pay = any(float(it.get('subcon_paid') or 0) <= 0 for it in items)
+    pay_lines = build_sc_lines_from_payments(project_id) if needs_pay else None
+    items = enrich_ip_subcon_from_payments(project_id, items, pay_lines or [])
+    sc_matrix = build_ip_sc_matrix(project_id, items, pay_lines)
+    cols = sc_matrix.get('columns') or []
+    if cols:
+        subcon_base = float((sc_matrix.get('summary') or {}).get('total_contract') or 0)
+        if subcon_base <= 0:
+            subcon_base = get_subcon_pct_base(project_id, cols)
+    else:
+        subcon_base = get_subcon_pct_base(project_id)
+    items = calc_ip_subcon_cumulative_pcts(items, subcon_base)
+    items = calc_ip_cumulative_pcts(items, project.get('contract_amount'))
+    pct_by_ip = {
+        (it.get('ip_no') or '').upper(): it.get('subcon_paid_pct')
+        for it in items
+    }
+    for row in sc_matrix.get('rows') or []:
+        key = (row.get('ip_no') or '').upper()
+        if key in pct_by_ip:
+            row['subcon_paid_pct'] = pct_by_ip[key]
+    return _pack_ip_period(project, items, sc_matrix)
+
+
+def get_ip_period_summary(project_id, part='full'):
+    """part=main 只回主表；full / matrix 會用指紋快取。"""
+    if part not in ('full', 'main', 'matrix'):
+        part = 'full'
+    if part != 'main':
+        cached = _ip_cache_get(project_id)
+        if cached:
+            return _slice_ip_summary(cached, part)
+    if part == 'main':
+        return _build_ip_period_main(project_id)
+    payload = _build_ip_period_full(project_id)
+    if payload:
+        _ip_cache_put(project_id, payload)
+    return _slice_ip_summary(payload, part)
 
 
 def get_quotation_for_project(project_id):
