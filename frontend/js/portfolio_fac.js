@@ -35,12 +35,15 @@ const PortfolioFac = {
     { id: 'project_progress_status', label: '項目狀態' },
     { id: 'client', label: 'Client' },
     { id: 'client_fac_status', label: 'Client FA' },
+    { id: 'updated_by', label: '最後更新人', locked: true },
+    { id: 'updated_at', label: '最後更新', locked: true },
   ],
 
   COMPACT_COL_IDS: [
     'n_code', 'project_code', 'description', 'pm',
     'pc_date', 'pc_cert_done', 'expected_completion_date',
     'portfolio_remark', 'project_progress_status', 'client', 'client_fac_status',
+    'updated_by', 'updated_at',
   ],
 
   /** 開分判矩陣時：左欄精簡，右側顯示判1–判15 */
@@ -91,44 +94,64 @@ const PortfolioFac = {
     return null;
   },
 
+  _cache: {},
+
+  _cacheKey() {
+    return `${this.statusFilter}|${this.pmFilter}|${this.q}`;
+  },
+
+  _applyData(data) {
+    this.items = data?.items || [];
+    this.stats = data?.stats || {};
+    this.lastImport = data?.last_import || null;
+    PortfolioCommon.fillPmSelect('pfPmFilter', data?.pms, this.pmFilter);
+    if (!this._visibleCols) this._initColPrefs();
+    if (this.showMatrix) this._applyMatrixCols();
+    this._syncTabs();
+    this._syncQuick();
+    this._syncMatrixBtn();
+    this._renderStats();
+    this.render();
+    if (this.showMatrix) this._scrollToMatrix();
+    if (this.drawerId) {
+      const cur = this.items.find((x) => x.id === this.drawerId);
+      if (cur) this.renderDrawer(cur);
+      else this.closeDrawer();
+    }
+  },
+
+  _failRow(msg) {
+    const body = document.getElementById('pfTableBody');
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">${escHtml(msg)}<br><button type="button" class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="PortfolioFac.load()">再試</button></div></td></tr>`;
+  },
+
   async load() {
     this._initMatrixPref();
     const qEl = document.getElementById('pfSearch');
     this.q = (qEl?.value || '').trim();
     this.pmFilter = document.getElementById('pfPmFilter')?.value || '';
-    const loadSeq = showContentLoading('載入結算總表…');
+    const key = this._cacheKey();
+    const cached = this._cache[key];
+    if (cached) this._applyData(cached);
+    const loadSeq = cached ? null : showContentLoading('載入結算總表…');
     try {
-      const data = await api('GET', `/portfolio/fac${PortfolioCommon.queryString(this.statusFilter, this.pmFilter, this.q)}`);
-      this.items = data?.items || [];
-      this.stats = data?.stats || {};
-      this.lastImport = data?.last_import || null;
-      PortfolioCommon.fillPmSelect('pfPmFilter', data?.pms, this.pmFilter);
-      if (!this._visibleCols) this._initColPrefs();
-      if (this.showMatrix) this._applyMatrixCols();
-      this._syncTabs();
-      this._syncQuick();
-      this._syncMatrixBtn();
-      this._renderStats();
-      this.render();
-      if (this.showMatrix) this._scrollToMatrix();
-      if (this.drawerId) {
-        const cur = this.items.find((x) => x.id === this.drawerId);
-        if (cur) this.renderDrawer(cur);
-        else this.closeDrawer();
-      }
+      const data = await api('GET', `/portfolio/fac${PortfolioCommon.queryString(this.statusFilter, this.pmFilter, this.q)}`, null, { silent: true });
+      if (App.currentPage !== 'portfolio-fac') return;
+      this._cache[key] = data;
+      this._applyData(data);
     } catch (e) {
       if (e?.name === 'AbortError') {
-        const body = document.getElementById('pfTableBody');
-        if (body && App.currentPage === 'portfolio-fac') {
-          body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">載入已中斷，請再點一次「N 項目結算總表」</div></td></tr>`;
+        if (!cached && App.currentPage === 'portfolio-fac') {
+          this._failRow('載入已中斷，請再試');
         }
         return;
       }
-      const body = document.getElementById('pfTableBody');
-      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次本頁' : '載入失敗';
-      if (body) body.innerHTML = `<tr><td colspan="${this._colSpan()}"><div class="empty-state" style="padding:40px">${msg}</div></td></tr>`;
+      if (cached) return;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再試' : '載入失敗';
+      this._failRow(msg);
     } finally {
-      hideContentLoading(loadSeq);
+      if (loadSeq != null) hideContentLoading(loadSeq);
     }
   },
 
@@ -299,6 +322,15 @@ const PortfolioFac = {
       const prev = this.items[idx];
       this.items[idx] = { ...prev, ...item, subcontractors: item.subcontractors ?? prev.subcontractors };
     }
+    Object.values(this._cache).forEach((data) => {
+      const rows = data?.items;
+      if (!rows) return;
+      const i = rows.findIndex((x) => x.id === item.id);
+      if (i >= 0) {
+        rows[i] = { ...rows[i], ...item, subcontractors: item.subcontractors ?? rows[i].subcontractors };
+      }
+    });
+    PortfolioCommon.paintAudit(item);
   },
 
   async syncFromProjects() {
@@ -512,6 +544,7 @@ const PortfolioFac = {
         <td data-col="project_progress_status">${PortfolioCommon.statusSelect(it.id, it.project_progress_status, 'project_progress_status')}</td>
         <td data-col="client">${PortfolioCommon.clientCell(it.client)}</td>
         <td data-col="client_fac_status">${PortfolioCommon.clientFaSelect(it.id, it.client_fac_status)}</td>
+        ${PortfolioCommon.auditCells(it)}
         ${this._matrixCells(it)}
       </tr>
     `).join('');

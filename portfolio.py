@@ -57,6 +57,7 @@ _LIST_SQL = """
         pp.source_file,
         pp.last_import_at,
         pp.updated_at,
+        pp.updated_by,
         p.project_code,
         p.project_name,
         p.project_name_en,
@@ -122,6 +123,7 @@ def _row_to_item(row, include_subcons=False):
         'source_file': d.get('source_file'),
         'last_import_at': d.get('last_import_at'),
         'updated_at': d.get('updated_at'),
+        'updated_by': (d.get('updated_by') or '').strip(),
     }
     if include_subcons:
         item['subcontractors'] = []
@@ -152,8 +154,18 @@ def _slots_by_portfolio(conn, ids):
 
 
 def ensure_rows_from_projects():
-    """為尚未有 portfolio 列的 projects 補列；不覆寫已有資料。"""
+    """為尚未有 portfolio 列的 projects 補列；不覆寫已有資料。沒有缺列時不寫入。"""
     conn = get_conn()
+    missing = conn.execute("""
+        SELECT COUNT(*) FROM projects p
+        WHERE NOT EXISTS (
+            SELECT 1 FROM portfolio_projects pp WHERE pp.project_id = p.id
+        )
+    """).fetchone()[0]
+    if not missing:
+        total = conn.execute("SELECT COUNT(*) FROM portfolio_projects").fetchone()[0]
+        conn.close()
+        return {'created': 0, 'total': int(total or 0)}
     cur = conn.execute("""
         INSERT INTO portfolio_projects (
             project_id, project_progress_status, client_fac_status,
@@ -176,6 +188,8 @@ def ensure_rows_from_projects():
     total = conn.execute("SELECT COUNT(*) FROM portfolio_projects").fetchone()[0]
     conn.commit()
     conn.close()
+    if created:
+        _invalidate_portfolio_reads()
     return {'created': created, 'total': total}
 
 
@@ -210,6 +224,61 @@ def _compute_stats(conn):
 
 _PORTFOLIO_STATS_CACHE = {'at': 0.0, 'data': None}
 _PORTFOLIO_STATS_TTL_SEC = 45
+_LIST_CACHE = {}
+_LIST_CACHE_TTL_SEC = 20
+
+
+def _invalidate_portfolio_reads():
+    _PORTFOLIO_STATS_CACHE['at'] = 0.0
+    _PORTFOLIO_STATS_CACHE['data'] = None
+    _LIST_CACHE.clear()
+
+
+def _audit_name(actor):
+    name = (actor or '').strip()
+    return name[:80] if name else None
+
+
+def _stamp_project_row(conn, project_id, actor):
+    if not project_id:
+        return
+    name = _audit_name(actor)
+    if name:
+        conn.execute(
+            """UPDATE projects
+               SET updated_at=datetime('now', 'localtime'), updated_by=?
+               WHERE id=?""",
+            (name, project_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE projects SET updated_at=datetime('now', 'localtime') WHERE id=?",
+            (project_id,),
+        )
+
+
+def stamp_project_audit(project_id, actor):
+    """工程項目表單儲存時，同步項目與結算列的最後更新。"""
+    conn = get_conn()
+    _stamp_project_row(conn, project_id, actor)
+    name = _audit_name(actor)
+    if name:
+        conn.execute(
+            """UPDATE portfolio_projects
+               SET updated_at=datetime('now', 'localtime'), updated_by=?
+               WHERE project_id=?""",
+            (name, project_id),
+        )
+    else:
+        conn.execute(
+            """UPDATE portfolio_projects
+               SET updated_at=datetime('now', 'localtime')
+               WHERE project_id=?""",
+            (project_id,),
+        )
+    conn.commit()
+    conn.close()
+    _invalidate_portfolio_reads()
 
 
 def get_portfolio_stats():
@@ -418,7 +487,7 @@ def _sync_sc_slots_from_subcontractors(conn, portfolio_id, project_id):
     }
 
 
-def sync_from_system():
+def sync_from_system(actor=None):
     """P4：補列 + 衍生 PC/Defect Cert、Retention、DLP；空槽填分判名；保留手填狀態。"""
     base = ensure_rows_from_projects()
     stats = {
@@ -516,10 +585,16 @@ def sync_from_system():
         if updates:
             sets = [f'{k}=?' for k in updates]
             sets.append("updated_at=datetime('now', 'localtime')")
+            name = _audit_name(actor)
+            params = list(updates.values())
+            if name:
+                sets.append('updated_by=?')
+                params.append(name)
             conn.execute(
                 f"UPDATE portfolio_projects SET {', '.join(sets)} WHERE id=?",
-                list(updates.values()) + [portfolio_id],
+                params + [portfolio_id],
             )
+            _stamp_project_row(conn, r['project_id'], actor)
             stats['portfolio_updated'] += 1
 
         sc_sync = _sync_sc_slots_from_subcontractors(
@@ -532,6 +607,7 @@ def sync_from_system():
 
     conn.commit()
     conn.close()
+    _invalidate_portfolio_reads()
     return stats
 
 
@@ -565,11 +641,18 @@ def _pm_options(conn):
 
 def list_portfolio(status=None, pm=None, q=None, include_subcons=False):
     """列出 portfolio 列（先補缺）。status: all | On Progress | Completed"""
+    status_key = (status or '').strip()
+    pm_key = (pm or '').strip()
+    q_key = (q or '').strip()
+    cache_key = (status_key.lower(), pm_key, q_key, bool(include_subcons))
+    cached = _LIST_CACHE.get(cache_key)
+    now = time.time()
+    if cached and (now - cached[0]) < _LIST_CACHE_TTL_SEC:
+        return cached[1]
     ensure_rows_from_projects()
     conn = get_conn()
     where = []
     params = []
-    status_key = (status or '').strip()
     if status_key and status_key.lower() != 'all':
         where.append("pp.project_progress_status = ?")
         params.append(status_key)
@@ -610,7 +693,9 @@ def list_portfolio(status=None, pm=None, q=None, include_subcons=False):
     if include_subcons:
         for item in items:
             item['subcontractors'] = slot_map.get(item['id'], [])
-    return {'items': items, 'stats': stats, 'pms': pms, 'last_import': last_import}
+    payload = {'items': items, 'stats': stats, 'pms': pms, 'last_import': last_import}
+    _LIST_CACHE[cache_key] = (time.time(), payload)
+    return payload
 
 
 def get_portfolio_item(portfolio_id, include_subcons=False):
@@ -626,9 +711,10 @@ def get_portfolio_item(portfolio_id, include_subcons=False):
     return item
 
 
-def update_portfolio(portfolio_id, data):
+def update_portfolio(portfolio_id, data, actor=None):
     """更新 P1 可編欄；回傳更新後的列。"""
-    if not get_portfolio_item(portfolio_id):
+    base = get_portfolio_item(portfolio_id)
+    if not base:
         raise ValueError('記錄不存在')
     payload = data or {}
     fields = []
@@ -656,18 +742,24 @@ def update_portfolio(portfolio_id, data):
     if not fields:
         return get_portfolio_item(portfolio_id, include_subcons=True)
     fields.append("updated_at = datetime('now', 'localtime')")
+    name = _audit_name(actor)
+    if name:
+        fields.append("updated_by = ?")
+        params.append(name)
     params.append(portfolio_id)
     conn = get_conn()
     conn.execute(
         f"UPDATE portfolio_projects SET {', '.join(fields)} WHERE id = ?",
         params,
     )
+    _stamp_project_row(conn, base.get('project_id'), actor)
     conn.commit()
     conn.close()
+    _invalidate_portfolio_reads()
     return get_portfolio_item(portfolio_id, include_subcons=True)
 
 
-def update_sc_status(portfolio_id, slots_data):
+def update_sc_status(portfolio_id, slots_data, actor=None):
     """更新分判 FAC 矩陣（1..15 槽）；name 與 fac_status 皆空則刪除該槽。"""
     base = get_portfolio_item(portfolio_id)
     if not base:
@@ -732,12 +824,23 @@ def update_sc_status(portfolio_id, slots_data):
             )
         touched += 1
     if touched:
-        conn.execute(
-            "UPDATE portfolio_projects SET updated_at=datetime('now', 'localtime') WHERE id=?",
-            (portfolio_id,),
-        )
+        name = _audit_name(actor)
+        if name:
+            conn.execute(
+                """UPDATE portfolio_projects
+                   SET updated_at=datetime('now', 'localtime'), updated_by=?
+                   WHERE id=?""",
+                (name, portfolio_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE portfolio_projects SET updated_at=datetime('now', 'localtime') WHERE id=?",
+                (portfolio_id,),
+            )
+        _stamp_project_row(conn, project_id, actor)
     conn.commit()
     conn.close()
+    _invalidate_portfolio_reads()
     return get_portfolio_item(portfolio_id, include_subcons=True)
 
 
@@ -774,6 +877,7 @@ def record_import(import_type, filename, rows_read, rows_upserted):
         (cur.lastrowid,),
     ).fetchone()
     conn.close()
+    _invalidate_portfolio_reads()
     return dict(rec) if rec else {}
 
 
@@ -928,7 +1032,7 @@ def _replace_sc_slots(conn, portfolio_id, project_id, slots):
     return written
 
 
-def upsert_from_import(parsed, create_placeholder=True, write_slots=True, source_file=None):
+def upsert_from_import(parsed, create_placeholder=True, write_slots=True, source_file=None, actor=None):
     """以 Excel 列 upsert portfolio_projects；可建 placeholder 項目。"""
     code = (parsed.get('project_code') or '').strip()
     if not code:
@@ -1033,8 +1137,16 @@ def upsert_from_import(parsed, create_placeholder=True, write_slots=True, source
     slots_n = 0
     if write_slots:
         slots_n = _replace_sc_slots(conn, pid, project_id, parsed.get('subcontractors'))
+    name = _audit_name(actor)
+    if name and pid:
+        conn.execute(
+            "UPDATE portfolio_projects SET updated_by=? WHERE id=?",
+            (name, pid),
+        )
+    _stamp_project_row(conn, project_id, actor)
     conn.commit()
     conn.close()
+    _invalidate_portfolio_reads()
     return {
         'action': 'upserted',
         'id': pid,

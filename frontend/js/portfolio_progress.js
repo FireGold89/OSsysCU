@@ -100,6 +100,29 @@ const PortfolioCommon = {
     return this.dash(val);
   },
 
+  auditCells(it) {
+    const name = (it?.updated_by || '').trim() || '—';
+    const raw = it?.updated_at || '';
+    const date = raw ? String(raw).slice(0, 10) : '—';
+    const id = it?.id ?? '';
+    return `<td class="td-muted" data-col="updated_by" data-audit-by="${id}">${escHtml(name)}</td>`
+      + `<td class="td-muted" data-col="updated_at" data-audit-at="${id}" title="${escHtml(raw)}">${escHtml(date)}</td>`;
+  },
+
+  paintAudit(item) {
+    if (!item?.id) return;
+    const name = (item.updated_by || '').trim() || '—';
+    const raw = item.updated_at || '';
+    const date = raw ? String(raw).slice(0, 10) : '—';
+    document.querySelectorAll(`[data-audit-by="${item.id}"]`).forEach((el) => {
+      el.textContent = name;
+    });
+    document.querySelectorAll(`[data-audit-at="${item.id}"]`).forEach((el) => {
+      el.textContent = date;
+      el.title = raw;
+    });
+  },
+
   checkCell(done) {
     return done ? '<span class="portfolio-check">✔</span>' : '<span class="td-muted">—</span>';
   },
@@ -161,6 +184,7 @@ const PortfolioCommon = {
       setTimeout(() => el.classList.remove('portfolio-save-ok'), 800);
       if (typeof PortfolioProgress !== 'undefined') PortfolioProgress.patchItem(item);
       if (typeof PortfolioFac !== 'undefined') PortfolioFac.patchItem(item);
+      this.paintAudit(item);
     } catch (e) {
       el.classList.add('portfolio-save-err');
     }
@@ -589,34 +613,51 @@ const PortfolioProgress = {
   statusFilter: 'On Progress',
   pmFilter: '',
   q: '',
+  _cache: {},
+
+  _cacheKey() {
+    return `${this.statusFilter}|${this.pmFilter}|${this.q}`;
+  },
+
+  _applyData(data) {
+    this.items = data?.items || [];
+    this.stats = data?.stats || {};
+    this.lastImport = data?.last_import || null;
+    PortfolioCommon.fillPmSelect('ppPmFilter', data?.pms, this.pmFilter);
+    this._syncTabs();
+    this._renderStats();
+    this.render();
+  },
+
+  _failRow(msg) {
+    const body = document.getElementById('ppTableBody');
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="13"><div class="empty-state" style="padding:40px">${escHtml(msg)}<br><button type="button" class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="PortfolioProgress.load()">再試</button></div></td></tr>`;
+  },
 
   async load() {
     const qEl = document.getElementById('ppSearch');
     this.q = (qEl?.value || '').trim();
     this.pmFilter = document.getElementById('ppPmFilter')?.value || '';
-    const loadSeq = showContentLoading('載入進行中項目…');
+    const key = this._cacheKey();
+    const cached = this._cache[key];
+    if (cached) this._applyData(cached);
+    const loadSeq = cached ? null : showContentLoading('載入進行中項目…');
     try {
-      const data = await api('GET', `/portfolio/progress${PortfolioCommon.queryString(this.statusFilter, this.pmFilter, this.q)}`);
-      this.items = data?.items || [];
-      this.stats = data?.stats || {};
-      this.lastImport = data?.last_import || null;
-      PortfolioCommon.fillPmSelect('ppPmFilter', data?.pms, this.pmFilter);
-      this._syncTabs();
-      this._renderStats();
-      this.render();
+      const data = await api('GET', `/portfolio/progress${PortfolioCommon.queryString(this.statusFilter, this.pmFilter, this.q)}`, null, { silent: true });
+      if (App.currentPage !== 'portfolio-progress') return;
+      this._cache[key] = data;
+      this._applyData(data);
     } catch (e) {
       if (e?.name === 'AbortError') {
-        const body = document.getElementById('ppTableBody');
-        if (body && App.currentPage === 'portfolio-progress') {
-          body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">載入已中斷，請再點一次「進行中項目」</div></td></tr>`;
-        }
+        if (!cached && App.currentPage === 'portfolio-progress') this._failRow('載入已中斷，請再試');
         return;
       }
-      const body = document.getElementById('ppTableBody');
-      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再點一次本頁' : '載入失敗';
-      if (body) body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">${msg}</div></td></tr>`;
+      if (cached) return;
+      const msg = e?.code === 'LOAD_TIMEOUT' ? '載入逾時，請再試' : '載入失敗';
+      this._failRow(msg);
     } finally {
-      hideContentLoading(loadSeq);
+      if (loadSeq != null) hideContentLoading(loadSeq);
     }
   },
 
@@ -651,6 +692,13 @@ const PortfolioProgress = {
     if (!item) return;
     const idx = this.items.findIndex((x) => x.id === item.id);
     if (idx >= 0) this.items[idx] = { ...this.items[idx], ...item };
+    Object.values(this._cache).forEach((data) => {
+      const rows = data?.items;
+      if (!rows) return;
+      const i = rows.findIndex((x) => x.id === item.id);
+      if (i >= 0) rows[i] = { ...rows[i], ...item };
+    });
+    PortfolioCommon.paintAudit(item);
   },
 
   async syncFromProjects() {
@@ -668,7 +716,7 @@ const PortfolioProgress = {
     const body = document.getElementById('ppTableBody');
     if (!body) return;
     if (!this.items.length) {
-      body.innerHTML = `<tr><td colspan="11"><div class="empty-state" style="padding:40px">沒有符合條件的項目</div></td></tr>`;
+      body.innerHTML = `<tr><td colspan="13"><div class="empty-state" style="padding:40px">沒有符合條件的項目</div></td></tr>`;
       return;
     }
     body.innerHTML = this.items.map((it) => `
@@ -684,6 +732,7 @@ const PortfolioProgress = {
         <td>${PortfolioCommon.textInput(it.id, it.remark, 'portfolio_remark', '備註')}</td>
         <td class="td-amount">${fmt(it.contract_sum)}</td>
         <td>${PortfolioCommon.statusSelect(it.id, it.project_progress_status, 'project_progress_status')}</td>
+        ${PortfolioCommon.auditCells(it)}
       </tr>
     `).join('');
   },

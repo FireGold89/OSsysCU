@@ -27,7 +27,9 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=auth.session_lifetime_
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 _secure = os.environ.get('SESSION_COOKIE_SECURE', '').strip().lower()
-if _secure in ('1', 'true', 'yes'):
+if _secure in ('0', 'false', 'no'):
+    app.config['SESSION_COOKIE_SECURE'] = False
+elif _secure in ('1', 'true', 'yes'):
     app.config['SESSION_COOKIE_SECURE'] = True
 elif os.path.exists('/.dockerenv'):
     app.config['SESSION_COOKIE_SECURE'] = True
@@ -398,6 +400,7 @@ def create_project():
     data.setdefault('person_in_charge', None)
     try:
         new_id = db.create_project(data)
+        portfolio.stamp_project_audit(new_id, auth.actor_display_name())
     except ValueError as e:
         return resp(error=str(e), status=400)
     return resp({'id': new_id}, status=201)
@@ -422,6 +425,7 @@ def update_project(project_id):
     data.setdefault('person_in_charge', None)
     try:
         db.update_project(project_id, data)
+        portfolio.stamp_project_audit(project_id, auth.actor_display_name())
     except ValueError as e:
         return resp(error=str(e), status=400)
     return resp({'message': '已更新'})
@@ -496,7 +500,7 @@ def portfolio_by_project_api(project_id):
 def portfolio_sync_from_projects_api():
     """P4：從 Cover / Main FAC / 分判回填衍生欄；保留 QS 手填狀態"""
     try:
-        return resp(portfolio.sync_from_system())
+        return resp(portfolio.sync_from_system(actor=auth.actor_display_name()))
     except Exception as e:
         return resp(error=f'同步失敗: {e}', status=500)
 
@@ -504,7 +508,9 @@ def portfolio_sync_from_projects_api():
 @app.route('/api/portfolio/projects/<int:portfolio_id>', methods=['PUT'])
 def portfolio_update_project_api(portfolio_id):
     try:
-        item = portfolio.update_portfolio(portfolio_id, request.json or {})
+        item = portfolio.update_portfolio(
+            portfolio_id, request.json or {}, actor=auth.actor_display_name(),
+        )
     except ValueError as e:
         msg = str(e)
         status = 404 if msg == '記錄不存在' else 400
@@ -516,7 +522,9 @@ def portfolio_update_project_api(portfolio_id):
 def portfolio_update_sc_status_api(portfolio_id):
     try:
         body = request.json or {}
-        item = portfolio.update_sc_status(portfolio_id, body.get('slots'))
+        item = portfolio.update_sc_status(
+            portfolio_id, body.get('slots'), actor=auth.actor_display_name(),
+        )
     except ValueError as e:
         msg = str(e)
         status = 404 if msg == '記錄不存在' else 400
@@ -545,7 +553,9 @@ def portfolio_import_fa_api():
     try:
         if preview:
             return resp(portfolio_importer.preview_fa_list(path))
-        return resp(portfolio_importer.sync_fa_list(path, create_placeholders=True))
+        return resp(portfolio_importer.sync_fa_list(
+            path, create_placeholders=True, actor=auth.actor_display_name(),
+        ))
     except ValueError as e:
         return resp(error=str(e), status=400)
     except Exception as e:
@@ -561,7 +571,9 @@ def portfolio_import_progress_api():
     try:
         if preview:
             return resp(portfolio_importer.preview_progress_list(path))
-        return resp(portfolio_importer.sync_progress_list(path, create_placeholders=True))
+        return resp(portfolio_importer.sync_progress_list(
+            path, create_placeholders=True, actor=auth.actor_display_name(),
+        ))
     except ValueError as e:
         return resp(error=str(e), status=400)
     except Exception as e:

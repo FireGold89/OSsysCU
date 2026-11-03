@@ -271,23 +271,23 @@ def _preview_rows(parsed, filename, import_type):
     }
 
 
-def sync_fa_list(path, create_placeholders=True):
+def sync_fa_list(path, create_placeholders=True, actor=None):
     parsed = parse_fa_list(path)
     return _sync_rows(
         parsed, os.path.basename(path), 'fa_list',
-        create_placeholders=create_placeholders, write_slots=True,
+        create_placeholders=create_placeholders, write_slots=True, actor=actor,
     )
 
 
-def sync_progress_list(path, create_placeholders=True):
+def sync_progress_list(path, create_placeholders=True, actor=None):
     parsed = parse_progress_list(path)
     return _sync_rows(
         parsed, os.path.basename(path), 'progress_list',
-        create_placeholders=create_placeholders, write_slots=False,
+        create_placeholders=create_placeholders, write_slots=False, actor=actor,
     )
 
 
-def _sync_rows(parsed, filename, import_type, create_placeholders, write_slots):
+def _sync_rows(parsed, filename, import_type, create_placeholders, write_slots, actor=None):
     upserted = 0
     created_projects = 0
     skipped = 0
@@ -298,6 +298,7 @@ def _sync_rows(parsed, filename, import_type, create_placeholders, write_slots):
             create_placeholder=create_placeholders,
             write_slots=write_slots,
             source_file=filename,
+            actor=actor,
         )
         if result.get('action') == 'skipped':
             skipped += 1

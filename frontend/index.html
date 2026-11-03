@@ -1509,7 +1509,7 @@
             <span class="form-hint pf-toolbar-import-hint" id="pfLastImport">尚未匯入 Excel</span>
             <div class="portfolio-tabs pf-toolbar-view" role="group" aria-label="顯示欄位">
               <button type="button" class="portfolio-tab active" id="pfDensityCompact" onclick="PortfolioFac.setDensity('compact')">精簡</button>
-              <button type="button" class="portfolio-tab" id="pfDensityFull" onclick="PortfolioFac.setDensity('full')">完整 19 欄</button>
+              <button type="button" class="portfolio-tab" id="pfDensityFull" onclick="PortfolioFac.setDensity('full')">完整</button>
               <button type="button" class="portfolio-tab" id="pfMatrixToggle" onclick="PortfolioFac.toggleMatrix()">分判矩陣</button>
             </div>
             <div class="col-picker-wrap" id="pfColPickerWrap">
@@ -1575,10 +1575,12 @@
                   <th data-col="project_progress_status">項目狀態</th>
                   <th data-col="client">Client</th>
                   <th data-col="client_fac_status">Client FA</th>
+                  <th data-col="updated_by">最後更新人</th>
+                  <th data-col="updated_at">最後更新</th>
                 </tr>
               </thead>
               <tbody id="pfTableBody">
-                <tr><td colspan="19"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+                <tr><td colspan="21"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
               </tbody>
             </table>
           </div>
@@ -1632,10 +1634,12 @@
                   <th>Remark</th>
                   <th>Contract Sum</th>
                   <th>狀態</th>
+                  <th>最後更新人</th>
+                  <th>最後更新</th>
                 </tr>
               </thead>
               <tbody id="ppTableBody">
-                <tr><td colspan="11"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
+                <tr><td colspan="13"><div class="empty-state" style="padding:40px">載入中...</div></td></tr>
               </tbody>
             </table>
           </div>

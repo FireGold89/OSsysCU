@@ -909,6 +909,14 @@ def _migrate_portfolio_tables(conn):
         "CREATE INDEX IF NOT EXISTS idx_pscs_portfolio "
         "ON portfolio_sc_fac_status(portfolio_project_id)"
     )
+    pp_cols = {r[1] for r in conn.execute("PRAGMA table_info(portfolio_projects)")}
+    if 'updated_by' not in pp_cols:
+        conn.execute("ALTER TABLE portfolio_projects ADD COLUMN updated_by TEXT")
+    proj_cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)")}
+    if 'updated_at' not in proj_cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN updated_at TEXT")
+    if 'updated_by' not in proj_cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN updated_by TEXT")
     conn.commit()
 
 

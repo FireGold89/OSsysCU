@@ -4,6 +4,20 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261026-project-audit` · 分支 `v2/portfolio`
+
+### 新增
+- **進行中項目、N 項目結算總表**：每列顯示最後更新人與最後更新日期。在這兩頁改資料、匯入，或在工程項目儲存時會記下當時登入者。
+- **部署腳本**：`scripts/deploy_aliyun_hk.sh`、`scripts/setup_caddy_aliyun.sh`（阿里云香港 + Caddy HTTPS）。
+
+### 修正
+- **登入 Cookie**：`SESSION_COOKIE_SECURE=0` 可在 Docker 上以 HTTP 调试；HTTPS 生产设 `1`。
+
+`APP_VERSION`: `v2-20261026-portfolio-load` · 分支 `v2/portfolio`
+
+### 修正
+- **N 項目結算總表、進行中項目**：沒有新項目時不再先寫資料庫；20 秒內重複打開直接用上次結果。逾時可按「再試」，已看過的清單不會被清成空白。
+
 `APP_VERSION`: `v2-20261026-hide-signoff` · 分支 `v2/portfolio`
 
 ### 變更

@@ -320,6 +320,19 @@ def current_user():
     }
 
 
+def actor_display_name():
+    """目前登入者的顯示名；沒有顯示名時用登入帳號。"""
+    user = current_user()
+    if not user:
+        return None
+    username = (user.get('username') or '').strip()
+    if not username:
+        return None
+    row = db.get_app_user_by_username(username)
+    display = ((row or {}).get('display_name') or '').strip()
+    return display or username
+
+
 def is_public_api(path, method):
     if path in _PUBLIC_API:
         return True
