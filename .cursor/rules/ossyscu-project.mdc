@@ -6,8 +6,8 @@ alwaysApply: true
 # OSsysCU — 專案規則
 
 ## 定位
-- QS 付款管理（Flask + SQLite + 靜態前端），生產：https://ossys.zeabur.app
-- GitHub：`FireGold89/OSsysCU`，分支 `main` → Zeabur 自動部署
+- QS 付款管理（Flask + SQLite + 靜態前端），生產：https://mossys.xyz（阿里雲；分支 `v2/portfolio`）
+- GitHub：`FireGold89/OSsysCU`；發版 push `v2/portfolio` 後於伺服器跑 `deploy_aliyun_hk.sh`
 - 版本號：`startup.py` 的 `APP_VERSION`（同步 `VERSION` 檔；部署後用 `/api/system/status` 核對）
 - 發行基線：`RELEASE.md`；Git tag `release/YYYY-MM-DD`；備份腳本 `scripts/backup_release.ps1`
 
@@ -24,7 +24,7 @@ alwaysApply: true
 | 資料路徑 | `config.py`（本機 `BASE_DIR`，Docker `/data` Volume） |
 
 ## 部署與資料
-- 推送 `main` 即觸發 Zeabur rebuild；改完記得更新 `APP_VERSION` 與 `CHANGELOG.md`
+- 改完記得更新 `APP_VERSION` 與 `CHANGELOG.md`；部署見 `docs/MOSSYS-OPS.md`
 - 上傳檔在 `DATA_DIR/uploads`；空庫還原用 `RESTORE_TOKEN`
 - **勿 commit**：`_backup/`、`.env`、憑證
 

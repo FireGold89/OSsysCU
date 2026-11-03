@@ -1,11 +1,11 @@
-# 上傳本機 qs_system.db 至 Zeabur（admin 登入 + RESTORE_TOKEN）
+# 上傳本機 qs_system.db 至線上（admin 登入 + RESTORE_TOKEN）
 param(
     [Parameter(Mandatory = $true)]
     [string]$AdminPassword,
     [string]$AdminUser = 'admin',
     [string]$RestoreToken = 'Restore8899',
     [string]$DbPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'qs_system.db'),
-    [string]$BaseUrl = 'https://ossys.zeabur.app'
+    [string]$BaseUrl = 'https://mossys.xyz'
 )
 
 if (-not (Test-Path $DbPath)) {

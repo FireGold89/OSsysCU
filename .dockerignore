@@ -14,7 +14,7 @@ __pycache__/
 .venv/
 venv/
 
-# 本機資料（Zeabur 用 /data Volume）
+# 本機資料（容器用 /data Volume）
 _data/
 uploads/
 *.db

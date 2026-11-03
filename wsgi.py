@@ -1,4 +1,4 @@
-"""Gunicorn WSGI 入口（Zeabur 生產環境）"""
+"""Gunicorn WSGI 入口（Docker 生產環境）"""
 import startup
 
 startup.run()

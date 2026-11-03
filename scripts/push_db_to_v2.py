@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""上傳本機 qs_system.db 至 Zeabur V2（admin 登入 + RESTORE_TOKEN）"""
+"""上傳本機 qs_system.db 至 V2 試行環境（admin 登入 + RESTORE_TOKEN）"""
 import os
 import sys
 
@@ -7,7 +7,7 @@ import requests
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB = os.path.join(ROOT, 'qs_system.db')
-BASE_URL = os.environ.get('OSSYS_V2_URL', 'https://ossys-v2.zeabur.app').rstrip('/')
+BASE_URL = os.environ.get('OSSYS_V2_URL', 'https://mossys.xyz').rstrip('/')
 
 
 def _load_dotenv():

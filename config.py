@@ -1,4 +1,4 @@
-"""路徑與部署設定（本機與 Zeabur 共用）"""
+"""路徑與部署設定（本機與 Docker 共用）"""
 import os
 import shutil
 
@@ -30,7 +30,7 @@ def _resolve_data_dir():
     env = (os.environ.get('DATA_DIR') or '').strip()
     if env:
         return env
-    # Docker / Zeabur 容器：固定用 Volume 掛載點
+    # Docker 容器：固定用 Volume 掛載點
     if os.path.exists('/.dockerenv'):
         return '/data'
     return BASE_DIR

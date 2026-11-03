@@ -41,7 +41,7 @@ flowchart TB
 | 項目 | 說明 | 證據 |
 |------|------|------|
 | 本機 | `DATA_DIR = BASE_DIR`（repo 根目錄） | `config.py` → `_resolve_data_dir()` |
-| Docker / Zeabur | 偵測 `/.dockerenv` → `DATA_DIR = '/data'` | `config.py` |
+| Docker | 偵測 `/.dockerenv` → `DATA_DIR = '/data'` | `config.py` |
 | 資料庫 | `DB_PATH = {DATA_DIR}/qs_system.db` | `config.py` |
 | 上傳 | `UPLOAD_DIR = {DATA_DIR}/uploads` | `config.py` |
 | Legacy 遷移 | 舊 `/app` 路徑啟動時搬到 `/data` | `config.py` → `migrate_legacy_data()` |

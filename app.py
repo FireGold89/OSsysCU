@@ -2976,7 +2976,7 @@ def restore_database():
         if token != expected:
             return resp(error='未授權', status=403)
     elif not empty_db:
-        return resp(error='請在 Zeabur Variables 設定 RESTORE_TOKEN', status=403)
+        return resp(error='請在伺服器環境變數設定 RESTORE_TOKEN', status=403)
 
     if 'file' not in request.files:
         return resp(error='請上傳 qs_system.db 文件', status=400)

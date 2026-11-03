@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSsysCU 系統過程與修正報告 · 2026-11-03</title>
+  <style>
+    :root {
+      --text: #1e293b;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --bg: #f8fafc;
+      --card: #fff;
+      --accent: #1d4ed8;
+      --ok: #047857;
+      --warn: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Microsoft JhengHei", "PingFang TC", Inter, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+    .sheet {
+      max-width: 980px;
+      margin: 24px auto 48px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      padding: 40px 48px 56px;
+    }
+    h1 { font-size: 26px; line-height: 1.35; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 32px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+    h3 { font-size: 16px; margin: 20px 0 8px; }
+    p { margin: 0 0 10px; }
+    .meta { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .meta div { margin: 2px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0 16px; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; vertical-align: top; text-align: left; }
+    th { background: #eff6ff; font-weight: 650; }
+    .note { font-size: 13px; color: var(--muted); }
+    ol, ul { margin: 6px 0 12px 1.2em; }
+    li { margin: 4px 0; }
+    code { font-family: Consolas, "JetBrains Mono", monospace; font-size: 0.9em; background: #f1f5f9; padding: 0 4px; }
+    .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #ecfdf5; color: var(--ok); }
+    @media print {
+      body { background: #fff; }
+      .sheet { margin: 0; border: 0; max-width: none; padding: 0; }
+      a { color: inherit; text-decoration: none; }
+      h2 { break-after: avoid; }
+      tr, h3 { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <article class="sheet">
+    <h1>OSsysCU QS 管理系統<br>由起始至現況的過程與修正報告</h1>
+    <div class="meta">
+      <div>報告日期：2026-11-03</div>
+      <div>系統：OSsysCU（Flask + SQLite + 靜態前端）</div>
+      <div>現行應用版本號：<code>v2-20261026-project-audit</code></div>
+      <div>程式分支：<code>v2/portfolio</code>（GitHub <code>FireGold89/OSsysCU</code>，至提交 <code>14f7aa2</code>）</div>
+      <div>正式網址：<a href="https://mossys.xyz">https://mossys.xyz</a>（阿里雲香港）</div>
+      <div>舊正式環境已下線（不再與 mossys 共用同一資料庫）</div>
+      <div>依據：<code>CHANGELOG.md</code>、2026-08-14 進度匯報、2026-11 阿里雲上線與監控頁實作紀錄</div>
+      <div>第一版對照：<code>C:\Users\hiufung_lau\Documents\Pro\OSsysCU</code>（<code>main</code> 分支，末版 <code>20260827-main-con-fac-pdf2</code>）</div>
+    </div>
+
+    <h2>1. 摘要</h2>
+    <p>本系統由香港 QS 地盤付款管理起步，於 2026 年 6 月建立版本基線，其後擴充 Master List、糧期、變更工程、結算與匯報 PDF。10 月集中處理瀏覽器載入卡住與切換項目過慢。11 月 3 日生產環境改為阿里雲 <strong>mossys.xyz</strong>，並另設僅管理員可開的 <code>/admin</code> 監控頁，不出現在 QS 日常畫面。</p>
+    <p>變更紀錄自 6 月基線起約有 <strong>239</strong> 條版本條目（同一日往往多次發版）。下面按模組、月份與修正分列，方便看出工作是連續堆出來的，不是一次做完。本報告不含帳號密碼、還原權杖或客戶合約金額。</p>
+
+    <h2>2. 工作範圍一覽</h2>
+    <table>
+      <thead><tr><th>範圍</th><th>做過的事</th></tr></thead>
+      <tbody>
+        <tr><td>工程項目與 Summary</td><td>中英名稱、負責人、從 Master List 帶入、累計已付與付款進度、概覽三種版面、切項目不再整頁卡住</td></tr>
+        <tr><td>Master List</td><td>報價編號入庫、工程類別、屋苑／業主常用選項、搜尋列排版、切頁逾時可再試</td></tr>
+        <tr><td>分判與付款</td><td>判項編號、發票去重、Sub-IP／MC IP、付款列表欄位、Excel 同步遇重複發票略過該列</td></tr>
+        <tr><td>糧期</td><td>主表、分包矩陣、美博批款日、申請百分比、輕量 API、主表先出矩陣後補</td></tr>
+        <tr><td>變更工程</td><td>主合約與分判兩邊的工程指令、扣款、審批 PDF；標題改為會議用字</td></tr>
+        <tr><td>結算與匯報</td><td>合約金額 A–F、主合約／分判最終結算 PDF、QS 匯報 PDF 中文、封面對齊項目資料</td></tr>
+        <tr><td>會簽出表</td><td>對公司 Template 反覆改日期、截標時間、字型與單頁；10 月 26 日起介面暫時隱藏，程式保留</td></tr>
+        <tr><td>ISO 文件</td><td>主合約／分判分批載入、缺件角標、提交條件說明、同槽多檔；修正容器啟動時索引錯誤</td></tr>
+        <tr><td>登入與權限</td><td>管理員／QS／財務／唯讀、系統內建帳號、操作紀錄、閒置逾時、開門動畫與主題保留</td></tr>
+        <tr><td>辨識</td><td>報價與發票分流、失敗不可存、文字層 PDF 直接抽字、RapidOCR、夸克手寫（有額度）</td></tr>
+        <tr><td>部署</td><td>試行環境 Docker 精簡與映像拉取、其後改阿里雲 Caddy、部署腳本、壓測、獨立監控頁</td></tr>
+      </tbody>
+    </table>
+
+    <h2>2.1 第一版（main）與 V2（v2/portfolio）對照</h2>
+    <p>兩份程式在同一 GitHub 倉庫 <code>FireGold89/OSsysCU</code>，本機可並存兩個資料夾：第一版在 <code>Documents\Pro\OSsysCU</code>，現行開發在 <code>OSsysCU-v2</code>。6～8 月的功能與修正紀錄以第一版 <code>CHANGELOG.md</code> 為準；9 月起帶 <code>v2-</code> 前綴的版本號與 <code>v2/portfolio</code> 分支條目在 V2 倉庫延續。</p>
+    <table>
+      <thead><tr><th>項目</th><th>第一版（起始～舊線）</th><th>V2（現行）</th></tr></thead>
+      <tbody>
+        <tr><td>本機路徑</td><td><code>…\Pro\OSsysCU</code></td><td><code>…\Pro\OSsysCU-v2</code></td></tr>
+        <tr><td>Git 分支</td><td><code>main</code></td><td><code>v2/portfolio</code></td></tr>
+        <tr><td>生產網址</td><td>舊正式環境（已下線，勿與 mossys 共用 DB）</td><td><a href="https://mossys.xyz">mossys.xyz</a>（阿里雲香港）</td></tr>
+        <tr><td>發行基線</td><td><code>RELEASE.md</code>：<code>20260827-ux-desktop</code>，標籤 <code>release/2026-08-27</code></td><td>無單一 tag；以 <code>APP_VERSION</code> 與部署提交為準（現約 <code>v2-20261026-project-audit</code>）</td></tr>
+        <tr><td>第一版末次已知版本</td><td colspan="2"><code>startup.py</code>：<code>20260827-main-con-fac-pdf2</code>（主合約最終結算 PDF P1/P2、登入夾萬與 Desktop UX Phase 1 等已含在其前序版本）</td></tr>
+        <tr><td>第一版 8 月已具備</td><td colspan="2">Session 登入（admin／qs）、閒置登出、登入前不閃主介面、夾萬開門動畫、Settings 還原 DB、項目負責人部門／角色下拉、sticky 表頭、切項目局部 loading、Dashboard 付款鑽取（見第一版 <code>RELEASE.md</code> 摘要）</td></tr>
+        <tr><td>V2 分叉後主要增量</td><td colspan="2">Portfolio 概覽分頁與結算／進行中總表、ISO 分批與缺件 UI、糧期 Sub-IP／矩陣與輕量 API、會簽出表（2026-10-26 起 UI 暫隱）、細粒度權限與操作紀錄、10 月載入／逾時整段修正、11 月 Caddy 部署與 <code>/admin</code> 監控</td></tr>
+        <tr><td>設計／規格文件</td><td><code>docs/System Overview.md</code>、<code>Feature Inventory.md</code>、<code>Portfolio FAC UI Spec.md</code>、2026-08-14 匯報 HTML</td><td>同上文件多數已帶入或同步概念；新增 <code>docs/MOSSYS-OPS.md</code>、壓測腳本說明、本報告</td></tr>
+      </tbody>
+    </table>
+    <p>查第一版某功能何時加入：在 <code>OSsysCU</code> 目錄看 <code>CHANGELOG.md</code> 與 <code>git log</code>（例如 <code>20260816-auth</code> 登入、<code>20260827-vault-login</code> 夾萬）。V2 自 9 月起的條目版本號改為 <code>v2-YYYYMMDD-…</code>，避免與第一版舊線混淆。</p>
+
+    <h2>3. 由起始到現在</h2>
+
+    <h3>3.1 2026 年 6 月 · 基線</h3>
+    <ul>
+      <li>定位為 QS 付款管理：工程項目、付款登記、報價／發票辨識、香港 QS 用語、項目中英名稱。</li>
+      <li>6 月 8 日建立版本號、<code>RELEASE.md</code> 與備份腳本；同時修正工程項目「累計已付」重複加總，以及付款進度被硬性封頂 100%。</li>
+      <li>同日加入淺色／深色主題（<code>qs_theme</code>）。</li>
+      <li>6 月 13 日 QS 匯報表 PDF 改為嵌入中文字型，修正 Linux 上中文亂碼。關注事項由系統規則產生，不是人工智能撰寫。</li>
+      <li>Master List 開始以完整報價編號（例如 <code>MS/Q001/26/jy</code>）入庫；末段縮寫為項目負責人。</li>
+    </ul>
+
+    <h3>3.2 2026 年 7 月至 8 月 · 日常 QS 流程</h3>
+    <ul>
+      <li>地盤付款、分判合約編號、糧期、變更工程、主合約／分判結算逐步接上，介面改用香港 QS 用語（分判及支出、判項編號、付款登記、糧期狀況）。</li>
+      <li>Master List 表單：工作範疇大類加可搜尋細項、工程類別可覆寫、屋苑與業主依使用次數給常用選項、選定屋苑後內容自動加前綴、外判與否改下拉。</li>
+      <li>工程項目負責 QS 改為在職同事下拉；Summary 可顯示負責人並排序、隱藏欄位。</li>
+      <li>8 月 14 日進度匯報時，生產仍在舊主機，版本約 <code>20260813-eng-cat</code>（詳見第一版 <code>docs/Meetings/2026-08-14 QS System Progress Report.html</code>）。當時待辦有編號規則、分判商主檔、登入與操作紀錄。登入、夾萬與 Desktop UX 已在第一版 <code>main</code> 於 8 月下旬落地（<code>20260827-*</code>）；細粒度帳號與操作紀錄在 V2 的 10 月完成；編號與分判商主檔仍未當作本期完工項。</li>
+    </ul>
+
+    <h3>3.3 2026 年 9 月 · V2、會簽與結算文件</h3>
+    <ul>
+      <li>分支 <code>v2/portfolio</code> 以 Docker 作 V2 試用。試行部署曾出現映像拉不下來，先精簡 Dockerfile，再改由 GitHub 容器映像供主機拉取。</li>
+      <li>會簽出表對公司 Word 範本逐項改：合約年期不要誤用 Master 開工完工、截標上午／下午／不填、NN1 編號正規化、分判商名稱、招標日期與工作天提示、Linux 方格不要變成問號、字型改明體楷體與 Carlito、PDF 由範本經 LibreOffice 轉出而不是另一套版面。</li>
+      <li>分判最終結算 PDF 多次改 P2：工程帳目、QS 三段聲明、雙簽與附錄的間距。</li>
+      <li>糧期加 IP Application、美博申請付款與附件。變更工程拆成主合約與分判兩邊，工程指令 PDF 與扣款 PDF 分開。</li>
+      <li>主合約最終結算改名、補 DLP 天數；Testing &amp; Commissioning 只在指定項目顯示。</li>
+      <li>10 月 26 日起側欄「項目登記·會簽出表」與 Master List「加入會簽出表」暫時隱藏，程式仍在。</li>
+    </ul>
+
+    <h3>3.4 2026 年 10 月 · 連續處理「卡住」</h3>
+    <p>這個月同一類問題重複出現，所以發版很密。每次只收一層，下一層又在別的頁爆出來。</p>
+    <ul>
+      <li>登入後先出主畫面，再載記憶中的項目；逾時就清掉記住的項目，避免永遠遮罩。</li>
+      <li>Chrome 舊設定檔把 JS 快取一年，改為版本不一致就重載一次；登入前清 Cache Storage，但保留主題與側欄。</li>
+      <li>切項目：取消上一筆請求、22 秒／28 秒逾時必關遮罩、主檔回來就收起全屏、分判與 VO 改背景載。頂欄先用小圈，15 秒後才全屏。</li>
+      <li>概覽不再為了一張表再打一次完整 summary；ISO 只先拿主合約與招標，分判附件按判項分批。合約金額結算自己載，不等 ISO、不組糧期。</li>
+      <li>進系統不再死等 Chart.js 與 Google 字型；Edge 擋外連時遮罩最多約 12 秒收起。清快取若被拖住，約 7 秒仍繼續登入。</li>
+      <li>付款登記、工程項目、分判編號、Master List、結算總表、進行中項目：逾時改「再試」，不要停在載入中，也不要把已看到的表清成空白。</li>
+      <li>糧期改輕量 API，與核對區並行；主表先出，分包矩陣後補；資料沒變就交回上次結果。</li>
+      <li>分包矩陣曾整頁空白：Summary 欄位讀錯、Sub-IP 空白要從描述解析、<code>Whole works IP</code> 對不上。Q1161 對過 Excel，IP-03 分包支出仍按指示保持不動。</li>
+      <li>權限：管理員可建帳號並分不可見／只看／可編輯；財務只改 Master List；唯讀不能寫。操作紀錄只記上線後的寫入，不含密碼。</li>
+      <li>結算總表與進行中項目加最後更新人、最後更新日期。進行中篩選列改成與結算總表同一套兩行排版。</li>
+    </ul>
+
+    <h3>3.5 2026 年 11 月 3 日 · 換機、驗速度、做監控</h3>
+    <p>這一天的工作是連著做的，不是只改一個開關。</p>
+    <ol>
+      <li>選定阿里雲香港輕量機，網域 <strong>mossys.xyz</strong>。DNS 的 NS 與 A 記錄要先指到這台，Let's Encrypt 才簽得到證。</li>
+      <li>Caddy 聽 80／443，應用只聽本機 8080，資料掛在 <code>/data</code>。公網不直接開 8080。</li>
+      <li>由舊環境備份帶回資料庫後，核對項目數、付款數、上傳數與登入是否開啟。</li>
+      <li>發現 HTTP 登入會立刻彈回登入頁，因為 Docker 把 Cookie 設成只在 HTTPS 生效。正式站改走 https，並把 Secure 設回開啟。</li>
+      <li>清理環境檔時一度只剩一行，網站變成未啟用登入。整份環境檔還原後重建容器。</li>
+      <li>第一次同步時伺服器 Git 仍停在舊提交，畫面卻像已更新（之前用檔案直接補過程式）。之後部署固定先 <code>fetch</code> 再 <code>reset --hard</code>。</li>
+      <li>寫可重複的讀取壓測：首屏、切最重項目、17 路並行、44 個項目的 summary、30 路同時拉項目列表。結果都低於前端 22 秒逾時。腳本在主機倉庫裡，容器沒有這條路徑，要先拷進去才能跑。</li>
+      <li>瀏覽器實際點頁，比舊主機時期順。這只代表目前資料量下的讀取，不是多人同時匯入或出 PDF 的保證。</li>
+      <li>做獨立頁 <code>/admin</code>（<code>14f7aa2</code>），不放進 QS 側欄。未登入去登入頁並回到 <code>/admin</code>；非管理員只見拒絕。頁上有版本、資料庫最後修改、上傳容量、閒置分鐘、OCR 是否就緒、還原權杖是否已設定、最近寫入失敗標紅，以及可選的 30 秒自動更新。</li>
+      <li>撰寫本報告時程式已在 GitHub。正式網要看到 <code>/admin</code>，仍須在伺服器跑部署腳本。</li>
+    </ol>
+
+    <h2>4. 修正表</h2>
+    <h3>4.1 金額、單據與欄位</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>現象</th>
+          <th>原因</th>
+          <th>修正</th>
+          <th>時期</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>工程項目「累計已付」偏大</td>
+          <td>判項與付款 JOIN 後重複加總</td>
+          <td>改正加總；付款進度超過承建金額時以提示顯示，不再封頂 100%</td>
+          <td>2026-06-08</td>
+        </tr>
+        <tr>
+          <td>匯報 PDF 中文亂碼</td>
+          <td>Linux 容器沒有可用中文字型，CID 字型方案失效</td>
+          <td>嵌入 TrueType（<code>fonts-wqy-zenhei</code>）</td>
+          <td>2026-06-13</td>
+        </tr>
+        <tr>
+          <td>會簽合約年期填錯</td>
+          <td>空日期仍退回 Master 開工／完工</td>
+          <td>會簽只讀「合約年期起迄」；空就不填；誤存草稿清掉</td>
+          <td>2026-09</td>
+        </tr>
+        <tr>
+          <td>會簽截標時間一點就變上午</td>
+          <td>外層標籤包住選項，點空白也算選中</td>
+          <td>改上午／下午／不填三選一；不填保留底線空位</td>
+          <td>2026-09</td>
+        </tr>
+        <tr>
+          <td>會簽 PDF 在 Linux 像另一份表，方格變問號</td>
+          <td>沒有範本字型；Wingdings 方格無法嵌入</td>
+          <td>範本隨映像部署，LibreOffice 轉 PDF，方格改 Unicode</td>
+          <td>2026-09 至 10-06</td>
+        </tr>
+        <tr>
+          <td>主合約 FAC PDF 匯出失敗</td>
+          <td>呼叫了不存在的頁首函式</td>
+          <td>改用與分判結算相同的頁首</td>
+          <td>2026-10-03</td>
+        </tr>
+        <tr>
+          <td>分包糧期矩陣空白</td>
+          <td>Summary 欄讀成 null；Sub-IP 空；百分比被當成金額</td>
+          <td>改走矩陣組裝；從描述解析 Sub-IP；無金額時改由付款匯總</td>
+          <td>2026-10-17</td>
+        </tr>
+        <tr>
+          <td>中期糧款 Prepared by 沒有人選</td>
+          <td>Master List 空時職員名單也空</td>
+          <td>合併負責人名單與工程項目負責人，並預設本項目 QS</td>
+          <td>2026-10-16</td>
+        </tr>
+        <tr>
+          <td>舊環境容器起不來</td>
+          <td>啟動時重建 ISO 唯一索引，與同槽多檔衝突</td>
+          <td>不再重建該索引</td>
+          <td>2026-10-13</td>
+        </tr>
+        <tr>
+          <td>Excel 同步整批中斷</td>
+          <td>碰到已存在的發票號就拋錯</td>
+          <td>略過該列並記錄，其餘繼續</td>
+          <td>2026-10-20</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>4.2 載入、瀏覽器與權限</h3>
+    <table>
+      <thead>
+        <tr><th>現象</th><th>原因</th><th>修正</th><th>時期</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>切換項目、重新整理後一直「載入中」</td>
+          <td>舊請求掛住；一次拉太多；自動載入上次項目</td>
+          <td>逾時取消連線、遮罩必關、可關閉自動載入</td>
+          <td>2026-10-13 至 10-22</td>
+        </tr>
+        <tr>
+          <td>重新整理後「載入項目資料」不走</td>
+          <td>返回快取仍留著遮罩；概覽等 ISO 與 summary</td>
+          <td>還原頁面時清遮罩；概覽先出基本欄</td>
+          <td>2026-10-16</td>
+        </tr>
+        <tr>
+          <td>登入後主畫面不出來</td>
+          <td>先等記憶項目，逾時也不放行</td>
+          <td>先顯示主介面；逾時清 <code>qs_project_id</code></td>
+          <td>2026-10-06</td>
+        </tr>
+        <tr>
+          <td>Chrome 一直用舊畫面</td>
+          <td>靜態檔被標成可快取一年</td>
+          <td>取消該標頭；版本與 API 不一致就重載</td>
+          <td>2026-10-20</td>
+        </tr>
+        <tr>
+          <td>一進系統就全頁轉圈</td>
+          <td>等待境外 Chart.js 與字型；追蹤防護把連線拖死</td>
+          <td>圖表改需要時才載；遮罩最長約 12 秒收起</td>
+          <td>2026-10-22</td>
+        </tr>
+        <tr>
+          <td>登入頁清快取時停住</td>
+          <td>Edge 拖住 Cache Storage</td>
+          <td>最多約 7 秒仍進入系統</td>
+          <td>2026-10-23</td>
+        </tr>
+        <tr>
+          <td>專業版概覽仍是上一個項目</td>
+          <td>切項目沒有立刻換專業版內容</td>
+          <td>切換當下更新該版面</td>
+          <td>2026-10-23</td>
+        </tr>
+        <tr>
+          <td>連續切頁，上一頁遮罩還在</td>
+          <td>新頁沒取消舊的「載入結算總表」</td>
+          <td>切頁收起遮罩並取消未完成讀取</td>
+          <td>2026-10-21</td>
+        </tr>
+        <tr>
+          <td>付款頁、項目頁、分判編號逾時後不能再點</td>
+          <td>錯誤被當成仍在載入</td>
+          <td>改顯示再試</td>
+          <td>2026-10-22</td>
+        </tr>
+        <tr>
+          <td>切換項目時糧期很慢</td>
+          <td>每次重算完整財務 summary，並與矩陣搶運算</td>
+          <td>輕量糧期 API；主表先出，矩陣後補</td>
+          <td>2026-10-26</td>
+        </tr>
+        <tr>
+          <td>結算總表、進行中項目逾時後變空白</td>
+          <td>沒新項目也先寫庫；失敗時清掉已顯示清單</td>
+          <td>先讀、20 秒內用上次結果；逾時可再試</td>
+          <td>2026-10-26</td>
+        </tr>
+        <tr>
+          <td>非管理員打開設定被 403，ISO 也跟著失敗</td>
+          <td>ISO 誤打只有管理員能開的設定 API</td>
+          <td>改讀一般應用設定</td>
+          <td>2026-10-16</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>4.3 換到阿里雲之後</h3>
+    <table>
+      <thead>
+        <tr><th>現象</th><th>原因</th><th>修正</th><th>時期</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>用 HTTP 登入後立刻回到登入頁</td>
+          <td>Docker 內把登入 Cookie 設成僅 HTTPS，瀏覽器不保存</td>
+          <td>可用環境變數關閉 Secure；正式站改走 HTTPS，並設回 Secure</td>
+          <td>2026-11-03</td>
+        </tr>
+        <tr>
+          <td>mossys.xyz 憑證申請失敗</td>
+          <td>網域 NS 或 A 記錄尚未指向伺服器，Let's Encrypt 查不到</td>
+          <td>改為阿里雲 DNS，A 記錄指向伺服器後重啟 Caddy</td>
+          <td>2026-11-03</td>
+        </tr>
+        <tr>
+          <td>網站顯示未啟用登入</td>
+          <td>伺服器環境檔在清理時被寫剩一行</td>
+          <td>還原完整環境檔並重建容器；以後改環境必須整份保留</td>
+          <td>2026-11-03</td>
+        </tr>
+        <tr>
+          <td>伺服器以為已更新，實際仍是舊程式</td>
+          <td>只 pull、未先 fetch，本機殘留修改讓 Git 顯示已最新</td>
+          <td>部署改為 <code>fetch</code> 後 <code>reset --hard</code></td>
+          <td>2026-11-03</td>
+        </tr>
+        <tr>
+          <td>在容器裡直接跑壓測腳本找不到檔案</td>
+          <td>腳本在主機 <code>/opt/ossys</code>，映像內沒有該路徑</td>
+          <td>先複製進容器，或用 <code>run_mossys_smoke.sh</code></td>
+          <td>2026-11-03</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">上表仍是摘錄。會簽範本在 9 月有數十次小改（版面、月數、審批「其他」說明欄），介面還有文字縮放、金額千分位、側欄拖放排序、無障礙標籤等，全部條目在 <code>CHANGELOG.md</code>。</p>
+
+    <h2>5. 還沒算進「已完工」的事</h2>
+    <ul>
+      <li>8 月匯報列過的編號規則統一、分判商主檔，本期沒有當成完成。</li>
+      <li>Q1161 的 IP-03 分包支出維持原數，未按後來的 Excel 改寫。</li>
+      <li>監控頁不看主機 CPU、Caddy 或憑證到期日。</li>
+      <li>沒有不限量又比夸克手寫更強的免費 OCR。印刷體繼續用本機 RapidOCR。</li>
+    </ul>
+
+    <h2>6. 現況</h2>
+    <table>
+      <thead>
+        <tr><th>項目</th><th>說明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>日常使用</td><td><a href="https://mossys.xyz">https://mossys.xyz</a>，需公司帳號登入</td></tr>
+        <tr><td>管理員監控</td><td><code>https://mossys.xyz/admin</code>（部署 <code>14f7aa2</code> 之後）。非管理員只見拒絕頁</td></tr>
+        <tr><td>資料</td><td>只在該伺服器 <code>/data</code>。勿與其他環境或機器共用同一個 SQLite</td></tr>
+        <tr><td>OCR</td><td>有文字層的 PDF 直接抽字。印刷掃描用本機 RapidOCR（免費）。手寫用夸克，有免費額度、不是無限。沒有「最強且永久免費不限量」的單一引擎</td></tr>
+        <tr><td>發版</td><td>push <code>v2/portfolio</code> 後，在伺服器執行 <code>scripts/deploy_aliyun_hk.sh</code>。說明見 <code>docs/MOSSYS-OPS.md</code></td></tr>
+      </tbody>
+    </table>
+    <p><span class="tag">已完成</span> 讀取路徑在現有資料量下未再出現舊主機時期那種超過 20 秒的 API 卡住。多人同時匯入 Excel 或產生 PDF 仍可能變慢，因資料庫為 SQLite、PDF 會佔用 CPU。</p>
+
+    <h2>7. 建議交件時一併說明</h2>
+    <ol>
+      <li>本報告描述至 2026-11-03 的程式狀態，不是驗收全部歷史單據的數據正確性。</li>
+      <li>正式站是否已含 <code>/admin</code>，以登入後開啟該網址，或 <code>/api/system/status</code> 的版本為準。版本號尚未因監控頁而另編新號。</li>
+      <li>列印：用瀏覽器開啟本檔，選擇列印或「另存 PDF」即可交件。</li>
+    </ol>
+
+    <p class="note">OSsysCU · 內部系統過程報告 · 2026-11-03</p>
+  </article>
+</body>
+</html>

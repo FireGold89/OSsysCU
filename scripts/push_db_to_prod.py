@@ -1,4 +1,4 @@
-"""上傳本機 qs_system.db 至 Zeabur 生產環境（需 .env 的 RESTORE_TOKEN）"""
+"""上傳本機 qs_system.db 至線上生產環境（需 .env 的 RESTORE_TOKEN）"""
 import os
 import sys
 
@@ -7,7 +7,7 @@ import requests
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(REPO, '.env')
 DB_PATH = os.path.join(REPO, 'qs_system.db')
-PROD_URL = os.environ.get('PROD_URL', 'https://ossys.zeabur.app')
+PROD_URL = os.environ.get('PROD_URL', 'https://mossys.xyz')
 
 
 def load_env():

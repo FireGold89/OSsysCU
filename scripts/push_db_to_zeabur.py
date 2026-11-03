@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""上傳本機 qs_system.db 至 Zeabur 生產（需 RESTORE_TOKEN；舊版另需 admin 登入）"""
+"""上傳本機 qs_system.db 至線上生產（需 RESTORE_TOKEN；舊版另需 admin 登入）"""
 import json
 import os
 import sys
@@ -8,7 +8,7 @@ import requests
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB = os.path.join(ROOT, 'qs_system.db')
-BASE_URL = os.environ.get('OSSYS_URL', 'https://ossys.zeabur.app').rstrip('/')
+BASE_URL = os.environ.get('OSSYS_URL', 'https://mossys.xyz').rstrip('/')
 
 
 def _load_dotenv():
@@ -45,7 +45,7 @@ def main():
         print(f'找不到資料庫: {db_path}', file=sys.stderr)
         sys.exit(1)
     if not restore_token:
-        print('請在 .env 或環境變數設定 RESTORE_TOKEN（與 Zeabur Variables 相同）', file=sys.stderr)
+        print('請在 .env 或環境變數設定 RESTORE_TOKEN（與伺服器相同）', file=sys.stderr)
         sys.exit(1)
 
     size_mb = os.path.getsize(db_path) / (1024 * 1024)

@@ -1447,6 +1447,12 @@ def _project_cover_defaults(data, existing=None):
         )
     if not data.get('qs_in_charge'):
         data['qs_in_charge'] = data.get('person_in_charge') or existing.get('person_in_charge')
+    pic = (data.get('person_in_charge') or '').strip()
+    pm = (data.get('project_manager') or '').strip()
+    if not pic and pm:
+        data['person_in_charge'] = pm
+    elif pic and not pm:
+        data['project_manager'] = pic
     mode = data.get('retention_release_mode')
     if mode is not None:
         data['retention_release_mode'] = (mode or 'na').strip().lower() or 'na'
@@ -7017,8 +7023,12 @@ def get_quotation_finance(quotation_no):
     }
 
 
+def _contains_cjk(text):
+    return any('\u4e00' <= ch <= '\u9fff' for ch in (text or ''))
+
+
 def _is_pic_abbreviation_label(label):
-    """略過報價尾碼式縮寫／純數字，下拉只列項目負責人全名"""
+    """略過報價尾碼式縮寫／純數字，下拉只列項目負責人全名（中文姓名不算縮寫）"""
     s = (label or '').strip()
     if not s:
         return True
@@ -7026,7 +7036,14 @@ def _is_pic_abbreviation_label(label):
         return True
     if ' ' in s:
         return False
-    if 2 <= len(s) <= 4 and s.isalpha() and (s == s.lower() or s == s.upper()):
+    if _contains_cjk(s):
+        return False
+    if (
+        2 <= len(s) <= 4
+        and s.isascii()
+        and s.isalpha()
+        and (s == s.lower() or s == s.upper())
+    ):
         return True
     return False
 
@@ -7685,16 +7702,29 @@ def get_staff_name_map():
     return out
 
 
+def _raise_if_staff_names_abbrev(name_en, name_zh):
+    """英文縮寫可留空或搭配中文全名；至少一邊為非縮寫全名。"""
+    en = (name_en or '').strip()
+    zh = (name_zh or '').strip()
+    en_bad = bool(en and _is_pic_abbreviation_label(en))
+    zh_bad = bool(zh and _is_pic_abbreviation_label(zh))
+    if en_bad and not zh:
+        raise ValueError('請填寫項目負責人全名，不要使用縮寫')
+    if zh_bad and not en:
+        raise ValueError('請填寫項目負責人全名，不要使用縮寫')
+    if en_bad and zh_bad:
+        raise ValueError('請填寫項目負責人全名，不要使用縮寫')
+    if not en and not zh:
+        raise ValueError('請填寫項目負責人姓名')
+
+
 def create_staff_member(data):
     data = dict(data)
     data['name_en'] = (data.get('name_en') or '').strip() or None
     data['name_zh'] = (data.get('name_zh') or '').strip() or None
     if not data['name_en'] and not data['name_zh']:
         raise ValueError('請填寫項目負責人姓名')
-    if (data['name_en'] and _is_pic_abbreviation_label(data['name_en'])) or (
-        data['name_zh'] and _is_pic_abbreviation_label(data['name_zh'])
-    ):
-        raise ValueError('請填寫項目負責人全名，不要使用縮寫')
+    _raise_if_staff_names_abbrev(data['name_en'], data['name_zh'])
     data['email'] = (data.get('email') or '').strip() or None
     data['phone'] = (data.get('phone') or '').strip() or None
     data['department'] = normalize_staff_department(data.get('department'))
@@ -7740,10 +7770,7 @@ def update_staff_member(staff_id, data):
     data['name_zh'] = (data.get('name_zh') or '').strip() or None
     if not data['name_en'] and not data['name_zh']:
         raise ValueError('請填寫項目負責人姓名')
-    if (data['name_en'] and _is_pic_abbreviation_label(data['name_en'])) or (
-        data['name_zh'] and _is_pic_abbreviation_label(data['name_zh'])
-    ):
-        raise ValueError('請填寫項目負責人全名，不要使用縮寫')
+    _raise_if_staff_names_abbrev(data['name_en'], data['name_zh'])
     data['email'] = (data.get('email') or '').strip() or None
     data['phone'] = (data.get('phone') or '').strip() or None
     data['department'] = normalize_staff_department(data.get('department'))

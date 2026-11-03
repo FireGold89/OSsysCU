@@ -549,7 +549,7 @@ const PortfolioCommon = {
         <div class="stat-card warning"><div class="stat-label">未配對</div><div class="stat-value">${data.unmatched ?? '—'}</div></div>
       </div>
       ${extra}
-      <p class="form-hint">確認後會 upsert 狀態／N Code／DLP 等欄；Cover 已有的 PM／日期不會覆寫。</p>`;
+      <p class="form-hint">確認後會 upsert 狀態／N Code／DLP 等欄；Cover 已有的項目負責人／日期不會覆寫。</p>`;
     modal.classList.add('open');
     if (typeof ModalA11y !== 'undefined') ModalA11y.onOpen(modal);
   },
@@ -589,7 +589,7 @@ const PortfolioCommon = {
     const sel = document.getElementById(selId);
     if (!sel) return;
     const keep = current || sel.value || '';
-    sel.innerHTML = '<option value="">全部 PM</option>';
+    sel.innerHTML = '<option value="">全部項目負責人</option>';
     (pms || []).forEach((pm) => {
       sel.innerHTML += `<option value="${escHtml(pm)}">${escHtml(pm)}</option>`;
     });

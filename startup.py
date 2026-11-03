@@ -7,7 +7,7 @@ from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
 APP_VERSION = 'v2-20261026-project-audit'
 
-# V2 試用環境標識（Zeabur Variables 可覆寫 DEPLOYMENT_TIER=production 還原為無標籤）
+# V2 試用環境標識（環境變數可覆寫 DEPLOYMENT_TIER=production 還原為無標籤）
 DEPLOYMENT_TIER = (os.environ.get('DEPLOYMENT_TIER') or 'v2').strip().lower()
 DEPLOYMENT_LABEL = 'V2 試用環境' if DEPLOYMENT_TIER == 'v2' else ''
 
@@ -97,7 +97,7 @@ def run():
             users = auth.load_users()
             print(f'[STARTUP] auth=enabled users={len(users)}')
         else:
-            print('[STARTUP] auth=disabled (no APP_*_PASSWORD; set Zeabur Variables in prod)')
+            print('[STARTUP] auth=disabled (no APP_*_PASSWORD; set env passwords in prod)')
     except Exception as e:
         print(f'[STARTUP] auth config warning: {e}')
 

@@ -1,6 +1,6 @@
 # mossys.xyz 运维速查
 
-生产：**https://mossys.xyz**（阿里云香港轻量 · `43.103.44.4`）。V2 发版以本环境为准，勿与 Zeabur 共用同一 SQLite。
+生产：**https://mossys.xyz**（阿里云香港轻量 · `43.103.44.4`）。V2 发版以本环境为准，勿与其他环境共用同一 SQLite。
 
 ## 推荐流程（本机 → GitHub → 阿里云）
 

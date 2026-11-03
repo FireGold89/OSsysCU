@@ -32,6 +32,9 @@ _WRITABLE = (
     'dlp_expiry_date',
 )
 
+# Excel／Cover 欄 PM 與工程項目 person_in_charge 為同一語意（項目負責人）
+_PIC_SQL = "TRIM(COALESCE(NULLIF(TRIM(p.person_in_charge), ''), IFNULL(p.project_manager, '')))"
+
 _COVER_FILL_FIELDS = (
     ('project_manager', 'pm'),
     ('main_contract_commencement_date', 'commencement_date'),
@@ -63,6 +66,7 @@ _LIST_SQL = """
         p.project_name_en,
         p.project_name_zh,
         p.client,
+        p.person_in_charge,
         p.project_manager,
         p.main_contract_commencement_date,
         p.start_date,
@@ -104,7 +108,10 @@ def _row_to_item(row, include_subcons=False):
         'n_code': d.get('n_code') or '',
         'project_code': d.get('project_code') or '',
         'description': _project_description(d),
-        'pm': (d.get('project_manager') or '').strip(),
+        'pm': (
+            (d.get('person_in_charge') or '').strip()
+            or (d.get('project_manager') or '').strip()
+        ),
         'commencement_date': d.get('main_contract_commencement_date') or d.get('start_date'),
         'contract_completion_date': d.get('project_completion_date'),
         'pc_date': d.get('pc_cert_date'),
@@ -487,12 +494,28 @@ def _sync_sc_slots_from_subcontractors(conn, portfolio_id, project_id):
     }
 
 
+def _sync_project_person_fields(conn):
+    """person_in_charge 與 project_manager（Excel PM）雙向補齊，以全名為準。"""
+    n1 = conn.execute("""
+        UPDATE projects SET project_manager = person_in_charge
+        WHERE TRIM(IFNULL(person_in_charge, '')) != ''
+          AND TRIM(IFNULL(project_manager, '')) = ''
+    """).rowcount
+    n2 = conn.execute("""
+        UPDATE projects SET person_in_charge = project_manager
+        WHERE TRIM(IFNULL(project_manager, '')) != ''
+          AND TRIM(IFNULL(person_in_charge, '')) = ''
+    """).rowcount
+    return (n1 or 0) + (n2 or 0)
+
+
 def sync_from_system(actor=None):
     """P4：補列 + 衍生 PC/Defect Cert、Retention、DLP；空槽填分判名；保留手填狀態。"""
     base = ensure_rows_from_projects()
     stats = {
         'created': base['created'],
         'total': base['total'],
+        'person_fields_synced': 0,
         'portfolio_updated': 0,
         'pc_cert_synced': 0,
         'defect_cert_synced': 0,
@@ -504,6 +527,7 @@ def sync_from_system(actor=None):
         'projects_no_system_sc': 0,
     }
     conn = get_conn()
+    stats['person_fields_synced'] = _sync_project_person_fields(conn)
     rows = conn.execute("""
         SELECT
             pp.id,
@@ -629,11 +653,11 @@ def get_portfolio_by_project_id(project_id, include_subcons=True):
 
 
 def _pm_options(conn):
-    rows = conn.execute("""
-        SELECT DISTINCT TRIM(p.project_manager) AS pm
+    rows = conn.execute(f"""
+        SELECT DISTINCT {_PIC_SQL} AS pm
         FROM portfolio_projects pp
         JOIN projects p ON p.id = pp.project_id
-        WHERE TRIM(IFNULL(p.project_manager, '')) != ''
+        WHERE {_PIC_SQL} != ''
         ORDER BY pm COLLATE NOCASE
     """).fetchall()
     return [r['pm'] for r in rows]
@@ -658,7 +682,7 @@ def list_portfolio(status=None, pm=None, q=None, include_subcons=False):
         params.append(status_key)
     pm_key = (pm or '').strip()
     if pm_key:
-        where.append("TRIM(IFNULL(p.project_manager, '')) = ?")
+        where.append(f"{_PIC_SQL} = ?")
         params.append(pm_key)
     q_key = (q or '').strip()
     if q_key:

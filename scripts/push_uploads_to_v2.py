@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""上傳本機 uploads/ zip 至 Zeabur V2（admin 登入 + RESTORE_TOKEN）"""
+"""上傳本機 uploads/ zip 至 V2 環境（admin 登入 + RESTORE_TOKEN）"""
 import io
 import os
 import sys
@@ -9,7 +9,7 @@ import requests
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOADS_DIR = os.path.join(ROOT, 'uploads')
-BASE_URL = os.environ.get('OSSYS_V2_URL', 'https://ossys-v2.zeabur.app').rstrip('/')
+BASE_URL = os.environ.get('OSSYS_V2_URL', 'https://mossys.xyz').rstrip('/')
 
 
 def _load_dotenv():

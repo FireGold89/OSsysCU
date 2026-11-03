@@ -119,7 +119,7 @@
 
 ### 新增
 - **操作紀錄**：管理員帳號可在側欄查看已登入用戶的新增／修改／刪除／上傳（路徑與時間，不含密碼）。上線前的操作沒有回溯。
-- **登入角色**：`admin` 全權；`qs`／`user` 可改業務但不可進系統設定與操作紀錄；`finance` 只可改 Master List；`viewer` 只讀。帳號仍由 Zeabur 環境變數設定，負責人名單上的角色標籤不是登入帳號。
+- **登入角色**：`admin` 全權；`qs`／`user` 可改業務但不可進系統設定與操作紀錄；`finance` 只可改 Master List；`viewer` 只讀。帳號仍可由環境變數或系統內建帳號設定，負責人名單上的角色標籤不是登入帳號。
 
 `APP_VERSION`: `v2-20261020-chrome-cache` · 分支 `v2/portfolio`
 
@@ -193,7 +193,7 @@
 `APP_VERSION`: `v2-20261016-perf-pass2` · 分支 `v2/portfolio`
 
 ### 改善
-- **Zeabur 卡頓（非加機器）**：首屏 `GET /projects?lite=1` 略過彙總子查詢，背景再拉完整列表；切項先用下拉快取即時更新 UI；分判／VO 登記 API 去重；`payment_records`／`subcontractors` 索引；ISO 改打 `GET /app-config`（非 admin 不再 403 `/settings`）。
+- **舊主機卡頓（非加機器）**：首屏 `GET /projects?lite=1` 略過彙總子查詢，背景再拉完整列表；切項先用下拉快取即時更新 UI；分判／VO 登記 API 去重；`payment_records`／`subcontractors` 索引；ISO 改打 `GET /app-config`（非 admin 不再 403 `/settings`）。
 
 `APP_VERSION`: `v2-20261016-switch-fast` · 分支 `v2/portfolio`
 
@@ -223,7 +223,7 @@
 `APP_VERSION`: `v2-20261015-gunicorn2` · 分支 `v2/portfolio`
 
 ### 改善
-- **Zeabur V2 並發**：`start.sh` 支援 `GUNICORN_WORKERS`／`GUNICORN_THREADS`；`DEPLOYMENT_TIER=v2` 且未设 workers 时 **默认 2 workers**（V1 仍为 1）。
+- **V2 並發**：`start.sh` 支援 `GUNICORN_WORKERS`／`GUNICORN_THREADS`；`DEPLOYMENT_TIER=v2` 且未设 workers 时 **默认 2 workers**（V1 仍为 1）。
 
 `APP_VERSION`: `v2-20261015-overview-perf` · 分支 `v2/portfolio`
 
@@ -253,7 +253,7 @@
 `APP_VERSION`: `v2-20261013-iso-index` · 分支 `v2/portfolio`
 
 ### 修正
-- **Zeabur 啟動崩潰**：`init_db` 不再重建 ISO 槽位 UNIQUE 索引（v4 已允許同槽多附件）；避免 `idx_iso_doc_unique_slot` IntegrityError → Gunicorn worker failed to boot。
+- **容器啟動崩潰**：`init_db` 不再重建 ISO 槽位 UNIQUE 索引（v4 已允許同槽多附件）；避免 `idx_iso_doc_unique_slot` IntegrityError → Gunicorn worker failed to boot。
 
 `APP_VERSION`: `v2-20261013-proj-switch` · 分支 `v2/portfolio`
 
@@ -268,7 +268,7 @@
 `APP_VERSION`: `v2-20261006-signoff-lo` · 分支 `v2/portfolio`
 
 ### 修正
-- **會簽 PDF（V2/Zeabur）**：Docker 安裝 LibreOffice headless + 字型，供 `SIGNOFF_PDF_ENGINE=word` 時由 Template.docx 轉 PDF
+- **會簽 PDF（V2 容器）**：Docker 安裝 LibreOffice headless + 字型，供 `SIGNOFF_PDF_ENGINE=word` 時由 Template.docx 轉 PDF
 
 `APP_VERSION`: `v2-20261006-text-scale` · 分支 `v2/portfolio`
 
@@ -322,12 +322,12 @@
 `APP_VERSION`: `v2-20260925-ghcr` · 分支 `v2/portfolio`
 
 ### 改善
-- **Zeabur V2 部署**：Dockerfile 改回 main 最小映像；GitHub Actions 推 `ghcr.io/firegold89/ossyscu-v2` 供 Zeabur「Docker Image」拉取（繞過 registry-oci ImagePull 失敗）
+- **V2 容器部署**：Dockerfile 改回 main 最小映像；GitHub Actions 推 `ghcr.io/firegold89/ossyscu-v2` 供主機「Docker Image」拉取（繞過 registry-oci ImagePull 失敗）
 
 `APP_VERSION`: `v2-20260925-docker-slim` · 分支 `v2/portfolio`
 
 ### 改善
-- **Zeabur 部署**：精簡 Docker 映像（移除 LibreOffice Java、Noto CJK；擴充 `.dockerignore`；明確 COPY 清單），緩解 ImagePullFailed
+- **容器部署**：精簡 Docker 映像（移除 LibreOffice Java、Noto CJK；擴充 `.dockerignore`；明確 COPY 清單），緩解 ImagePullFailed
 
 `APP_VERSION`: `v2-20260912-dashboard-perf` · 分支 `v2/portfolio`
 
@@ -347,7 +347,7 @@
 `APP_VERSION`: `v2-20260911-signoff-deploy` · 分支 `v2/portfolio`
 
 ### 修正
-- **項目登記·會簽出表**：會簽 Template 納入 `assets/signoff/` 隨部署；Zeabur 以 LibreOffice 將套印 docx 轉 PDF（與本機 Word 預覽一致）
+- **項目登記·會簽出表**：會簽 Template 納入 `assets/signoff/` 隨部署；Linux 容器以 LibreOffice 將套印 docx 轉 PDF（與本機 Word 預覽一致）
 
 `APP_VERSION`: `v2-20260911-sc-fac-p2-gap` · 分支 `v2/portfolio`
 
@@ -667,7 +667,7 @@
 `APP_VERSION`: `20260816-auth`
 
 ### 新增
-- **简易登入**：Flask Session；Zeabur 设 `SECRET_KEY` + `APP_ADMIN_PASSWORD` / `APP_LOGIN_PASSWORD`；`admin` 可进系统设定与还原；`qs` 日常 QS；未设密码时本机仍免登入
+- **简易登入**：Flask Session；生产环境设 `SECRET_KEY` + `APP_ADMIN_PASSWORD` / `APP_LOGIN_PASSWORD`；`admin` 可进系统设定与还原；`qs` 日常 QS；未设密码时本机仍免登入
 
 `APP_VERSION`: `20260815-revert-infer`
 
@@ -1362,7 +1362,7 @@
 - JS 加版本參數強制刷新快取
 
 ### 修正
-- Master List 編輯／配對：改以數字 id 呼叫 API，避免報價編號含 `/` 在 Zeabur 上 404
+- Master List 編輯／配對：改以數字 id 呼叫 API，避免報價編號含 `/` 在線上路由 404
 
 ### 新增（Master List Phase 2 試行）
 - 財務明細子表：主分判合約、業主糧期／發票、分判付款、支票
@@ -1475,6 +1475,6 @@
 ## 部署核對清單
 
 1. `git push origin main`
-2. 等待 Zeabur 重建（約 1–3 分鐘）
-3. `GET https://ossys.zeabur.app/api/system/status` → 確認 `app_version`
+2. 等待容器重建（約 1–3 分鐘）
+3. `GET https://mossys.xyz/api/system/status` → 確認 `app_version`
 4. 瀏覽器 **Ctrl+F5** 強制重新整理靜態資源

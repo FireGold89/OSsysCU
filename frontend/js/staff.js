@@ -17,6 +17,12 @@ const StaffRoster = {
     return { roles: this.roles, departments: this.departments };
   },
 
+  _looksLikeLatinAbbrev(name) {
+    const s = (name || '').trim();
+    if (!s || /\s/.test(s) || /[\u4e00-\u9fff]/.test(s)) return false;
+    return s.length >= 2 && s.length <= 4 && /^[A-Za-z]+$/.test(s);
+  },
+
   normalizeRoleId(roleId) {
     const aliases = {
       admin: 'mgr',
@@ -99,7 +105,11 @@ const StaffRoster = {
 
   displayName(row) {
     if (!row) return '—';
-    return row.person_name || row.name_en || row.name_zh || '—';
+    if (row.person_name) return row.person_name;
+    const zh = (row.name_zh || '').trim();
+    const en = (row.name_en || '').trim();
+    if (zh && en) return `${zh} · ${en}`;
+    return en || zh || '—';
   },
 
   nameFor(code) {
@@ -302,8 +312,11 @@ const StaffRoster = {
       toast('請填寫項目負責人全名（英文或中文）', 'warning');
       return;
     }
-    if ((body.name_en && body.name_en.length <= 4 && !body.name_en.includes(' '))
-      || (body.name_zh && body.name_zh.length > 0 && body.name_zh.length <= 2)) {
+    if (StaffRoster._looksLikeLatinAbbrev(body.name_en) && !body.name_zh) {
+      toast('英文請填全名（含空格）或改填中文姓名', 'warning');
+      return;
+    }
+    if (StaffRoster._looksLikeLatinAbbrev(body.name_en) && StaffRoster._looksLikeLatinAbbrev(body.name_zh)) {
       toast('請填寫全名，不要使用縮寫（如 EC、KM）', 'warning');
       return;
     }

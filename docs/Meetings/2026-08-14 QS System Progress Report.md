@@ -2,7 +2,7 @@
 
 > **會議日期**：2026-08-14  
 > **系統版本**：`20260813-eng-cat`（核對：`GET /api/system/status` → `app_version`）  
-> **生產環境**：https://ossys.zeabur.app  
+> **生產環境**（報告當時）：舊主機（已下線）；現行為 https://mossys.xyz  
 > **對象**：管理層、QS 使用者  
 > **資料來源**：`docs/` 系統分析文件（Requirements／Workflows／Architecture／Decisions 對應內容）、`PENDING.md`、code 唯讀查證  
 > **機密**：本文不含密碼、Token 值、客戶敏感資料
@@ -255,7 +255,7 @@ Payment Status Excel 匯入
 | **QS 負責人** | 業務規則確認、BOQ 決策、Excel 對照 |
 | **管理層** | 優先序、上線範圍、登入政策 |
 | **開發** | Code 實作、公式統一、文件更新 |
-| **運維** | Zeabur 部署、Token 設定狀態（不記錄 Token 值） |
+| **運維** | 容器部署、Token 設定狀態（不記錄 Token 值） |
 
 ---
 

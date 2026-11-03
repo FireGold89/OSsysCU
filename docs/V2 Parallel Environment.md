@@ -1,7 +1,7 @@
 # V2 並行環境（Staging / 試用）
 
-> **V1 Production**：`main` → https://ossys.zeabur.app  
-> **V2 Staging**：`v2/portfolio` → https://ossys-v2.zeabur.app
+> **現行生產**：`v2/portfolio` → https://mossys.xyz（阿里雲）  
+> **第一版**：`main` → 舊正式環境（已下線）
 
 ---
 
@@ -70,19 +70,9 @@ GET http://localhost:5001/api/system/status
 
 ---
 
-## Zeabur 第二套（Staging）
+## 生產部署（現行）
 
-1. Zeabur 新建 **Service**（同一 GitHub repo `FireGold89/OSsysCU`）
-2. **部署分支**：`v2/portfolio`（勿用 `main`）
-3. **Volume**：新建獨立 Volume 掛載 `/data`
-4. **Variables**（複製 V1，另確認）：
-   - `DEPLOYMENT_TIER=v2`
-   - `SECRET_KEY`（可與 V1 不同）
-   - 登入帳密、可選 `RESTORE_TOKEN`
-5. 自訂域名例：`ossys-v2.zeabur.app`
-6. **資料初始化**：Settings 上傳 V1 備份之 `qs_system.db`，或空庫 + 匯入 Ref Excel
-
-推送 V2 分支才會觸發 V2 重建；**push `main` 不影響 V2 Service**。
+見 **`docs/MOSSYS-OPS.md`**：push `v2/portfolio` → 阿里雲 `deploy_aliyun_hk.sh`，資料在 `/data`，環境檔 `/opt/ossys.env`。
 
 ---
 
@@ -91,8 +81,8 @@ GET http://localhost:5001/api/system/status
 ```
 1. 在 OSsysCU-v2 開發 Portfolio / 大功能
 2. commit 到 v2/portfolio
-3. push → V2 Zeabur 自動部署 → QS 試用
-4. 試穩後 merge v2/portfolio → main → V1 上線
+3. push → mossys 部署腳本重建 → QS 試用
+4. 試穩後按需合併或維持 `v2/portfolio` 為生產分支
 ```
 
 V1 緊急修復：只在 `OSsysCU`（main）改，cherry-pick 到 `v2/portfolio` 如需同步。

@@ -52,7 +52,7 @@ cat > "$DEST_DIR/MANIFEST.json" <<EOF
   "git_branch": "$BRANCH",
   "backup_time": "$(date -Iseconds)",
   "db_included": $DB_COPIED,
-  "production": "https://ossys.zeabur.app"
+  "production": "https://mossys.xyz"
 }
 EOF
 

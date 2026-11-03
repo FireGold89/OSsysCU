@@ -104,7 +104,7 @@ def _enforce_idle_and_touch(user):
 
 
 def _clean_env_secret(val):
-    """去除 Zeabur 粘贴时常见的前后空白或引号"""
+    """去除环境变量粘贴时常见的前后空白或引号"""
     s = (val or '').strip()
     if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
         s = s[1:-1]
@@ -143,7 +143,7 @@ def _parse_auth_users():
     qs_user = _clean_env_secret(os.environ.get('APP_LOGIN_USER', 'qs')) or 'qs'
     qs_pass = _clean_env_secret(os.environ.get('APP_LOGIN_PASSWORD', ''))
 
-    # 只设 APP_LOGIN_PASSWORD 时，admin 共用同一密码（Zeabur 常见遗漏）
+    # 只设 APP_LOGIN_PASSWORD 时，admin 共用同一密码（部署时常见遗漏）
     if not admin_pass and qs_pass:
         admin_pass = qs_pass
 

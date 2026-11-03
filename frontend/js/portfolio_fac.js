@@ -19,7 +19,7 @@ const PortfolioFac = {
     { id: 'n_code', label: 'N Code', locked: true },
     { id: 'project_code', label: 'Project Code', locked: true },
     { id: 'description', label: '項目描述', locked: true },
-    { id: 'pm', label: 'PM' },
+    { id: 'pm', label: '項目負責人' },
     { id: 'commencement_date', label: '開工' },
     { id: 'contract_completion_date', label: '合約完工' },
     { id: 'pc_date', label: 'PC Date' },
@@ -480,7 +480,7 @@ const PortfolioFac = {
         <button type="button" class="btn btn-secondary btn-sm" onclick="PortfolioCommon.openScFac(${it.project_id})">分判 FAC 總表</button>
       </div>
       <div class="pf-drawer-meta">
-        <div><span class="pf-drawer-label">PM</span>${PortfolioCommon.dash(it.pm)}</div>
+        <div><span class="pf-drawer-label">項目負責人</span>${PortfolioCommon.dash(it.pm)}</div>
         <div><span class="pf-drawer-label">Client</span>${PortfolioCommon.dash(it.client)}</div>
         <div><span class="pf-drawer-label">開工</span>${PortfolioCommon.dash(it.commencement_date)}</div>
         <div><span class="pf-drawer-label">合約完工</span>${PortfolioCommon.dash(it.contract_completion_date)}</div>

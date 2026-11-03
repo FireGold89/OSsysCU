@@ -355,7 +355,7 @@ const DocViewer = {
         loading.style.display = 'none';
         if (errMsg) {
           errMsg.textContent = r.status === 404
-            ? '文件不在伺服器（Zeabur 需掛載 Volume）'
+            ? '文件不在伺服器（需掛載資料目錄 /data）'
             : `伺服器回應 ${r.status}，可嘗試新分頁開啟`;
         }
         errBox.style.display = '';
@@ -804,7 +804,7 @@ function updateDashProjectHero(project, ipPeriod) {
 /** 工程項目負責人（顯示全名） */
 function fmtProjectPerson(p) {
   if (!p) return '—';
-  const name = (p.person_in_charge || '').trim();
+  const name = (p.person_in_charge || p.project_manager || '').trim();
   return name ? escHtml(name) : '—';
 }
 

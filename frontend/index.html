@@ -1495,7 +1495,7 @@
               <button type="button" class="portfolio-tab" data-status="all" onclick="PortfolioFac.setStatus('all')">全部</button>
             </div>
             <select class="form-input master-filter pf-toolbar-pm" id="pfPmFilter" onchange="PortfolioFac.load()">
-              <option value="">全部 PM</option>
+              <option value="">全部項目負責人</option>
             </select>
             <input type="text" class="form-input master-search pf-toolbar-search" id="pfSearch" placeholder="搜尋 Project / N Code / 業主…" onkeydown="if(event.key==='Enter')PortfolioFac.load()">
             <button class="btn btn-secondary btn-sm" onclick="PortfolioFac.load()">搜尋</button>
@@ -1559,7 +1559,7 @@
                   <th class="portfolio-sticky pf-sticky-0" data-col="n_code">N Code</th>
                   <th class="portfolio-sticky pf-sticky-1" data-col="project_code">Project Code</th>
                   <th class="portfolio-sticky pf-sticky-2" data-col="description">項目描述</th>
-                  <th data-col="pm">PM</th>
+                  <th data-col="pm">項目負責人</th>
                   <th data-col="commencement_date">開工</th>
                   <th data-col="contract_completion_date">合約完工</th>
                   <th data-col="pc_date">PC Date</th>
@@ -1597,7 +1597,7 @@
               <button type="button" class="portfolio-tab" data-status="all" onclick="PortfolioProgress.setStatus('all')">全部</button>
             </div>
             <select class="form-input master-filter pf-toolbar-pm" id="ppPmFilter" onchange="PortfolioProgress.load()">
-              <option value="">全部 PM</option>
+              <option value="">全部項目負責人</option>
             </select>
             <input type="text" class="form-input master-search pf-toolbar-search" id="ppSearch" placeholder="搜尋 Project / 業主…" onkeydown="if(event.key==='Enter')PortfolioProgress.load()">
             <button class="btn btn-secondary btn-sm" onclick="PortfolioProgress.load()">搜尋</button>
@@ -1626,7 +1626,7 @@
                   <th class="portfolio-sticky pp-sticky-0">Project Code</th>
                   <th class="portfolio-sticky pp-sticky-1">描述</th>
                   <th>Client</th>
-                  <th>PM</th>
+                  <th>項目負責人</th>
                   <th>開工</th>
                   <th>完工</th>
                   <th>PC</th>
@@ -1696,11 +1696,11 @@
           </div>
           <div class="card ei-editor-card">
             <div class="card-header">
-              <div class="card-title">PM 補欄 · 一鍵出表</div>
+              <div class="card-title">項目負責人補欄 · 一鍵出表</div>
               <div class="card-sub">全部欄位可編輯 · 日期可留空</div>
             </div>
             <div id="eiEditor" class="ei-editor-body">
-              <p class="text-muted">選擇左側項目以編輯 PM 欄位並出表</p>
+              <p class="text-muted">選擇左側項目以編輯項目負責人欄位並出表</p>
             </div>
           </div>
         </div>
@@ -1884,7 +1884,7 @@
             <p><strong>項目負責人</strong>名單以 Master List「項目負責人」欄為準自動列出；「建立對應」可補充電郵、部門等聯絡資料供工程項目選用。</p>
             <p>已略過縮寫（如 jy、km）及多人並列（如 Joe Yu, Neelson）等非正式寫法；同一負責人多種拼寫會合併統計。</p>
             <p>報價編號尾碼（如 <code>/kp</code>）僅為編號規則，<strong>不等同</strong>現時跟進人；同一報價可由不同負責人接手。</p>
-            <p><strong>權限角色</strong>是負責人名單上的標籤。真正登入權限以 Zeabur 帳號為準：管理員可看「操作紀錄」與系統設定；QS 帳號可改地盤資料；財務只可改 Master List；唯讀不可寫入。</p>
+            <p><strong>權限角色</strong>是負責人名單上的標籤。真正登入權限以伺服器設定的系統帳號為準：管理員可看「操作紀錄」與系統設定；QS 帳號可改地盤資料；財務只可改 Master List；唯讀不可寫入。</p>
           </div>
         </div>
       </div>
@@ -1894,7 +1894,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">帳號與權限</div>
-            <div class="card-sub">新增人員並設定每個範圍是不可見、只看或可編輯。Zeabur 環境變數裡的管理員帳號不在此表，仍可登入。</div>
+            <div class="card-sub">新增人員並設定每個範圍是不可見、只看或可編輯。環境變數設定的管理員帳號不在此表，仍可登入。</div>
             <button type="button" class="btn btn-primary btn-sm" onclick="AccessAdmin.openCreate()">新增帳號</button>
           </div>
           <div class="table-wrap">
@@ -2052,12 +2052,12 @@
           </div>
           <div class="card-body">
             <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px">
-              上傳本機 <code>qs_system.db</code> 覆蓋線上資料（需管理員登入 + Zeabur 設定的 <code>RESTORE_TOKEN</code>）。
+              上傳本機 <code>qs_system.db</code> 覆蓋線上資料（需管理員登入 + 伺服器設定的 <code>RESTORE_TOKEN</code>）。
             </p>
             <div id="settingDbStatus" style="font-size:12px;color:var(--text-muted);margin-bottom:12px">載入中…</div>
             <div class="form-group">
               <label for="settingRestoreToken" class="form-label">RESTORE_TOKEN</label>
-              <input type="password" class="form-input" id="settingRestoreToken" placeholder="與 Zeabur Variables 相同">
+              <input type="password" class="form-input" id="settingRestoreToken" placeholder="與伺服器 RESTORE_TOKEN 相同">
             </div>
             <div class="form-group">
               <label for="settingRestoreDbFile" class="form-label">qs_system.db</label>
@@ -3636,14 +3636,15 @@
       <input type="hidden" id="staffModalId">
       <div class="form-row">
         <div class="form-group">
-          <label for="staffNameEn" class="form-label">英文姓名 <span class="required">*</span></label>
-          <input type="text" class="form-input" id="staffNameEn" placeholder="例：Dennis Chan / Katie Puk">
+          <label for="staffNameEn" class="form-label">英文姓名</label>
+          <input type="text" class="form-input" id="staffNameEn" placeholder="例：Dennis Chan">
         </div>
         <div class="form-group">
           <label for="staffNameZh" class="form-label">中文姓名</label>
-          <input type="text" class="form-input" id="staffNameZh" placeholder="（選填）">
+          <input type="text" class="form-input" id="staffNameZh" placeholder="例：余振宇（可與英文並存）">
         </div>
       </div>
+      <p class="form-hint" style="margin:-4px 0 12px">英文或中文至少填一項全名；勿用報價尾碼（如 jy、kp）。</p>
       <div class="form-row">
         <div class="form-group">
           <label for="staffRole" class="form-label">權限角色</label>

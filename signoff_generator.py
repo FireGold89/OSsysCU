@@ -998,7 +998,7 @@ def _lo_compact_enabled() -> bool:
 
 
 def _patch_docx_for_linux_pdf(docx_bytes: bytes) -> bytes:
-    """Zeabur：字型對應 + 方格字元；版面以 Ref/投標合約會簽表Template 為準。"""
+    """Linux 容器：字型對應 + 方格字元；版面以 Ref/投標合約會簽表Template 為準。"""
     if sys.platform == 'win32':
         return docx_bytes
     in_buf = BytesIO(docx_bytes)
@@ -1070,7 +1070,7 @@ def _docx_bytes_to_pdf_win(docx_bytes: bytes) -> bytes | None:
 
 
 def _docx_bytes_to_pdf_libreoffice(docx_bytes: bytes) -> bytes | None:
-    """Linux Docker（Zeabur）：LibreOffice headless 轉 PDF，版面接近本機 Word。"""
+    """Linux Docker：LibreOffice headless 轉 PDF，版面接近本機 Word。"""
     docx_bytes = _patch_docx_for_linux_pdf(docx_bytes)
     for binary in ('libreoffice', 'soffice'):
         if not shutil.which(binary):

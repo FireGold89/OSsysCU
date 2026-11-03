@@ -1,4 +1,4 @@
-"""打包本機 uploads/ 為 zip 上傳至 Zeabur（需 RESTORE_TOKEN）"""
+"""打包本機 uploads/ 為 zip 上傳至線上（需 RESTORE_TOKEN）"""
 import io
 import os
 import sys
@@ -9,7 +9,7 @@ import requests
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(REPO, '.env')
 UPLOADS_DIR = os.path.join(REPO, 'uploads')
-PROD_URL = os.environ.get('PROD_URL', 'https://ossys.zeabur.app')
+PROD_URL = os.environ.get('PROD_URL', 'https://mossys.xyz')
 
 
 def load_env():

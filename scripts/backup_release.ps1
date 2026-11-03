@@ -98,7 +98,7 @@ $Manifest = @{
     git_branch  = $Branch
     backup_time = (Get-Date).ToString("o")
     db_included = $DbCopied
-    production  = "https://ossys.zeabur.app"
+    production  = "https://mossys.xyz"
 } | ConvertTo-Json -Depth 3
 
 $Manifest | Set-Content (Join-Path $DestDir "MANIFEST.json") -Encoding UTF8

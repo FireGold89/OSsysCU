@@ -1,4 +1,4 @@
-# V2 映像推至 GHCR — Zeabur 以「Docker Image」部署，繞過 registry-oci ImagePull 失敗
+# V2 映像推至 GHCR — 主機以「Docker Image」拉取，繞過 registry-oci ImagePull 失敗
 name: V2 Docker GHCR
 
 on:
