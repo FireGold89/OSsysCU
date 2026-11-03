@@ -6,6 +6,9 @@
 
 `APP_VERSION`: `v2-20261026-project-audit` · 分支 `v2/portfolio`
 
+### 變更
+- **阿里云部署**：`deploy_aliyun_hk.sh` 改為 `git fetch` + `reset --hard`；容器僅綁 `127.0.0.1:8080`；`MOSSYS-OPS.md` 補本机→GitHub→阿里云流程。
+
 ### 新增
 - **進行中項目、N 項目結算總表**：每列顯示最後更新人與最後更新日期。在這兩頁改資料、匯入，或在工程項目儲存時會記下當時登入者。
 - **部署腳本**：`scripts/deploy_aliyun_hk.sh`、`scripts/setup_caddy_aliyun.sh`（阿里云香港 + Caddy HTTPS）。

@@ -37,7 +37,8 @@ else
   cd "$REPO_DIR"
   $SUDO git fetch origin "$BRANCH"
   $SUDO git checkout "$BRANCH"
-  $SUDO git pull --ff-only origin "$BRANCH"
+  # 与 GitHub 完全一致，避免服务器本地改动导致 pull 显示已最新却未拉到新 commit
+  $SUDO git reset --hard "origin/$BRANCH"
 fi
 
 cd "$REPO_DIR"
@@ -48,13 +49,15 @@ if $SUDO docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 fi
 
 $SUDO docker run -d --name "$CONTAINER_NAME" --restart unless-stopped \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   -v /data:/data \
   --env-file "$ENV_FILE" \
   "$IMAGE_NAME"
 
 sleep 2
+echo "Git: $(git -C "$REPO_DIR" log -1 --oneline)"
+curl -s "http://127.0.0.1:8080/api/system/status" || true
+echo
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)"
-echo "本机 HTTP 状态: ${code:-failed}"
+echo "本机 HTTP 状态: ${code:-failed}（生产请用 https://mossys.xyz）"
 $SUDO docker logs "$CONTAINER_NAME" --tail 20
-echo "若 code 为 200/302 且防火墙已放行 8080，浏览器打开: http://$(curl -s ifconfig.me 2>/dev/null || echo '公网IP'):8080"

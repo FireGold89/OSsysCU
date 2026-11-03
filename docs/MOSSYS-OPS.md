@@ -1,16 +1,34 @@
 # mossys.xyz 运维速查
 
-生产：https://mossys.xyz · 服务器：阿里云香港轻量 · IP：`43.103.44.4`
+生产：**https://mossys.xyz**（阿里云香港轻量 · `43.103.44.4`）。V2 发版以本环境为准，勿与 Zeabur 共用同一 SQLite。
+
+## 推荐流程（本机 → GitHub → 阿里云）
+
+1. 本机：在 `v2/portfolio` 改代码 → 更新 `startup.py` / `VERSION` / `CHANGELOG.md`（有发版时）→ **commit + push**。
+2. 阿里云：拉齐 GitHub 并重建容器（见下）。**不要**覆盖 `/opt/ossys.env` 或 `/data`。
+3. 验收：`curl -s https://mossys.xyz/api/system/status` → `app_version`、`auth_enabled: true`。
 
 ## 日常部署（代码更新）
 
-本机 push `v2/portfolio` 后，SSH：
+**一键（服务器 Workbench / SSH）：**
+
+```bash
+sudo bash /opt/ossys/scripts/deploy_aliyun_hk.sh
+```
+
+**本机 PowerShell（push 后）：**
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 "sudo bash /opt/ossys/scripts/deploy_aliyun_hk.sh"
+```
+
+**手动等价命令**（须 `fetch` + `reset --hard`，勿只 `pull` 而不 fetch，否则可能仍停在旧 commit）：
 
 ```bash
 cd /opt/ossys
 sudo git fetch origin v2/portfolio
 sudo git checkout v2/portfolio
-sudo git pull --ff-only origin v2/portfolio
+sudo git reset --hard origin/v2/portfolio
 sudo docker build -t ossys-v2 .
 sudo docker rm -f ossys
 sudo docker run -d --name ossys --restart unless-stopped \
@@ -19,8 +37,6 @@ sudo docker run -d --name ossys --restart unless-stopped \
   --env-file /opt/ossys.env \
   ossys-v2
 ```
-
-验收：`curl -s https://mossys.xyz/api/system/status` → `app_version`、`auth_enabled: true`。
 
 ## 环境变量
 
