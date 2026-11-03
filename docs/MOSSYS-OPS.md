@@ -53,16 +53,39 @@ scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .
 
 ## API 压测（可重复）
 
-脚本 `scripts/mossys_load_smoke.py`：在 **ossys 容器内**用 env 登入，模拟首屏／切项目／并行 GET；单请求 **≥22s** 会标 `slow`（对应前端逾时）。**不能代替浏览器点 UI**，只查后端是否过慢。
+脚本在 Git 仓库 **`scripts/mossys_load_smoke.py`**（宿主机 `/opt/ossys/scripts/…`）。**容器里没有 `/opt/ossys`**（镜像只有 `/app`，未打包 scripts），须先 **`docker cp` 进容器** 再 `docker exec` 执行。脚本在容器内用 env 登入，模拟首屏／切项目／并行 GET；单请求 **≥22s** 会标 `slow`。**不能代替浏览器点 UI**。
 
-```powershell
-# 本机（仓库根目录）
-scp -i $env:USERPROFILE\.ssh\aliyun-ossys .\scripts\mossys_load_smoke.py admin@43.103.44.4:/tmp/
-ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 `
-  "sudo docker cp /tmp/mossys_load_smoke.py ossys:/tmp/ && sudo docker exec ossys python3 /tmp/mossys_load_smoke.py https://mossys.xyz"
+**方法二 — 阿里云 Workbench / SSH（推荐）**
+
+```bash
+# 一键（需仓库已 pull 到含 mossys_load_smoke.py 的 commit）
+sudo bash /opt/ossys/scripts/run_mossys_smoke.sh
 ```
 
-可同时测本机 8080 与 HTTPS：`... mossys_load_smoke.py http://127.0.0.1:8080 https://mossys.xyz`。期望输出含 `all OK under 22s`。
+或手动：
+
+```bash
+sudo docker cp /opt/ossys/scripts/mossys_load_smoke.py ossys:/tmp/mossys_load_smoke.py
+sudo docker exec ossys python3 /tmp/mossys_load_smoke.py https://mossys.xyz
+```
+
+若 `No such file`：在宿主机执行 `ls /opt/ossys/scripts/mossys_load_smoke.py`；没有则 `cd /opt/ossys && sudo git fetch origin v2/portfolio && sudo git reset --hard origin/v2/portfolio`。
+
+可同时测本机 8080 与 HTTPS：
+
+```bash
+sudo docker exec ossys python3 /tmp/mossys_load_smoke.py http://127.0.0.1:8080 https://mossys.xyz
+```
+
+期望终端输出含 **`all OK under 22s`**。
+
+**方法一 — 本机 PowerShell**
+
+```powershell
+scp -i $env:USERPROFILE\.ssh\aliyun-ossys .\scripts\mossys_load_smoke.py admin@43.103.44.4:/tmp/
+ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 `
+  "sudo docker cp /tmp/mossys_load_smoke.py ossys:/tmp/mossys_load_smoke.py && sudo docker exec ossys python3 /tmp/mossys_load_smoke.py https://mossys.xyz"
+```
 
 ## 故障排查
 
