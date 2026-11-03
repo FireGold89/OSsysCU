@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系統監控</title>
+  <script>
+    (function () {
+      var saved = localStorage.getItem('qs_theme');
+      var theme = saved === 'light' || saved === 'dark' ? saved
+        : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="stylesheet" href="css/admin.css?v=__APP_BUILD__-ops2">
+</head>
+<body>
+  <main class="ops-shell">
+    <header class="ops-top">
+      <div>
+        <h1>系統監控</h1>
+        <p class="ops-sub">僅管理員 · 不在 QS 主介面顯示</p>
+      </div>
+      <div class="ops-actions">
+        <label class="ops-auto" id="opsAutoWrap" hidden>
+          <input type="checkbox" id="opsAuto"> 每 30 秒更新
+        </label>
+        <button type="button" class="ops-btn" id="opsTheme">切換主題</button>
+        <button type="button" class="ops-btn" id="opsRefresh" hidden>重新整理</button>
+      </div>
+    </header>
+    <p class="ops-msg" id="opsMsg">載入中…</p>
+    <section class="ops-grid" id="opsGrid" hidden></section>
+    <section class="ops-card" id="opsOcr" hidden>
+      <h2>OCR</h2>
+      <p class="ops-sub" id="opsOcrMode"></p>
+      <div id="opsOcrList"></div>
+    </section>
+    <section class="ops-card" id="opsWrites" hidden>
+      <h2>最近寫入</h2>
+      <p class="ops-sub" id="opsWriteHint"></p>
+      <div class="ops-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>時間</th>
+              <th>帳號</th>
+              <th>方法</th>
+              <th>路徑</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody id="opsWriteBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="js/ops_monitor.js?v=__APP_BUILD__-ops2"></script>
+</body>
+</html>

@@ -11,6 +11,7 @@
 - **运维**：`scripts/mossys_load_smoke.py` 可重复 API 压测（22s 门槛）；宿主机 `run_mossys_smoke.sh` + `MOSSYS-OPS.md` 说明须 `docker cp` 进容器。
 
 ### 新增
+- **系統監控**：獨立頁 `/admin`（不出現在 QS 主介面）。沿用現有登入，僅管理員可看版本、資料庫修改時間、上傳容量、登入閒置、OCR 就緒、還原權杖是否已設定，以及最近寫入（失敗標色）；可每 30 秒自動更新。
 - **進行中項目、N 項目結算總表**：每列顯示最後更新人與最後更新日期。在這兩頁改資料、匯入，或在工程項目儲存時會記下當時登入者。
 - **部署腳本**：`scripts/deploy_aliyun_hk.sh`、`scripts/setup_caddy_aliyun.sh`（阿里云香港 + Caddy HTTPS）。
 

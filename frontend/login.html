@@ -135,7 +135,11 @@
     const API = `${window.location.origin}/api`;
     const VAULT_SKIP_KEY = 'qs_vault_skip';
     const params = new URLSearchParams(window.location.search);
-    const nextUrl = params.get('next') || '/';
+    function safeNext(raw) {
+      if (!raw || raw.charAt(0) !== '/' || raw.charAt(1) === '/' || raw.indexOf('\\') !== -1) return '/';
+      return raw;
+    }
+    const nextUrl = safeNext(params.get('next'));
 
     const vaultSkipPref = document.getElementById('vaultSkipPref');
     if (vaultSkipPref) {
@@ -219,7 +223,7 @@
         });
         const json = await r.json();
         if (json.success && json.data?.user) {
-          window.location.replace(nextUrl.startsWith('/') ? nextUrl : '/');
+          window.location.replace(nextUrl);
           return true;
         }
         if (json.success && json.data?.auth_required === false) {
@@ -257,7 +261,7 @@
         }
         btn.textContent = '開啟金庫…';
         playVaultOpen(() => {
-          window.location.replace(nextUrl.startsWith('/') ? nextUrl : '/');
+          window.location.replace(nextUrl);
         });
       } catch (err) {
         errEl.textContent = err.message || '登入失敗';

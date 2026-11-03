@@ -5,6 +5,7 @@ app.py — QS管理系統 Flask API主程式
 """
 import os
 import json
+import time
 import uuid
 import re
 from io import BytesIO
@@ -38,6 +39,7 @@ else:
 CORS(app, supports_credentials=True)
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
+_PROCESS_STARTED = time.time()
 
 
 def allowed_file(filename):
@@ -80,6 +82,112 @@ def _log_write_activity(response):
     except Exception:
         pass
     return response
+
+
+def _upload_usage(upload_dir):
+    count = 0
+    total = 0
+    if not os.path.isdir(upload_dir):
+        return count, total
+    for root, _dirs, files in os.walk(upload_dir):
+        for name in files:
+            path = os.path.join(root, name)
+            if not os.path.isfile(path):
+                continue
+            count += 1
+            try:
+                total += os.path.getsize(path)
+            except OSError:
+                pass
+    return count, total
+
+
+def _ocr_ops_summary():
+    """只回引擎是否就緒，不含任何金鑰。"""
+    mode = 'auto'
+    engines = []
+    try:
+        mode = db.get_setting('ocr_mode', 'auto') or 'auto'
+        from ocr_processor import get_available_engines
+        names = get_available_engines(
+            quark_client_id=db.get_setting('quark_client_id'),
+            quark_client_key=db.get_setting('quark_client_key'),
+            quark_api_key=db.get_setting('quark_api_key'),
+            gemini_api_key=db.get_setting('gemini_api_key'),
+        )
+        for name in names:
+            ready = ('未設定' not in name) and ('未安裝' not in name)
+            engines.append({'name': name, 'ready': ready})
+    except Exception:
+        engines = []
+    return mode, engines
+
+
+def _worker_rss_mb():
+    """目前處理請求的 Gunicorn worker 常駐記憶體（Linux 為 KB）。"""
+    try:
+        import resource
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if os.name == 'nt':
+            return round(rss / (1024 * 1024), 1)
+        return round(rss / 1024, 1)
+    except Exception:
+        return None
+
+
+@app.route('/admin')
+def admin_monitor_page():
+    return _serve_frontend_html('admin.html')
+
+
+@app.route('/api/admin/ops-status', methods=['GET'])
+def admin_ops_status():
+    from config import DATA_DIR, DB_PATH, UPLOAD_DIR
+    projects = db.get_all_projects()
+    upload_count, upload_bytes = _upload_usage(UPLOAD_DIR)
+    db_mtime = None
+    db_age_sec = None
+    if os.path.exists(DB_PATH):
+        mtime = os.path.getmtime(DB_PATH)
+        db_mtime = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
+        db_age_sec = max(0, int(time.time() - mtime))
+    conn = db.get_conn()
+    payment_count = conn.execute('SELECT COUNT(*) FROM payment_records').fetchone()[0]
+    journal_mode = conn.execute('PRAGMA journal_mode').fetchone()[0]
+    busy_timeout_ms = conn.execute('PRAGMA busy_timeout').fetchone()[0]
+    conn.close()
+    activity = db.activity_log_snapshot(recent_limit=15, hours=1)
+    ocr_mode, ocr_engines = _ocr_ops_summary()
+    return resp({
+        'app_version': _app_version(),
+        'deployment_tier': _deployment_tier(),
+        'deployment_label': _deployment_label(),
+        'auth_enabled': auth.is_enabled(),
+        'idle_minutes_admin': auth.idle_timeout_minutes('admin'),
+        'idle_minutes_user': auth.idle_timeout_minutes('user'),
+        'session_days': auth.session_lifetime_days(),
+        'restore_token_configured': bool(os.environ.get('RESTORE_TOKEN', '').strip()),
+        'data_dir': DATA_DIR,
+        'db_path': DB_PATH,
+        'db_exists': os.path.exists(DB_PATH),
+        'db_size_bytes': os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0,
+        'db_mtime': db_mtime,
+        'db_age_sec': db_age_sec,
+        'project_count': len(projects),
+        'payment_count': payment_count,
+        'upload_count': upload_count,
+        'upload_bytes': upload_bytes,
+        'volume_mounted': DATA_DIR == '/data',
+        'journal_mode': journal_mode,
+        'busy_timeout_ms': busy_timeout_ms,
+        'worker_rss_mb': _worker_rss_mb(),
+        'process_uptime_sec': int(time.time() - _PROCESS_STARTED),
+        'writes_last_hour': activity['writes_last_hour'],
+        'failed_writes_last_hour': activity['failed_writes_last_hour'],
+        'recent_writes': activity['recent'],
+        'ocr_mode': ocr_mode,
+        'ocr_engines': ocr_engines,
+    })
 
 
 @app.route('/api/admin/activity', methods=['GET'])

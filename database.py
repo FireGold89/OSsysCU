@@ -718,6 +718,45 @@ def insert_activity_log(username, role, method, path, status_code):
     conn.close()
 
 
+def activity_log_snapshot(recent_limit=15, hours=1):
+    """最近寫入筆數與明細，供管理員監控頁。"""
+    conn = get_conn()
+    _migrate_activity_log(conn)
+    hours = max(1, min(int(hours or 1), 168))
+    recent_limit = max(1, min(int(recent_limit or 15), 50))
+    since = f'-{hours} hours'
+    count = conn.execute(
+        """
+        SELECT COUNT(*) FROM activity_log
+        WHERE created_at >= datetime('now', 'localtime', ?)
+        """,
+        (since,),
+    ).fetchone()[0]
+    failed = conn.execute(
+        """
+        SELECT COUNT(*) FROM activity_log
+        WHERE created_at >= datetime('now', 'localtime', ?)
+          AND IFNULL(status_code, 0) >= 400
+        """,
+        (since,),
+    ).fetchone()[0]
+    rows = conn.execute(
+        """
+        SELECT username, role, method, path, status_code, created_at
+        FROM activity_log
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (recent_limit,),
+    ).fetchall()
+    conn.close()
+    return {
+        'writes_last_hour': int(count or 0),
+        'failed_writes_last_hour': int(failed or 0),
+        'recent': [dict(r) for r in rows],
+    }
+
+
 def list_activity_log(limit=200):
     conn = get_conn()
     rows = conn.execute(
