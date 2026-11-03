@@ -218,6 +218,9 @@ const StaffRoster = {
     tbody.innerHTML = this.list.map(s => {
       const name = this.displayName(s);
       const subParts = [];
+      if (s.code && s.in_staff_table) {
+        subParts.push(`<div class="td-muted" style="font-size:11px">縮寫 ${escHtml(s.code)}</div>`);
+      }
       if (s.name_zh && s.name_en && s.name_en !== s.name_zh) {
         subParts.push(`<div class="td-muted" style="font-size:11px">${escHtml(s.name_zh)}</div>`);
       }
@@ -269,7 +272,7 @@ const StaffRoster = {
   openAdd() {
     document.getElementById('staffModalTitle').textContent = '新增項目負責人';
     document.getElementById('staffModalId').value = '';
-    ['staffNameEn', 'staffNameZh', 'staffEmail', 'staffPhone', 'staffNotes'].forEach(id => {
+    ['staffNameEn', 'staffNameZh', 'staffCode', 'staffEmail', 'staffPhone', 'staffNotes'].forEach(id => {
       document.getElementById(id).value = '';
     });
     this.syncModalSelects('qs', '');
@@ -284,6 +287,7 @@ const StaffRoster = {
     document.getElementById('staffModalId').value = s.id;
     document.getElementById('staffNameEn').value = s.name_en || '';
     document.getElementById('staffNameZh').value = s.name_zh || '';
+    document.getElementById('staffCode').value = s.code || '';
     document.getElementById('staffEmail').value = s.email || '';
     document.getElementById('staffPhone').value = s.phone || '';
     this.syncModalSelects(s.access_role || 'qs', s.department || '');
@@ -298,9 +302,15 @@ const StaffRoster = {
 
   async saveModal() {
     const id = document.getElementById('staffModalId').value;
+    const codeRaw = document.getElementById('staffCode').value.trim().toLowerCase();
+    if (codeRaw && !/^[a-z]{2,4}$/.test(codeRaw)) {
+      toast('編號縮寫須為 2～4 位英文字母（例：ily、dc）', 'warning');
+      return;
+    }
     const body = {
       name_en: document.getElementById('staffNameEn').value.trim(),
       name_zh: document.getElementById('staffNameZh').value.trim(),
+      code: codeRaw || undefined,
       email: document.getElementById('staffEmail').value.trim(),
       phone: document.getElementById('staffPhone').value.trim(),
       department: document.getElementById('staffDept').value.trim(),

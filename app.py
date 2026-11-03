@@ -2445,8 +2445,6 @@ def get_staff(staff_id):
 @app.route('/api/staff', methods=['POST'])
 def create_staff():
     data = request.json or {}
-    if not data.get('code'):
-        return resp(error='請填寫縮寫', status=400)
     try:
         new_id = db.create_staff_member(data)
         return resp({'id': new_id}, status=201)

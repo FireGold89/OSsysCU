@@ -7740,7 +7740,11 @@ def create_staff_member(data):
     if dup:
         conn.close()
         raise ValueError(f'項目負責人「{canon}」已存在')
-    code = _normalize_staff_code(data.get('code'))
+    raw_code = (data.get('code') or '').strip()
+    code = _normalize_staff_code(raw_code)
+    if raw_code and not code:
+        conn.close()
+        raise ValueError('編號縮寫須為 2～4 位英文字母（例：jy、dc、ily）')
     if not code:
         code = _derive_staff_code(conn, data['name_en'], data['name_zh'])
     data['code'] = code
@@ -7789,11 +7793,30 @@ def update_staff_member(staff_id, data):
     if dup:
         conn.close()
         raise ValueError(f'項目負責人「{canon}」已存在')
-    conn.execute("""
-        UPDATE staff_members SET
+    set_sql = """
             name_en=:name_en, name_zh=:name_zh, email=:email, phone=:phone,
             department=:department, access_role=:access_role, is_active=:is_active,
             notes=:notes, updated_at=:updated_at
+    """
+    raw_code = (data.get('code') or '').strip()
+    if raw_code:
+        new_code = _normalize_staff_code(raw_code)
+        if not new_code:
+            conn.close()
+            raise ValueError('編號縮寫須為 2～4 位英文字母（例：jy、dc、ily）')
+        if new_code != (existing.get('code') or '').strip().lower():
+            code_dup = conn.execute(
+                "SELECT id FROM staff_members WHERE code=? AND id != ?",
+                (new_code, staff_id),
+            ).fetchone()
+            if code_dup:
+                conn.close()
+                raise ValueError(f'編號縮寫「{new_code}」已被其他人使用')
+            set_sql = f"code=:code, {set_sql}"
+            data['code'] = new_code
+    conn.execute(f"""
+        UPDATE staff_members SET
+            {set_sql}
         WHERE id=:id
     """, {**data, 'id': staff_id})
     conn.commit()

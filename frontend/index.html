@@ -3644,7 +3644,14 @@
           <input type="text" class="form-input" id="staffNameZh" placeholder="例：余振宇（可與英文並存）">
         </div>
       </div>
-      <p class="form-hint" style="margin:-4px 0 12px">英文或中文至少填一項全名；勿用報價尾碼（如 jy、kp）。</p>
+      <p class="form-hint" style="margin:-4px 0 12px">英文或中文至少填一項全名；勿把全名填成兩三個字母。</p>
+      <div class="form-group">
+        <label for="staffCode" class="form-label">編號縮寫</label>
+        <input type="text" class="form-input" id="staffCode" maxlength="4" autocomplete="off"
+          placeholder="例：ily（對應 MS/Q001/26/ily 尾碼；選填，留空自動產生）"
+          style="max-width:160px;text-transform:lowercase">
+        <p class="form-hint">2～4 位英文字母，用於報價編號尾碼；與 Master List E 欄慣例一致，不等於登入帳號。</p>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="staffRole" class="form-label">權限角色</label>
