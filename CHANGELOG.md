@@ -8,6 +8,7 @@
 
 ### 變更
 - **阿里云部署**：`deploy_aliyun_hk.sh` 改為 `git fetch` + `reset --hard`；容器僅綁 `127.0.0.1:8080`；`MOSSYS-OPS.md` 補本机→GitHub→阿里云流程。
+- **运维**：`scripts/mossys_load_smoke.py` 可重复 API 压测（22s 门槛）；文档见 `MOSSYS-OPS.md`。
 
 ### 新增
 - **進行中項目、N 項目結算總表**：每列顯示最後更新人與最後更新日期。在這兩頁改資料、匯入，或在工程項目儲存時會記下當時登入者。

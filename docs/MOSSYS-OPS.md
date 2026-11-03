@@ -51,6 +51,19 @@ sudo docker run -d --name ossys --restart unless-stopped \
 scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .\Backup\
 ```
 
+## API 压测（可重复）
+
+脚本 `scripts/mossys_load_smoke.py`：在 **ossys 容器内**用 env 登入，模拟首屏／切项目／并行 GET；单请求 **≥22s** 会标 `slow`（对应前端逾时）。**不能代替浏览器点 UI**，只查后端是否过慢。
+
+```powershell
+# 本机（仓库根目录）
+scp -i $env:USERPROFILE\.ssh\aliyun-ossys .\scripts\mossys_load_smoke.py admin@43.103.44.4:/tmp/
+ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 `
+  "sudo docker cp /tmp/mossys_load_smoke.py ossys:/tmp/ && sudo docker exec ossys python3 /tmp/mossys_load_smoke.py https://mossys.xyz"
+```
+
+可同时测本机 8080 与 HTTPS：`... mossys_load_smoke.py http://127.0.0.1:8080 https://mossys.xyz`。期望输出含 `all OK under 22s`。
+
 ## 故障排查
 
 ### 网站打不开 / 502
