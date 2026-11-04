@@ -51,6 +51,23 @@ sudo docker run -d --name ossys --restart unless-stopped \
 scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .\Backup\
 ```
 
+## uploads 目錄說明
+
+| 子目錄 | 來源 | 檔名規則（v2-20261104-upload-naming 起） |
+|--------|------|------------------------------------------|
+| `iso/{項目}/` | ISO 上傳 | `{原檔名}_{YYYYMMDD}.pdf` |
+| `ocr/` | OCR／付款掃描 | `{項目}_{原檔名}_{YYYYMMDD}.pdf` |
+| `quotations/` | 分判報價 PDF | `{項目}_{SC}_{原檔名}_{日期}.pdf` |
+| `main-fac/` | 主包 FAC 附件 | `{項目}_{statement\|pc_cert\|mg_cert}_{原檔名}_{日期}` |
+| `sc-vo/` | 分判 VO 附件 | `{項目}_VO{id}_{type}_{原檔名}_{日期}` |
+| `ip/` | 糧期支票／IP 附件 | `{項目}_IP{n}_{receipt\|application\|cert}_{原檔名}_{日期}` |
+| `imports/` | Excel 匯入暫存 | `{用途}_{原檔名}_{日期}.xlsx` |
+| `misc/` | 通用上傳 API | `{原檔名}_{日期}.ext` |
+
+**根目錄一堆 32 位 hex `.pdf`**：舊版 OCR／付款上傳（約 20261104 前）產物；DB 的 `payment_records.pdf_path`、`ocr_extractions.filename` 仍指向它們，**勿批量刪**。新上傳會進上表子目錄。
+
+**匯出（不寫 uploads）**：QS 匯報 PDF、會簽表 PDF/DOCX、Interim Cert、Main/SC FAC 等由 API 直接下載，檔名見瀏覽器存檔（如 `QS匯報_{項目}_{日期}.pdf`）。
+
 ## ISO / 附件遷移（預覽 404「文件不在伺服器」）
 
 資料庫只記 **路徑**；實體檔在 **`/data/uploads/`**，ISO 在 **`/data/uploads/iso/{項目編號}/`**。只還原 `qs_system.db`、未拷貝 `iso/` 子目錄時，畫面仍顯示檔名但預覽會 404。

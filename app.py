@@ -6,7 +6,6 @@ app.py — QS管理系統 Flask API主程式
 import os
 import json
 import time
-import uuid
 import re
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -15,6 +14,7 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
+from upload_naming import upload_rel_path, upload_slug
 import auth
 import access_control
 import database as db
@@ -640,15 +640,20 @@ def portfolio_update_sc_status_api(portfolio_id):
     return resp(item)
 
 
+def _save_uploaded_file(category, file, slug=None):
+    rel = upload_rel_path(category, file.filename, UPLOAD_DIR, slug=slug)
+    path = os.path.join(UPLOAD_DIR, rel.replace('/', os.sep))
+    file.save(path)
+    return path, rel
+
+
 def _save_portfolio_excel():
     if 'file' not in request.files:
         return None, None, resp(error='請上傳 Excel', status=400)
     file = request.files['file']
     if not file.filename or not file.filename.lower().endswith(('.xlsx', '.xls')):
         return None, None, resp(error='請上傳 .xlsx', status=400)
-    name = secure_filename(file.filename) or 'portfolio.xlsx'
-    path = os.path.join(UPLOAD_DIR, name)
-    file.save(path)
+    path, _rel = _save_uploaded_file('imports', file, slug='portfolio')
     return path, file.filename, None
 
 
@@ -717,9 +722,7 @@ def _save_eng_excel():
     file = request.files['file']
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return None, None, resp(error='請上傳 Excel（.xlsx）', status=400)
-    name = secure_filename(file.filename) or 'nn1.xlsx'
-    path = os.path.join(UPLOAD_DIR, name)
-    file.save(path)
+    path, _rel = _save_uploaded_file('imports', file, slug='nn1')
     return path, file.filename, None
 
 
@@ -908,13 +911,12 @@ def upload_main_con_fac_attachment(project_id):
     file = request.files['file']
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
-    db.update_main_fac_attachment(project_id, att_type, unique_name, file.filename)
+    project = db.get_project(project_id)
+    code = db.iso_safe_project_code(project.get('project_code') if project else None)
+    rel, save_path = _save_uploaded_file('main-fac', file, slug=f'{code}_{att_type}')
+    db.update_main_fac_attachment(project_id, att_type, rel, file.filename)
     return resp({
-        'path': unique_name,
+        'path': rel,
         'filename': file.filename,
         'type': att_type,
         'message': '已上傳',
@@ -1565,11 +1567,8 @@ def upload_file():
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
-    return resp({'pdf_path': unique_name, 'filename': file.filename})
+    rel, _save_path = _save_uploaded_file('misc', file)
+    return resp({'pdf_path': rel, 'filename': file.filename})
 
 
 @app.route('/api/subcontractors/<int:sc_id>/quotation-pdf', methods=['POST'])
@@ -1584,14 +1583,13 @@ def upload_sc_quotation_pdf(sc_id):
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
-
-    db.attach_quotation_pdf(sc_id, unique_name, original_filename=file.filename)
+    project = db.get_project(sc.get('project_id'))
+    code = db.iso_safe_project_code(project.get('project_code') if project else None)
+    sc_tag = upload_slug(sc.get('sc_no') or sc_id)
+    rel, _save_path = _save_uploaded_file('quotations', file, slug=f'{code}_{sc_tag}')
+    db.attach_quotation_pdf(sc_id, rel, original_filename=file.filename)
     return resp({
-        'pdf_path': unique_name,
+        'pdf_path': rel,
         'filename': file.filename,
         'message': '報價 PDF 已上傳',
     })
@@ -1835,10 +1833,9 @@ def upload_sc_vo_attachment(record_id):
     file = request.files['file']
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
+    project = db.get_project(row.get('project_id'))
+    code = db.iso_safe_project_code(project.get('project_code') if project else None)
+    rel, save_path = _save_uploaded_file('sc-vo', file, slug=f'{code}_VO{record_id}_{att_type}')
     old_path = {
         'approval': row.get('approval_attachment'),
         'quotation': row.get('quotation_attachment'),
@@ -1846,15 +1843,15 @@ def upload_sc_vo_attachment(record_id):
         'engineering_order': row.get('engineering_order_attachment'),
     }.get(att_type)
     if old_path:
-        old_full = os.path.join(UPLOAD_DIR, old_path)
+        old_full = os.path.join(UPLOAD_DIR, old_path.replace('/', os.sep))
         if os.path.isfile(old_full):
             try:
                 os.remove(old_full)
             except OSError:
                 pass
-    db.update_sc_vo_attachment(record_id, att_type, unique_name, file.filename)
+    db.update_sc_vo_attachment(record_id, att_type, rel, file.filename)
     return resp({
-        'path': unique_name,
+        'path': rel,
         'filename': file.filename,
         'type': att_type,
         'message': '已上傳',
@@ -1988,11 +1985,13 @@ def ocr_upload():
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳PDF/PNG/JPG）', status=400)
 
-    # 儲存文件
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
+    project_id = request.form.get('project_id', type=int)
+    slug = None
+    if project_id:
+        project = db.get_project(project_id)
+        if project:
+            slug = db.iso_safe_project_code(project.get('project_code'))
+    rel, save_path = _save_uploaded_file('ocr', file, slug=slug)
 
     api_key = db.get_setting('gemini_api_key') or None
     quark_id = db.get_setting('quark_client_id') or None
@@ -2013,13 +2012,12 @@ def ocr_upload():
     except Exception as e:
         return resp(error=f'OCR處理錯誤: {str(e)}', status=500)
 
-    project_id = request.form.get('project_id', type=int)
     ocr_failed = method == 'failed'
 
     # 儲存OCR記錄（每次上傳均保留 PDF 路徑）
     ocr_id = db.save_ocr_extraction(
         payment_id=None,
-        filename=unique_name,
+        filename=rel,
         raw_text=raw_text or '',
         extracted_json=extracted or {},
         confidence='high' if method in (
@@ -2042,7 +2040,7 @@ def ocr_upload():
         'ocr_id': ocr_id,
         'method': method,
         'filename': file.filename,
-        'pdf_path': unique_name,
+        'pdf_path': rel,
         'extracted': extracted,
         'raw_text': (raw_text or '')[:2000],  # 限制回傳長度
         'error': error,
@@ -2236,16 +2234,16 @@ def upload_ip_receipt_attachment(ip_id):
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
+    project = db.get_project(existing.get('project_id'))
+    code = db.iso_safe_project_code(project.get('project_code') if project else None)
+    ip_no = existing.get('ip_no') or ip_id
+    rel, _save_path = _save_uploaded_file('ip', file, slug=f'{code}_IP{ip_no}_receipt')
     record_index = request.form.get('record_index', request.args.get('record_index', 0))
     try:
         record_index = int(record_index or 0)
     except (TypeError, ValueError):
         record_index = 0
-    db.set_ip_receipt_attachment(ip_id, unique_name, file.filename, record_index=record_index)
+    db.set_ip_receipt_attachment(ip_id, rel, file.filename, record_index=record_index)
     row = db.get_interim_payment(ip_id)
     rec = (row.get('receipt_records') or [{}])[record_index] if row else {}
     return resp({
@@ -2268,7 +2266,7 @@ def delete_ip_receipt_attachment(ip_id):
         record_index = 0
     old_path = db.clear_ip_receipt_attachment(ip_id, record_index=record_index)
     if old_path:
-        full = os.path.join(UPLOAD_DIR, old_path)
+        full = os.path.join(UPLOAD_DIR, old_path.replace('/', os.sep))
         if os.path.isfile(full):
             try:
                 os.remove(full)
@@ -2289,21 +2287,21 @@ def upload_ip_application_attachment(ip_id):
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
+    project = db.get_project(existing.get('project_id'))
+    code = db.iso_safe_project_code(project.get('project_code') if project else None)
+    ip_no = existing.get('ip_no') or ip_id
+    rel, _save_path = _save_uploaded_file('ip', file, slug=f'{code}_IP{ip_no}_application')
     old_path = existing.get('ip_application_attachment')
     if old_path:
-        old_full = os.path.join(UPLOAD_DIR, old_path)
+        old_full = os.path.join(UPLOAD_DIR, old_path.replace('/', os.sep))
         if os.path.isfile(old_full):
             try:
                 os.remove(old_full)
             except OSError:
                 pass
-    db.set_ip_application_attachment(ip_id, unique_name, file.filename)
+    db.set_ip_application_attachment(ip_id, rel, file.filename)
     return resp({
-        'ip_application_attachment': unique_name,
+        'ip_application_attachment': rel,
         'ip_application_attachment_name': file.filename,
         'summary': db.get_ip_period_summary(existing['project_id']),
     })
@@ -2316,7 +2314,7 @@ def delete_ip_application_attachment(ip_id):
         return resp(error='糧期記錄不存在', status=404)
     old_path = db.clear_ip_application_attachment(ip_id)
     if old_path:
-        full = os.path.join(UPLOAD_DIR, old_path)
+        full = os.path.join(UPLOAD_DIR, old_path.replace('/', os.sep))
         if os.path.isfile(full):
             try:
                 os.remove(full)
@@ -2337,13 +2335,13 @@ def upload_ip_cert_attachment(ip_id):
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(UPLOAD_DIR, unique_name)
-    file.save(save_path)
-    db.set_ip_cert_attachment(ip_id, unique_name, file.filename)
+    project = db.get_project(existing.get('project_id'))
+    code = db.iso_safe_project_code(project.get('project_code') if project else None)
+    ip_no = existing.get('ip_no') or ip_id
+    rel, _save_path = _save_uploaded_file('ip', file, slug=f'{code}_IP{ip_no}_cert')
+    db.set_ip_cert_attachment(ip_id, rel, file.filename)
     return resp({
-        'ip_cert_attachment': unique_name,
+        'ip_cert_attachment': rel,
         'ip_cert_attachment_name': file.filename,
         'summary': db.get_ip_period_summary(existing['project_id']),
     })
@@ -2356,7 +2354,7 @@ def delete_ip_cert_attachment(ip_id):
         return resp(error='糧期記錄不存在', status=404)
     old_path = db.clear_ip_cert_attachment(ip_id)
     if old_path:
-        full = os.path.join(UPLOAD_DIR, old_path)
+        full = os.path.join(UPLOAD_DIR, old_path.replace('/', os.sep))
         if os.path.isfile(full):
             try:
                 os.remove(full)
@@ -2932,8 +2930,7 @@ def master_list_preview():
     file = request.files['file']
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return resp(error='請上傳 Master List Excel', status=400)
-    save_path = os.path.join(UPLOAD_DIR, secure_filename(file.filename))
-    file.save(save_path)
+    save_path, _rel = _save_uploaded_file('imports', file, slug='master-list')
     try:
         from master_list_importer import preview_master_import
         return resp(preview_master_import(save_path))
@@ -2948,8 +2945,7 @@ def master_list_sync():
     file = request.files['file']
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return resp(error='請上傳 Master List Excel', status=400)
-    save_path = os.path.join(UPLOAD_DIR, secure_filename(file.filename))
-    file.save(save_path)
+    save_path, _rel = _save_uploaded_file('imports', file, slug='master-list')
     try:
         from master_list_importer import sync_master_import
         stats = sync_master_import(save_path)
@@ -3157,8 +3153,7 @@ def import_summary_api():
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return resp(error='請上傳 Excel 文件', status=400)
 
-    save_path = os.path.join(UPLOAD_DIR, secure_filename(file.filename))
-    file.save(save_path)
+    save_path, _rel = _save_uploaded_file('imports', file, slug='summary')
     try:
         from summary_importer import sync_summary_import
         stats = sync_summary_import(save_path, update_existing=True)
@@ -3189,8 +3184,7 @@ def import_excel_api():
     if not file.filename.endswith(('.xlsx', '.xls')):
         return resp(error='請上傳Excel文件', status=400)
 
-    save_path = os.path.join(UPLOAD_DIR, secure_filename(file.filename))
-    file.save(save_path)
+    save_path, _rel = _save_uploaded_file('imports', file, slug='payment-excel')
 
     try:
         from excel_importer import import_excel

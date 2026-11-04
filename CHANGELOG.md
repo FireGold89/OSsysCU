@@ -4,6 +4,12 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-upload-naming` · 分支 `v2/portfolio`
+
+### 變更
+- **uploads 命名**：新增 `upload_naming.py`；上傳改為 `{分類子目錄}/{標籤_原檔名_YYYYMMDD}.ext`，取代根目錄 32 位 hex。涵蓋 OCR、報價 PDF、主包 FAC、分判 VO、糧期附件、Excel 匯入等；ISO 仍用 `iso/{項目}/`。
+- **匯出 PDF/Word**：QS 匯報、會簽表、糧期證書、Main/SC FAC 等仍直接下載，不寫入 uploads（檔名已在 HTTP `Content-Disposition`）。
+
 `APP_VERSION`: `v2-20261104-iso-delete-disk` · 分支 `v2/portfolio`
 
 ### 修正

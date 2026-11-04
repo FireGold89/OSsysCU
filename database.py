@@ -6,7 +6,6 @@ import sqlite3
 import os
 import json
 import re
-import uuid
 from datetime import datetime
 
 from config import DB_PATH
@@ -1181,38 +1180,15 @@ def iso_slot_disk_label(doc_slot):
     return ISO_SLOT_DISK_LABELS.get(doc_slot, doc_slot or 'ISO文件')
 
 
-_ISO_FORBIDDEN_NAME_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
-
-
 def iso_sanitize_original_basename(original_filename):
-    """只取檔名、去掉路徑與 Windows 非法字元；保留中文與空格。"""
-    name = (original_filename or 'file').strip().replace('\\', '/')
-    name = name.split('/')[-1].strip()
-    name = _ISO_FORBIDDEN_NAME_CHARS.sub('_', name)
-    return name or 'file'
+    from upload_naming import sanitize_original_basename
+    return sanitize_original_basename(original_filename)
 
 
 def iso_disk_filename(original_filename, dest_dir=None, when=None):
-    """
-    ISO 實體檔名：{原檔主檔名}_{YYYYMMDD}.{ext}
-    同目錄已有同名檔時改為 {原檔主檔名}_{YYYYMMDD}_{8位hex}.{ext}
-    """
-    when = when or datetime.now()
-    date_tag = when.strftime('%Y%m%d')
-    safe = iso_sanitize_original_basename(original_filename)
-    if '.' in safe:
-        stem, ext = safe.rsplit('.', 1)
-        ext = re.sub(r'[^\w.+-]', '', ext.lower())[:16] or 'pdf'
-    else:
-        stem, ext = safe, 'pdf'
-    stem = stem.strip()[:160] or 'file'
-    name = f'{stem}_{date_tag}.{ext}'
-    if dest_dir:
-        full = os.path.join(dest_dir, name)
-        if os.path.isfile(full):
-            uid = uuid.uuid4().hex[:8]
-            name = f'{stem}_{date_tag}_{uid}.{ext}'
-    return name
+    """ISO 實體檔名：{原檔主檔名}_{YYYYMMDD}.{ext}（同目錄碰撞加 hex）。"""
+    from upload_naming import allocate_dated_basename
+    return allocate_dated_basename(original_filename, dest_dir=dest_dir, slug=None, when=when)
 
 
 def _migrate_cover_page_fields(conn):
