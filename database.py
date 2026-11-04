@@ -7123,6 +7123,33 @@ def _person_in_charge_lower_keys(label):
     return [s] if s else []
 
 
+def _roster_identity_group_key(label):
+    from master_ref import person_identity_pic_key
+
+    return person_identity_pic_key(label)
+
+
+def _roster_preferred_display_name(label):
+    from master_ref import person_identity_code, person_identity_display_name
+
+    code = person_identity_code(label)
+    if code:
+        return person_identity_display_name(code)
+    return (label or '').strip()
+
+
+def _count_projects_for_pic_keys(conn, lower_keys):
+    if not lower_keys:
+        return 0
+    ph = ','.join('?' * len(lower_keys))
+    return conn.execute(
+        f"""SELECT COUNT(DISTINCT id) FROM projects
+            WHERE lower(trim(person_in_charge)) IN ({ph})
+               OR lower(trim(qs_in_charge)) IN ({ph})""",
+        lower_keys + lower_keys,
+    ).fetchone()[0]
+
+
 def _registry_by_person(conn, filt_sql='', params=None):
     """Master List 項目負責人統計（正規化姓名）"""
     from master_ref import person_identity_pic_key
@@ -7608,6 +7635,11 @@ def _normalize_person_in_charge_identities(conn):
                 "WHERE person_in_charge IS NOT NULL AND lower(trim(person_in_charge))=lower(trim(?))",
                 (display, label),
             )
+            conn.execute(
+                "UPDATE projects SET qs_in_charge=? "
+                "WHERE qs_in_charge IS NOT NULL AND lower(trim(qs_in_charge))=lower(trim(?))",
+                (display, label),
+            )
 
 
 def _sync_staff_canonical_codes(conn):
@@ -7666,7 +7698,7 @@ def list_master_person_roster(active_only=False, conn=None):
 
     roster = []
     for p in by_person:
-        name = p['person_name']
+        name = _roster_preferred_display_name(p['person_name'])
         key = p['pic_key']
         match_keys = p.get('match_keys') or _person_in_charge_lower_keys(name)
         staff = staff_by_lower.get(key) or staff_by_lower.get(name.lower())
@@ -7674,12 +7706,7 @@ def list_master_person_roster(active_only=False, conn=None):
             if staff:
                 break
             staff = staff_by_lower.get(mk)
-        ph = ','.join('?' * len(match_keys)) if match_keys else '?'
-        pk_params = match_keys if match_keys else [key]
-        project_count = conn.execute(
-            f"SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge)) IN ({ph})",
-            pk_params,
-        ).fetchone()[0]
+        project_count = _count_projects_for_pic_keys(conn, match_keys or [key])
         entry = {
             'person_name': name,
             'pic_key': key,
@@ -7716,19 +7743,20 @@ def list_master_person_roster(active_only=False, conn=None):
             })
         roster.append(entry)
 
-    seen_keys = {r['pic_key'] for r in roster}
+    seen_keys = set()
+    for r in roster:
+        seen_keys.add(_roster_identity_group_key(r.get('person_name') or ''))
 
     def _append_roster_person(name, staff=None, quotation_count=0):
-        from master_ref import person_identity_pic_key
-
         nonlocal roster, seen_keys
         label = (name or '').strip()
         if not label or _invalid_master_person_label(label):
             return
-        gkey = person_identity_pic_key(label)
+        gkey = _roster_identity_group_key(label)
         if gkey in seen_keys:
             return
         seen_keys.add(gkey)
+        label = _roster_preferred_display_name(label)
         key = label.lower()
         if staff is None:
             staff = staff_by_lower.get(key)
@@ -7738,12 +7766,7 @@ def list_master_person_roster(active_only=False, conn=None):
                     if staff:
                         break
         match_keys = _person_in_charge_lower_keys(label)
-        ph = ','.join('?' * len(match_keys)) if match_keys else '?'
-        pk_params = match_keys if match_keys else [key]
-        project_count = conn.execute(
-            f"SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge)) IN ({ph})",
-            pk_params,
-        ).fetchone()[0]
+        project_count = _count_projects_for_pic_keys(conn, match_keys or [key])
         entry = {
             'person_name': label,
             'pic_key': key,

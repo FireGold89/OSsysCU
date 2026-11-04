@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-pic-identity-r2` · 分支 `v2/portfolio`
+
+### 修正
+- **項目負責人名單**：identity 與 staff 追加列去重（修正 皮立新／Pi Lap Sun 雙列）；項目統計含 `qs_in_charge`；畫面優先顯示中文名。
+
 `APP_VERSION`: `v2-20261104-pic-identity-r1` · 分支 `v2/portfolio`
 
 ### 修正
