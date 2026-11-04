@@ -57,9 +57,34 @@
     $('opsOcr').hidden = true;
     $('opsUploads').hidden = true;
     $('opsWrites').hidden = true;
+    if ($('panelMonitor')) $('panelMonitor').hidden = true;
+    if ($('panelAccess')) $('panelAccess').hidden = true;
+    if ($('adminTabs')) $('adminTabs').hidden = true;
     $('opsRefresh').hidden = true;
     $('opsAutoWrap').hidden = true;
     stopAuto();
+  }
+
+  function switchTab(tab) {
+    const t = tab === 'access' ? 'access' : 'monitor';
+    document.querySelectorAll('.ops-tab').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tab === t);
+    });
+    if ($('panelMonitor')) $('panelMonitor').hidden = t !== 'monitor';
+    if ($('panelAccess')) $('panelAccess').hidden = t !== 'access';
+    $('opsAutoWrap').hidden = t !== 'monitor';
+    $('opsRefresh').hidden = false;
+    if (t === 'access') {
+      stopAuto();
+      if (typeof AccessAdmin !== 'undefined') AccessAdmin.load();
+    } else {
+      loadStatus().catch(() => showDenied('載入失敗'));
+      if ($('opsAuto').checked) startAuto();
+    }
+    const path = t === 'access' ? '/admin#access' : '/admin';
+    if (window.location.pathname.endsWith('/admin') && window.location.hash !== (t === 'access' ? '#access' : '')) {
+      history.replaceState(null, '', path);
+    }
   }
 
   async function loadStatus() {
@@ -196,16 +221,35 @@
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('qs_theme', next);
   });
-  $('opsRefresh').addEventListener('click', () => { loadStatus().catch(() => showDenied('載入失敗')); });
+  $('opsRefresh').addEventListener('click', () => {
+    if ($('panelAccess') && !$('panelAccess').hidden) {
+      AccessAdmin.load().catch(() => toast('載入失敗', 'error'));
+      return;
+    }
+    loadStatus().catch(() => showDenied('載入失敗'));
+  });
+
+  $('adminTabs')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ops-tab');
+    if (btn?.dataset.tab) switchTab(btn.dataset.tab);
+  });
 
   (async function boot() {
     try {
       const r = await fetch(API + '/auth/me', { credentials: 'include' });
       const json = await r.json();
       const data = json.data || {};
+      const startTab = window.location.hash === '#access' ? 'access' : 'monitor';
+      const afterAuth = async () => {
+        if ($('adminTabs')) $('adminTabs').hidden = false;
+        switchTab(startTab);
+        if (startTab === 'monitor') {
+          await loadStatus();
+          if ($('opsAuto').checked) startAuto();
+        }
+      };
       if (data.auth_required === false) {
-        await loadStatus();
-        if ($('opsAuto').checked) startAuto();
+        await afterAuth();
         return;
       }
       const user = data.user;
@@ -217,8 +261,7 @@
         showDenied('需要管理員');
         return;
       }
-      await loadStatus();
-      if ($('opsAuto').checked) startAuto();
+      await afterAuth();
     } catch (_) {
       showDenied('無法連線');
     }

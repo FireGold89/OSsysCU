@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-admin-access` · 分支 `v2/portfolio`
+
+### 新增
+- **/admin 登入管理**：分頁「登入管理」整合帳號與權限（同主程式 AccessAdmin API）；`/admin#access` 直達。
+
 `APP_VERSION`: `v2-20261104-upload-layout` · 分支 `v2/portfolio`
 
 ### 變更

@@ -55,7 +55,7 @@ const AccessAdmin = {
       )).join('');
       return `<tr>
         <td>${escHtml(area.label)}<div class="form-hint">${escHtml(area.hint || '')}</div></td>
-        <td><select class="form-input access-level" data-area="${escHtml(area.id)}">${opts}</select></td>
+        <td><select class="form-input admin-input access-level" data-area="${escHtml(area.id)}">${opts}</select></td>
       </tr>`;
     }).join('');
   },

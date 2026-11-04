@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>系統監控</title>
+  <title>系統管理</title>
   <script>
     (function () {
       var saved = localStorage.getItem('qs_theme');
@@ -12,13 +12,14 @@
       document.documentElement.setAttribute('data-theme', theme);
     })();
   </script>
-  <link rel="stylesheet" href="css/admin.css?v=__APP_BUILD__-ops2">
+  <link rel="stylesheet" href="css/admin.css?v=__APP_BUILD__-ops3">
 </head>
 <body>
+  <div id="toastContainer" class="admin-toast-wrap" aria-live="polite"></div>
   <main class="ops-shell">
     <header class="ops-top">
       <div>
-        <h1>系統監控</h1>
+        <h1>系統管理</h1>
         <p class="ops-sub">僅管理員 · 不在 QS 主介面顯示</p>
       </div>
       <div class="ops-actions">
@@ -27,52 +28,125 @@
         </label>
         <button type="button" class="ops-btn" id="opsTheme">切換主題</button>
         <button type="button" class="ops-btn" id="opsRefresh" hidden>重新整理</button>
+        <a class="ops-btn" href="/">返回 QS</a>
       </div>
     </header>
+
+    <nav class="ops-tabs" id="adminTabs" hidden>
+      <button type="button" class="ops-tab active" data-tab="monitor">系統監控</button>
+      <button type="button" class="ops-tab" data-tab="access">登入管理</button>
+    </nav>
+
     <p class="ops-msg" id="opsMsg">載入中…</p>
-    <section class="ops-grid" id="opsGrid" hidden></section>
-    <section class="ops-card" id="opsOcr" hidden>
-      <h2>OCR</h2>
-      <p class="ops-sub" id="opsOcrMode"></p>
-      <div id="opsOcrList"></div>
-    </section>
-    <section class="ops-card" id="opsUploads" hidden>
-      <h2>uploads 分類（磁碟）</h2>
-      <p class="ops-sub">依資料夾對應系統功能；預覽／匯出 PDF 多數不寫入 uploads，見下方說明。</p>
-      <div class="ops-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>分類</th>
-              <th>功能</th>
-              <th>檔案數</th>
-              <th>容量</th>
-            </tr>
-          </thead>
-          <tbody id="opsUploadBody"></tbody>
-        </table>
-      </div>
-      <p class="ops-sub" id="opsGeneratedHint"></p>
-    </section>
-    <section class="ops-card" id="opsWrites" hidden>
-      <h2>最近寫入</h2>
-      <p class="ops-sub" id="opsWriteHint"></p>
-      <div class="ops-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>時間</th>
-              <th>帳號</th>
-              <th>方法</th>
-              <th>路徑</th>
-              <th>狀態</th>
-            </tr>
-          </thead>
-          <tbody id="opsWriteBody"></tbody>
-        </table>
-      </div>
-    </section>
+
+    <div id="panelMonitor" hidden>
+      <section class="ops-grid" id="opsGrid" hidden></section>
+      <section class="ops-card" id="opsOcr" hidden>
+        <h2>OCR</h2>
+        <p class="ops-sub" id="opsOcrMode"></p>
+        <div id="opsOcrList"></div>
+      </section>
+      <section class="ops-card" id="opsUploads" hidden>
+        <h2>uploads 分類（磁碟）</h2>
+        <p class="ops-sub">依資料夾對應系統功能；預覽／匯出 PDF 多數不寫入 uploads，見下方說明。</p>
+        <div class="ops-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>分類</th>
+                <th>功能</th>
+                <th>檔案數</th>
+                <th>容量</th>
+              </tr>
+            </thead>
+            <tbody id="opsUploadBody"></tbody>
+          </table>
+        </div>
+        <p class="ops-sub" id="opsGeneratedHint"></p>
+      </section>
+      <section class="ops-card" id="opsWrites" hidden>
+        <h2>最近寫入</h2>
+        <p class="ops-sub" id="opsWriteHint"></p>
+        <div class="ops-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>帳號</th>
+                <th>方法</th>
+                <th>路徑</th>
+                <th>狀態</th>
+              </tr>
+            </thead>
+            <tbody id="opsWriteBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div id="panelAccess" hidden>
+      <section class="ops-card">
+        <div class="ops-card-head">
+          <div>
+            <h2>登入帳號與權限</h2>
+            <p class="ops-sub">新增 QS／財務／唯讀等帳號；環境變數設定的管理員不在此表，仍可登入。</p>
+          </div>
+          <button type="button" class="ops-btn ops-btn-primary" onclick="AccessAdmin.openCreate()">新增帳號</button>
+        </div>
+        <div class="ops-table-wrap">
+          <table>
+            <thead>
+              <tr><th>帳號</th><th>姓名</th><th>角色</th><th>狀態</th><th></th></tr>
+            </thead>
+            <tbody id="accessUserBody">
+              <tr><td colspan="5">載入中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="ops-card" id="accessEditor" style="display:none">
+        <h2 id="accessEditorTitle">帳號</h2>
+        <div class="admin-form">
+          <div class="admin-form-row">
+            <div class="admin-field">
+              <label for="accessUsername" class="admin-label">登入帳號</label>
+              <input class="admin-input" id="accessUsername" autocomplete="off">
+            </div>
+            <div class="admin-field">
+              <label for="accessDisplayName" class="admin-label">顯示姓名</label>
+              <input class="admin-input" id="accessDisplayName">
+            </div>
+          </div>
+          <div class="admin-form-row">
+            <div class="admin-field">
+              <label for="accessPassword" class="admin-label">密碼</label>
+              <input class="admin-input" id="accessPassword" type="password" autocomplete="new-password">
+              <p class="ops-sub" id="accessPasswordHint"></p>
+            </div>
+            <div class="admin-field">
+              <label for="accessRole" class="admin-label">角色範本</label>
+              <select class="admin-input" id="accessRole" onchange="AccessAdmin.applyPreset()"></select>
+            </div>
+          </div>
+          <label class="admin-check">
+            <input type="checkbox" id="accessActive" checked> 啟用
+          </label>
+          <div class="ops-table-wrap" style="margin-top:12px">
+            <table>
+              <thead><tr><th>範圍</th><th>權限</th></tr></thead>
+              <tbody id="accessMatrix" onchange="AccessAdmin.markCustom()"></tbody>
+            </table>
+          </div>
+          <div class="admin-form-actions">
+            <button type="button" class="ops-btn ops-btn-primary" onclick="AccessAdmin.save()">儲存</button>
+            <button type="button" class="ops-btn" onclick="AccessAdmin.closeEditor()">取消</button>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
-  <script src="js/ops_monitor.js?v=__APP_BUILD__-ops2"></script>
+  <script src="js/admin_common.js?v=__APP_BUILD__-ops3"></script>
+  <script src="js/access_admin.js?v=__APP_BUILD__-ops3"></script>
+  <script src="js/ops_monitor.js?v=__APP_BUILD__-ops3"></script>
 </body>
 </html>

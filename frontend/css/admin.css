@@ -31,7 +31,7 @@ body {
 }
 
 .ops-shell {
-  max-width: 960px;
+  max-width: 1024px;
   margin: 0 auto;
   padding: 28px 20px 48px;
 }
@@ -114,3 +114,127 @@ tr.ops-fail td { color: #b91c1c; font-weight: 650; }
 [data-theme="dark"] .ops-badge.bad { color: #fcd34d; }
 
 #opsOcr { margin-bottom: 16px; }
+
+.ops-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ops-tab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+}
+
+.ops-tab.active {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--accent);
+  font-weight: 650;
+}
+
+.ops-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.ops-card-head h2 { margin: 0 0 4px; }
+
+.ops-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ops-btn-primary:hover { filter: brightness(1.05); }
+
+.admin-form { margin-top: 8px; }
+
+.admin-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .admin-form-row { grid-template-columns: 1fr; }
+}
+
+.admin-field { min-width: 0; }
+
+.admin-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.admin-input,
+.admin-input.form-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.admin-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.admin-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.td-mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.td-muted { color: var(--muted); }
+
+.admin-toast-wrap {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.admin-toast {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.admin-toast-error { border-color: #b91c1c; }
+.admin-toast-success { border-color: #047857; }
+
+#panelMonitor > .ops-card,
+#panelMonitor > .ops-grid { margin-bottom: 16px; }

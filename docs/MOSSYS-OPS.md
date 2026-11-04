@@ -70,6 +70,8 @@ scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .
 
 **不寫 uploads 的「製作」**：QS 匯報、會簽表、Main/SC FAC 預覽 PDF、糧期計算書匯出等 → 僅 HTTP 下載／瀏覽器 blob；完整清單見 `upload_naming.GENERATED_EXPORTS` 或 **/admin**「uploads 分類」頁尾。
 
+**系統管理頁**：https://mossys.xyz/admin（需管理員）—「系統監控」與「登入管理」（新增／編輯 QS 等帳號與權限矩陣）；直連登入管理：`/admin#access`。
+
 **本機／SSH 統計**：
 
 ```bash
