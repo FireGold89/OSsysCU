@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-iso-delete-disk` · 分支 `v2/portfolio`
+
+### 修正
+- **ISO 刪除附件**：DELETE 會同步刪除 `/data/uploads` 對應實體檔（無其他 ISO／歷史版本引用時）；主動刪除不再寫入歷史版本表。
+
 `APP_VERSION`: `v2-20261104-iso-upload-name` · 分支 `v2/portfolio`
 
 ### 變更

@@ -57,6 +57,13 @@ scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .
 
 **新上傳命名（v2-20261104 起）**：`{原檔主檔名}_{YYYYMMDD}.pdf`（同日同名再加 `_8位hex`）。舊資料多為 `{槽位中文}_{日期}_{hex}` 或遷移備份缺中文前綴；預覽 API 會依 `_xxxxxxxx` 尾碼對齊。
 
+**刪除附件（v2-20261104-iso-delete-disk 起）**：畫面按刪除會一併移除磁碟檔。若先前已刪 DB 但檔仍在（舊版行為），可 SSH 手動刪，或對照 DB：
+
+```bash
+# 列出某項目 iso 目錄內檔案（例 MS/Q1970/24 → MS_Q1970_24_jc）
+sudo ls -la /data/uploads/iso/MS_Q1970_24_jc/
+```
+
 **伺服器自查（Workbench / SSH）：**
 
 ```bash

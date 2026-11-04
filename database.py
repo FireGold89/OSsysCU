@@ -3329,15 +3329,40 @@ def get_iso_document(doc_id):
     return dict(row) if row else None
 
 
-def delete_iso_document(doc_id):
+def iso_upload_path_referenced(file_path):
+    """資料庫是否仍有 ISO 現行檔或歷史版本指向此 uploads 相對路徑。"""
+    fp = (file_path or '').strip()
+    if not fp:
+        return False
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            """SELECT 1 FROM iso_document_files
+               WHERE file_path=? AND TRIM(file_path) != '' LIMIT 1""",
+            (fp,),
+        ).fetchone()
+        if row:
+            return True
+        row = conn.execute(
+            """SELECT 1 FROM iso_document_versions
+               WHERE file_path=? AND TRIM(file_path) != '' LIMIT 1""",
+            (fp,),
+        ).fetchone()
+        return bool(row)
+    finally:
+        conn.close()
+
+
+def delete_iso_document(doc_id, archive=True):
+    """刪除 ISO 附件列。archive=False 時不寫入歷史版本（使用者主動刪除）。"""
     conn = get_conn()
     row = conn.execute("SELECT * FROM iso_document_files WHERE id=?", (doc_id,)).fetchone()
-    if row:
+    if row and archive:
         _archive_iso_file_row(conn, row)
     conn.execute("DELETE FROM iso_document_files WHERE id=?", (doc_id,))
     conn.commit()
     conn.close()
-    return row['file_path'] if row else None
+    return dict(row) if row else None
 
 
 def update_iso_supplemental_amount(project_id, amount):

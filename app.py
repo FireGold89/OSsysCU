@@ -1277,7 +1277,10 @@ def delete_project_document(doc_id):
                     (row['project_id'], scope, doc_slot, path),
                 ).fetchone()
                 if iso_row:
-                    db.delete_iso_document(iso_row['id'])
+                    iso_full = db.get_iso_document(iso_row['id'])
+                    db.delete_iso_document(iso_row['id'], archive=False)
+                    if iso_full:
+                        _remove_iso_upload_file(iso_full.get('file_path'))
             finally:
                 conn.close()
     db.delete_project_document(doc_id)
@@ -1293,6 +1296,21 @@ def _iso_project_upload_dir(project_id):
     subdir = os.path.join(UPLOAD_DIR, 'iso', code)
     os.makedirs(subdir, exist_ok=True)
     return subdir, f'iso/{code}'
+
+
+def _remove_iso_upload_file(rel_path):
+    """刪除 uploads 實體檔（無其他 ISO 紀錄引用時）。"""
+    rel_path = (rel_path or '').strip()
+    if not rel_path or db.iso_upload_path_referenced(rel_path):
+        return False
+    disk = _resolve_upload_disk_path(rel_path)
+    if not disk:
+        return False
+    try:
+        os.remove(disk)
+        return True
+    except OSError:
+        return False
 
 
 @app.route('/api/projects/<int:project_id>/contract-calc', methods=['GET'])
@@ -1461,8 +1479,15 @@ def delete_iso_document(doc_id):
     existing = db.get_iso_document(doc_id)
     if not existing:
         return resp(error='附件不存在', status=404)
-    db.delete_iso_document(doc_id)
-    return resp({'message': '已刪除'})
+    storage = (existing.get('storage_type') or 'file').strip().lower()
+    file_path = (existing.get('file_path') or '').strip()
+    db.delete_iso_document(doc_id, archive=False)
+    file_removed = (
+        storage == 'file'
+        and file_path
+        and _remove_iso_upload_file(file_path)
+    )
+    return resp({'message': '已刪除', 'file_removed': file_removed})
 
 
 @app.route('/api/projects/<int:project_id>/iso-meta', methods=['PATCH'])

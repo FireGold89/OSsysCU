@@ -1062,7 +1062,7 @@ const IsoDocs = {
   },
 
   async deleteFile(docId) {
-    if (!confirm('刪除此 ISO 附件？（舊版仍可在歷史版本中查閱）')) return;
+    if (!confirm('刪除此 ISO 附件？\n畫面紀錄與伺服器上的 PDF／圖片檔將一併移除。')) return;
     try {
       await api('DELETE', `/iso-documents/${docId}`, null, { silent: true });
       toast('已刪除', 'success');
