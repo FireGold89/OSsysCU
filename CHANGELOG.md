@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-pic-identity` · 分支 `v2/portfolio`
+
+### 修正
+- **項目負責人 identity**：Mr. Pi／Pi Lap Sun／皮立新 合併為縮寫 **pi**；名單統計、staff 合併、主檔 `person_in_charge` 正規化（init_db 遷移）。
+
 `APP_VERSION`: `v2-20261104-admin-logout` · 分支 `v2/portfolio`
 
 ### 新增

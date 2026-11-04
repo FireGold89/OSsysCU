@@ -554,7 +554,9 @@ def _migrate_db(conn):
             ))
     _migrate_pic_abbreviations(conn)
     _migrate_staff_roster(conn)
+    _merge_staff_by_identity(conn)
     _sync_staff_canonical_codes(conn)
+    _normalize_person_in_charge_identities(conn)
     _migrate_master_source_filenames(conn)
     _migrate_qs_subcon_registry_fields(conn)
     pay_cols = {r[1] for r in conn.execute("PRAGMA table_info(payment_records)")}
@@ -7110,8 +7112,21 @@ def _pick_canonical_person_name(variants):
     return best_name
 
 
+def _person_in_charge_lower_keys(label):
+    """查詢／統計用：同一 identity 的所有 person_in_charge 小寫鍵。"""
+    from master_ref import person_identity_code, person_identity_labels
+
+    code = person_identity_code(label)
+    if code:
+        return sorted({s.strip().lower() for s in person_identity_labels(code) if s.strip()})
+    s = (label or '').strip().lower()
+    return [s] if s else []
+
+
 def _registry_by_person(conn, filt_sql='', params=None):
     """Master List 項目負責人統計（正規化姓名）"""
+    from master_ref import person_identity_pic_key
+
     params = params or []
     pic_rows = conn.execute(f"""
         SELECT lower(trim(qr.person_in_charge)) AS pic_key,
@@ -7123,18 +7138,23 @@ def _registry_by_person(conn, filt_sql='', params=None):
     """, params).fetchall()
     groups = {}
     for row in pic_rows:
-        key = row['pic_key']
-        groups.setdefault(key, []).append((row['person_name'], row['cnt']))
+        name = row['person_name']
+        gkey = person_identity_pic_key(name)
+        groups.setdefault(gkey, []).append((name, row['cnt'], row['pic_key']))
     result = []
-    for key, variants in groups.items():
+    for gkey, items in groups.items():
+        variants = [(n, c) for n, c, _ in items]
         name = _pick_canonical_person_name(variants)
         if _invalid_master_person_label(name):
             continue
+        raw_keys = [pk for _, _, pk in items]
+        pic_key = max(items, key=lambda x: x[1])[2]
         result.append({
             'person_name': name,
             'cnt': sum(c for _, c in variants),
-            'pic_key': key,
-            'variant_count': len(variants),
+            'pic_key': pic_key,
+            'variant_count': len({n.lower() for n, _ in variants}),
+            'match_keys': sorted(set(raw_keys)),
         })
     result.sort(key=lambda x: (-x['cnt'], x['person_name'].lower()))
     return result
@@ -7478,6 +7498,8 @@ def _normalize_staff_code(code):
 
 def _build_staff_name_lookup(staff_rows):
     """姓名 → staff 列；勿把 2～4 字母尾碼當姓名鍵（避免 dc、iy 串錯人）。"""
+    from master_ref import person_identity_labels, normalize_person_code
+
     by_name = {}
     for s in staff_rows:
         scode = (s.get('code') or '').strip().lower()
@@ -7485,6 +7507,9 @@ def _build_staff_name_lookup(staff_rows):
         canon = _staff_canonical_name(s)
         if canon:
             names.append(canon)
+        icode = normalize_person_code(scode)
+        if icode:
+            names.extend(person_identity_labels(icode))
         for n in names:
             key = (n or '').strip().lower()
             if not key:
@@ -7495,6 +7520,92 @@ def _build_staff_name_lookup(staff_rows):
             if prev is None or (not prev.get('is_active') and s.get('is_active')):
                 by_name[key] = s
     return by_name
+
+
+def _merge_staff_by_identity(conn):
+    """合併同一人的重複 staff 列（如 Mr. Pi 與 皮立新）。"""
+    from master_ref import PERSON_IDENTITY_BY_CODE, person_identity_code
+
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM staff_members ORDER BY id"
+    ).fetchall()]
+    for code, meta in PERSON_IDENTITY_BY_CODE.items():
+        matched = []
+        for r in rows:
+            if not r.get('is_active'):
+                continue
+            if (r.get('code') or '').lower() == code:
+                matched.append(r)
+                continue
+            labels = list(_staff_display_names(r)) + [_staff_canonical_name(r)]
+            if any(person_identity_code(n) == code for n in labels if n):
+                matched.append(r)
+        if len(matched) <= 1:
+            if len(matched) == 1:
+                r = matched[0]
+                want_en = (r.get('name_en') or '').strip()
+                want_zh = (r.get('name_zh') or meta.get('display') or '').strip()
+                for en in meta.get('en', ()):
+                    if not want_en:
+                        want_en = en
+                if (r.get('code') or '').lower() != code:
+                    taken = conn.execute(
+                        "SELECT id FROM staff_members WHERE lower(code)=? AND id!=?",
+                        (code, r['id']),
+                    ).fetchone()
+                    if not taken:
+                        conn.execute(
+                            "UPDATE staff_members SET code=?, updated_at=datetime('now','localtime') WHERE id=?",
+                            (code, r['id']),
+                        )
+                if want_zh and want_zh != (r.get('name_zh') or '').strip():
+                    conn.execute(
+                        "UPDATE staff_members SET name_zh=?, updated_at=datetime('now','localtime') WHERE id=?",
+                        (want_zh, r['id']),
+                    )
+            continue
+        matched.sort(key=lambda r: (
+            0 if (r.get('name_zh') or '').strip() else 1,
+            0 if (r.get('code') or '').lower() == code else 1,
+            r['id'],
+        ))
+        keep = matched[0]
+        name_en = (keep.get('name_en') or '').strip()
+        name_zh = (keep.get('name_zh') or meta.get('display') or '').strip()
+        for r in matched:
+            if not name_en and (r.get('name_en') or '').strip():
+                name_en = r['name_en'].strip()
+            if not name_zh and (r.get('name_zh') or '').strip():
+                name_zh = r['name_zh'].strip()
+        for r in matched[1:]:
+            conn.execute(
+                "UPDATE staff_members SET is_active=0, updated_at=datetime('now','localtime') WHERE id=?",
+                (r['id'],),
+            )
+        conn.execute("""
+            UPDATE staff_members
+            SET code=?, name_en=?, name_zh=?, updated_at=datetime('now','localtime')
+            WHERE id=?
+        """, (code, name_en or keep.get('name_en'), name_zh or keep.get('name_zh'), keep['id']))
+
+
+def _normalize_person_in_charge_identities(conn):
+    """主檔／項目 person_in_charge 統一為 identity 慣用顯示名。"""
+    from master_ref import PERSON_IDENTITY_BY_CODE, person_identity_display_name, person_identity_labels
+
+    for code in PERSON_IDENTITY_BY_CODE:
+        display = person_identity_display_name(code)
+        for label in person_identity_labels(code):
+            conn.execute(
+                "UPDATE quotation_registry SET person_in_charge=? "
+                "WHERE lower(trim(person_in_charge))=lower(trim(?))",
+                (display, label),
+            )
+            conn.execute(
+                "UPDATE projects SET person_in_charge=? "
+                "WHERE person_in_charge IS NOT NULL AND lower(trim(person_in_charge))=lower(trim(?))",
+                (display, label),
+            )
 
 
 def _sync_staff_canonical_codes(conn):
@@ -7555,10 +7666,17 @@ def list_master_person_roster(active_only=False, conn=None):
     for p in by_person:
         name = p['person_name']
         key = p['pic_key']
+        match_keys = p.get('match_keys') or _person_in_charge_lower_keys(name)
         staff = staff_by_lower.get(key) or staff_by_lower.get(name.lower())
+        for mk in match_keys:
+            if staff:
+                break
+            staff = staff_by_lower.get(mk)
+        ph = ','.join('?' * len(match_keys)) if match_keys else '?'
+        pk_params = match_keys if match_keys else [key]
         project_count = conn.execute(
-            "SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge))=?",
-            (key,),
+            f"SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge)) IN ({ph})",
+            pk_params,
         ).fetchone()[0]
         entry = {
             'person_name': name,
@@ -7599,19 +7717,30 @@ def list_master_person_roster(active_only=False, conn=None):
     seen_keys = {r['pic_key'] for r in roster}
 
     def _append_roster_person(name, staff=None, quotation_count=0):
+        from master_ref import person_identity_pic_key
+
         nonlocal roster, seen_keys
         label = (name or '').strip()
         if not label or _invalid_master_person_label(label):
             return
-        key = label.lower()
-        if key in seen_keys:
+        gkey = person_identity_pic_key(label)
+        if gkey in seen_keys:
             return
-        seen_keys.add(key)
+        seen_keys.add(gkey)
+        key = label.lower()
         if staff is None:
             staff = staff_by_lower.get(key)
+            if not staff:
+                for mk in _person_in_charge_lower_keys(label):
+                    staff = staff_by_lower.get(mk)
+                    if staff:
+                        break
+        match_keys = _person_in_charge_lower_keys(label)
+        ph = ','.join('?' * len(match_keys)) if match_keys else '?'
+        pk_params = match_keys if match_keys else [key]
         project_count = conn.execute(
-            "SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge))=?",
-            (key,),
+            f"SELECT COUNT(*) FROM projects WHERE lower(trim(person_in_charge)) IN ({ph})",
+            pk_params,
         ).fetchone()[0]
         entry = {
             'person_name': label,
@@ -7694,16 +7823,25 @@ def list_quotations_for_roster_person(person_label, limit=100, offset=0, sort_di
     if not label:
         conn.close()
         return {'items': [], 'total': 0, 'person_name': None, 'pic_key': None}
+    from master_ref import person_identity_code, person_identity_labels
+
     key = label.lower()
     by_person = _registry_by_person(conn)
     roster = next(
-        (p for p in by_person if p['person_name'].lower() == key or p['pic_key'] == key),
+        (p for p in by_person if p['person_name'].lower() == key or p['pic_key'] == key
+         or key in (p.get('match_keys') or [])),
         None,
     )
     pic_key = roster['pic_key'] if roster else key
     person_name = roster['person_name'] if roster else label
-    filt = ' AND lower(trim(qr.person_in_charge)) = ?'
-    params = [pic_key]
+    icode = person_identity_code(label) or person_identity_code(person_name)
+    if icode:
+        match_names = person_identity_labels(icode)
+    elif roster:
+        match_names = [person_name]
+    else:
+        match_names = [label]
+    filt, params = _sql_person_in_charge_match('qr', match_names)
     order_sql = _registry_order_sql('quote_date', sort_dir)
     sql = f"""
         SELECT qr.*, p.project_code, p.project_name, p.account_code, p.mp_contract_code

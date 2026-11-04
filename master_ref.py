@@ -21,6 +21,88 @@ PERSON_CODE_NAMES = {
     'kl': 'Kelvin Li',
 }
 
+# 同一人 Master List 多種寫法 → 報價尾碼／staff code（勿用英文首字母 ps）
+PERSON_IDENTITY_BY_CODE = {
+    'pi': {
+        'en': ('Mr. Pi', 'Pi Lap Sun'),
+        'zh': ('皮立新',),
+        'display': '皮立新',
+    },
+}
+
+
+def _normalize_identity_label(s):
+    return re.sub(r'\s+', ' ', (s or '').strip().lower())
+
+
+def person_identity_code(label):
+    """任一項目負責人顯示名 → 慣用縮寫 code，無則 None。"""
+    raw = (label or '').strip()
+    if not raw:
+        return None
+    key = _normalize_identity_label(raw)
+    for code, meta in PERSON_IDENTITY_BY_CODE.items():
+        for en in meta.get('en', ()):
+            if _normalize_identity_label(en) == key:
+                return code
+        for zh in meta.get('zh', ()):
+            if (zh or '').strip() == raw or _normalize_identity_label(zh) == key:
+                return code
+    for code, full in PERSON_CODE_NAMES.items():
+        if _normalize_identity_label(full) == key:
+            return code
+    return None
+
+
+def person_identity_labels(code):
+    """同一 identity 在 DB 可能出現的 person_in_charge 字串（去重、保留大小寫）。"""
+    code = normalize_person_code(code)
+    if not code:
+        return []
+    meta = PERSON_IDENTITY_BY_CODE.get(code)
+    if not meta:
+        full = PERSON_CODE_NAMES.get(code)
+        return [full] if full else []
+    seen = set()
+    out = []
+    for bucket in ('display', 'en', 'zh'):
+        val = meta.get(bucket)
+        if isinstance(val, str) and val.strip():
+            items = (val,)
+        elif isinstance(val, (list, tuple)):
+            items = val
+        else:
+            continue
+        for item in items:
+            s = (item or '').strip()
+            if not s:
+                continue
+            lk = s.lower()
+            if lk in seen:
+                continue
+            seen.add(lk)
+            out.append(s)
+    fallback = PERSON_CODE_NAMES.get(code)
+    if fallback and fallback.strip().lower() not in seen:
+        out.append(fallback.strip())
+    return out
+
+
+def person_identity_pic_key(label):
+    """主檔統計分組鍵（合併同一人的不同拼寫）。"""
+    code = person_identity_code(label)
+    if code:
+        return f'identity:{code}'
+    return _normalize_identity_label(label)
+
+
+def person_identity_display_name(code):
+    meta = PERSON_IDENTITY_BY_CODE.get(code) or {}
+    disp = (meta.get('display') or '').strip()
+    if disp:
+        return disp
+    return PERSON_CODE_NAMES.get(code, code)
+
 _name_map_cache = None
 
 
@@ -97,10 +179,14 @@ def _name_matches_canonical(full_name, name_en, name_zh):
 def canonical_quotation_suffix(name_en=None, name_zh=None):
     """
     報價編號尾碼慣例（MS/Q001/26/dc 的 dc）。
-    優先 PERSON_CODE_NAMES；否則英文雙名取首字母（Dennis Chan→dc）。
+    優先 PERSON_IDENTITY／PERSON_CODE_NAMES；否則英文雙名取首字母（Dennis Chan→dc）。
     """
     en = (name_en or '').strip()
     zh = (name_zh or '').strip()
+    for candidate in (en, zh):
+        code = person_identity_code(candidate)
+        if code:
+            return code
     for code, full in PERSON_CODE_NAMES.items():
         if _name_matches_canonical(full, en, zh):
             return code.lower()
