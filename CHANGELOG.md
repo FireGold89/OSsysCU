@@ -4,6 +4,12 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-upload-layout` · 分支 `v2/portfolio`
+
+### 變更
+- **uploads 分類目錄**：路徑改為 `{功能}/{項目或_general}/檔名`；`UPLOAD_CATEGORIES` 對照各 API。管理頁 `/admin` 顯示磁碟分類統計；`scripts/uploads_inventory.py` 可 SSH 跑。
+- **匯出清單**：`GENERATED_EXPORTS` 列出不寫 uploads 的 PDF/Word 功能，避免與上傳混淆。
+
 `APP_VERSION`: `v2-20261104-upload-naming` · 分支 `v2/portfolio`
 
 ### 變更

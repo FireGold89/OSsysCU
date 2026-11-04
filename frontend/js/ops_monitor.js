@@ -55,6 +55,7 @@
     $('opsMsg').textContent = text;
     $('opsGrid').hidden = true;
     $('opsOcr').hidden = true;
+    $('opsUploads').hidden = true;
     $('opsWrites').hidden = true;
     $('opsRefresh').hidden = true;
     $('opsAutoWrap').hidden = true;
@@ -107,6 +108,32 @@
       span.textContent = eng.name || '';
       list.appendChild(span);
     });
+    const storage = d.upload_storage || [];
+    $('opsUploads').hidden = false;
+    const upBody = $('opsUploadBody');
+    upBody.replaceChildren();
+    storage.forEach((row) => {
+      if (!row.files) return;
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><code>' + (row.id || '') + '</code><br><span class="ops-sub">' + (row.label || '') + '</span></td>' +
+        '<td>' + (row.feature || '') + '<br><span class="ops-sub">' + (row.path_hint || '') + '</span></td>' +
+        '<td>' + row.files + '</td>' +
+        '<td>' + fmtBytes(row.bytes) + '</td>';
+      upBody.appendChild(tr);
+    });
+    if (!upBody.children.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = '（尚無已分類檔案，或僅有舊版根目錄檔）';
+      tr.appendChild(td);
+      upBody.appendChild(tr);
+    }
+    const gen = d.generated_exports || [];
+    $('opsGeneratedHint').textContent = gen.length
+      ? '不寫 uploads 的匯出：' + gen.map((g) => g.label).join('、')
+      : '';
     const rows = d.recent_writes || [];
     $('opsWrites').hidden = false;
     $('opsWriteHint').textContent = '最近 1 小時寫入 ' + (d.writes_last_hour || 0) + ' 筆，失敗 ' + (d.failed_writes_last_hour || 0) + ' 筆 · 下列為最近 ' + rows.length + ' 筆';

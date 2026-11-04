@@ -36,6 +36,24 @@
       <p class="ops-sub" id="opsOcrMode"></p>
       <div id="opsOcrList"></div>
     </section>
+    <section class="ops-card" id="opsUploads" hidden>
+      <h2>uploads 分類（磁碟）</h2>
+      <p class="ops-sub">依資料夾對應系統功能；預覽／匯出 PDF 多數不寫入 uploads，見下方說明。</p>
+      <div class="ops-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>分類</th>
+              <th>功能</th>
+              <th>檔案數</th>
+              <th>容量</th>
+            </tr>
+          </thead>
+          <tbody id="opsUploadBody"></tbody>
+        </table>
+      </div>
+      <p class="ops-sub" id="opsGeneratedHint"></p>
+    </section>
     <section class="ops-card" id="opsWrites" hidden>
       <h2>最近寫入</h2>
       <p class="ops-sub" id="opsWriteHint"></p>

@@ -53,20 +53,29 @@ scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .
 
 ## uploads 目錄說明
 
-| 子目錄 | 來源 | 檔名規則（v2-20261104-upload-naming 起） |
-|--------|------|------------------------------------------|
-| `iso/{項目}/` | ISO 上傳 | `{原檔名}_{YYYYMMDD}.pdf` |
-| `ocr/` | OCR／付款掃描 | `{項目}_{原檔名}_{YYYYMMDD}.pdf` |
-| `quotations/` | 分判報價 PDF | `{項目}_{SC}_{原檔名}_{日期}.pdf` |
-| `main-fac/` | 主包 FAC 附件 | `{項目}_{statement\|pc_cert\|mg_cert}_{原檔名}_{日期}` |
-| `sc-vo/` | 分判 VO 附件 | `{項目}_VO{id}_{type}_{原檔名}_{日期}` |
-| `ip/` | 糧期支票／IP 附件 | `{項目}_IP{n}_{receipt\|application\|cert}_{原檔名}_{日期}` |
-| `imports/` | Excel 匯入暫存 | `{用途}_{原檔名}_{日期}.xlsx` |
-| `misc/` | 通用上傳 API | `{原檔名}_{日期}.ext` |
+**路徑規則（v2-20261104 起）**：`{功能}/{項目或_general}/{前綴_原檔名_YYYYMMDD}.ext`
 
-**根目錄一堆 32 位 hex `.pdf`**：舊版 OCR／付款上傳（約 20261104 前）產物；DB 的 `payment_records.pdf_path`、`ocr_extractions.filename` 仍指向它們，**勿批量刪**。新上傳會進上表子目錄。
+| 第一層 `功能/` | 對應畫面／API | 第二層 |
+|----------------|---------------|--------|
+| `iso/` | ISO 文件登記 | `{MS_Q1161_25_jc}/` |
+| `ocr/` | OCR、付款掃描 | `{項目}/` 或 `_general/` |
+| `quotations/` | 分判 · 上傳報價 PDF | `{項目}/` |
+| `main-fac/` | 主包 FAC 附件 | `{項目}/` |
+| `sc-vo/` | 分判 VO 附件 | `{項目}/` |
+| `ip/` | 糧期支票／IP 附件 | `{項目}/` |
+| `imports/` | Excel 匯入暫存 | `_general/`（檔名前綴 portfolio、master-list 等） |
+| `misc/` | `/api/files/upload` | `_general/` |
 
-**匯出（不寫 uploads）**：QS 匯報 PDF、會簽表 PDF/DOCX、Interim Cert、Main/SC FAC 等由 API 直接下載，檔名見瀏覽器存檔（如 `QS匯報_{項目}_{日期}.pdf`）。
+**根目錄 32 位 hex `.pdf`**：歸類為 **legacy-root**（舊 OCR 等）；DB 仍可能引用，**勿批量刪**。
+
+**不寫 uploads 的「製作」**：QS 匯報、會簽表、Main/SC FAC 預覽 PDF、糧期計算書匯出等 → 僅 HTTP 下載／瀏覽器 blob；完整清單見 `upload_naming.GENERATED_EXPORTS` 或 **/admin**「uploads 分類」頁尾。
+
+**本機／SSH 統計**：
+
+```bash
+python scripts/uploads_inventory.py
+# 或指定目錄：python scripts/uploads_inventory.py /data/uploads
+```
 
 ## ISO / 附件遷移（預覽 404「文件不在伺服器」）
 

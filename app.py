@@ -14,7 +14,13 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
-from upload_naming import upload_rel_path, upload_slug
+from upload_naming import (
+    GENERATED_EXPORTS,
+    UPLOAD_CATEGORIES,
+    upload_rel_path,
+    upload_slug,
+    upload_storage_summary,
+)
 import auth
 import access_control
 import database as db
@@ -187,6 +193,9 @@ def admin_ops_status():
         'recent_writes': activity['recent'],
         'ocr_mode': ocr_mode,
         'ocr_engines': ocr_engines,
+        'upload_storage': upload_storage_summary(UPLOAD_DIR),
+        'upload_catalog': UPLOAD_CATEGORIES,
+        'generated_exports': GENERATED_EXPORTS,
     })
 
 
@@ -640,8 +649,15 @@ def portfolio_update_sc_status_api(portfolio_id):
     return resp(item)
 
 
-def _save_uploaded_file(category, file, slug=None):
-    rel = upload_rel_path(category, file.filename, UPLOAD_DIR, slug=slug)
+def _save_uploaded_file(category, file, project_code=None, detail_slug=None):
+    code = db.iso_safe_project_code(project_code) if project_code else None
+    rel = upload_rel_path(
+        category,
+        file.filename,
+        UPLOAD_DIR,
+        project_code=code,
+        detail_slug=detail_slug,
+    )
     path = os.path.join(UPLOAD_DIR, rel.replace('/', os.sep))
     file.save(path)
     return path, rel
@@ -653,7 +669,7 @@ def _save_portfolio_excel():
     file = request.files['file']
     if not file.filename or not file.filename.lower().endswith(('.xlsx', '.xls')):
         return None, None, resp(error='請上傳 .xlsx', status=400)
-    path, _rel = _save_uploaded_file('imports', file, slug='portfolio')
+    path, _rel = _save_uploaded_file('imports', file, detail_slug='portfolio')
     return path, file.filename, None
 
 
@@ -722,7 +738,7 @@ def _save_eng_excel():
     file = request.files['file']
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return None, None, resp(error='請上傳 Excel（.xlsx）', status=400)
-    path, _rel = _save_uploaded_file('imports', file, slug='nn1')
+    path, _rel = _save_uploaded_file('imports', file, detail_slug='nn1')
     return path, file.filename, None
 
 
@@ -913,7 +929,9 @@ def upload_main_con_fac_attachment(project_id):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
     project = db.get_project(project_id)
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
-    rel, save_path = _save_uploaded_file('main-fac', file, slug=f'{code}_{att_type}')
+    rel, save_path = _save_uploaded_file(
+        'main-fac', file, project_code=code, detail_slug=att_type,
+    )
     db.update_main_fac_attachment(project_id, att_type, rel, file.filename)
     return resp({
         'path': rel,
@@ -1567,7 +1585,7 @@ def upload_file():
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    rel, _save_path = _save_uploaded_file('misc', file)
+    rel, _save_path = _save_uploaded_file('misc', file, detail_slug='generic')
     return resp({'pdf_path': rel, 'filename': file.filename})
 
 
@@ -1586,7 +1604,9 @@ def upload_sc_quotation_pdf(sc_id):
     project = db.get_project(sc.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     sc_tag = upload_slug(sc.get('sc_no') or sc_id)
-    rel, _save_path = _save_uploaded_file('quotations', file, slug=f'{code}_{sc_tag}')
+    rel, _save_path = _save_uploaded_file(
+        'quotations', file, project_code=code, detail_slug=sc_tag,
+    )
     db.attach_quotation_pdf(sc_id, rel, original_filename=file.filename)
     return resp({
         'pdf_path': rel,
@@ -1835,7 +1855,12 @@ def upload_sc_vo_attachment(record_id):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
     project = db.get_project(row.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
-    rel, save_path = _save_uploaded_file('sc-vo', file, slug=f'{code}_VO{record_id}_{att_type}')
+    rel, save_path = _save_uploaded_file(
+        'sc-vo',
+        file,
+        project_code=code,
+        detail_slug=f'VO{record_id}_{att_type}',
+    )
     old_path = {
         'approval': row.get('approval_attachment'),
         'quotation': row.get('quotation_attachment'),
@@ -1986,12 +2011,12 @@ def ocr_upload():
         return resp(error='不支援的文件格式（請上傳PDF/PNG/JPG）', status=400)
 
     project_id = request.form.get('project_id', type=int)
-    slug = None
+    ocr_project_code = None
     if project_id:
         project = db.get_project(project_id)
         if project:
-            slug = db.iso_safe_project_code(project.get('project_code'))
-    rel, save_path = _save_uploaded_file('ocr', file, slug=slug)
+            ocr_project_code = project.get('project_code')
+    rel, save_path = _save_uploaded_file('ocr', file, project_code=ocr_project_code)
 
     api_key = db.get_setting('gemini_api_key') or None
     quark_id = db.get_setting('quark_client_id') or None
@@ -2237,7 +2262,9 @@ def upload_ip_receipt_attachment(ip_id):
     project = db.get_project(existing.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     ip_no = existing.get('ip_no') or ip_id
-    rel, _save_path = _save_uploaded_file('ip', file, slug=f'{code}_IP{ip_no}_receipt')
+    rel, _save_path = _save_uploaded_file(
+        'ip', file, project_code=code, detail_slug=f'IP{ip_no}_receipt',
+    )
     record_index = request.form.get('record_index', request.args.get('record_index', 0))
     try:
         record_index = int(record_index or 0)
@@ -2290,7 +2317,9 @@ def upload_ip_application_attachment(ip_id):
     project = db.get_project(existing.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     ip_no = existing.get('ip_no') or ip_id
-    rel, _save_path = _save_uploaded_file('ip', file, slug=f'{code}_IP{ip_no}_application')
+    rel, _save_path = _save_uploaded_file(
+        'ip', file, project_code=code, detail_slug=f'IP{ip_no}_application',
+    )
     old_path = existing.get('ip_application_attachment')
     if old_path:
         old_full = os.path.join(UPLOAD_DIR, old_path.replace('/', os.sep))
@@ -2338,7 +2367,9 @@ def upload_ip_cert_attachment(ip_id):
     project = db.get_project(existing.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     ip_no = existing.get('ip_no') or ip_id
-    rel, _save_path = _save_uploaded_file('ip', file, slug=f'{code}_IP{ip_no}_cert')
+    rel, _save_path = _save_uploaded_file(
+        'ip', file, project_code=code, detail_slug=f'IP{ip_no}_cert',
+    )
     db.set_ip_cert_attachment(ip_id, rel, file.filename)
     return resp({
         'ip_cert_attachment': rel,
@@ -2930,7 +2961,7 @@ def master_list_preview():
     file = request.files['file']
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return resp(error='請上傳 Master List Excel', status=400)
-    save_path, _rel = _save_uploaded_file('imports', file, slug='master-list')
+    save_path, _rel = _save_uploaded_file('imports', file, detail_slug='master-list')
     try:
         from master_list_importer import preview_master_import
         return resp(preview_master_import(save_path))
@@ -2945,7 +2976,7 @@ def master_list_sync():
     file = request.files['file']
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return resp(error='請上傳 Master List Excel', status=400)
-    save_path, _rel = _save_uploaded_file('imports', file, slug='master-list')
+    save_path, _rel = _save_uploaded_file('imports', file, detail_slug='master-list')
     try:
         from master_list_importer import sync_master_import
         stats = sync_master_import(save_path)
@@ -3153,7 +3184,7 @@ def import_summary_api():
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return resp(error='請上傳 Excel 文件', status=400)
 
-    save_path, _rel = _save_uploaded_file('imports', file, slug='summary')
+    save_path, _rel = _save_uploaded_file('imports', file, detail_slug='summary')
     try:
         from summary_importer import sync_summary_import
         stats = sync_summary_import(save_path, update_existing=True)
@@ -3184,7 +3215,7 @@ def import_excel_api():
     if not file.filename.endswith(('.xlsx', '.xls')):
         return resp(error='請上傳Excel文件', status=400)
 
-    save_path, _rel = _save_uploaded_file('imports', file, slug='payment-excel')
+    save_path, _rel = _save_uploaded_file('imports', file, detail_slug='payment-excel')
 
     try:
         from excel_importer import import_excel
