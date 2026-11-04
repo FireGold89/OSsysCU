@@ -7571,7 +7571,10 @@ def _merge_staff_by_identity(conn):
             if len(matched) == 1:
                 r = matched[0]
                 want_en = (r.get('name_en') or '').strip()
-                want_zh = (r.get('name_zh') or meta.get('display') or '').strip()
+                zh_meta = meta.get('zh') or ()
+                want_zh = (r.get('name_zh') or (zh_meta[0] if zh_meta else '')).strip()
+                if not want_en:
+                    want_en = (meta.get('display') or '').strip()
                 for en in meta.get('en', ()):
                     if not want_en:
                         want_en = en
@@ -7598,12 +7601,18 @@ def _merge_staff_by_identity(conn):
         ))
         keep = matched[0]
         name_en = (keep.get('name_en') or '').strip()
-        name_zh = (keep.get('name_zh') or meta.get('display') or '').strip()
+        zh_meta = meta.get('zh') or ()
+        name_zh = (keep.get('name_zh') or (zh_meta[0] if zh_meta else '')).strip()
+        if not name_en:
+            name_en = (meta.get('display') or '').strip()
         for r in matched:
             if not name_en and (r.get('name_en') or '').strip():
                 name_en = r['name_en'].strip()
             if not name_zh and (r.get('name_zh') or '').strip():
                 name_zh = r['name_zh'].strip()
+        for en in meta.get('en', ()):
+            if not name_en:
+                name_en = en.strip()
         for r in matched[1:]:
             # 釋放 UNIQUE code（停用列仍佔用 pi 會令保留列無法寫入）
             off_code = f"_off{r['id']}"

@@ -26,13 +26,13 @@ PERSON_IDENTITY_BY_CODE = {
     'pi': {
         'en': ('Mr. Pi', 'Pi Lap Sun'),
         'zh': ('皮立新',),
-        'display': '皮立新',
+        'display': 'Pi Lap Sun',
     },
     'jw': {
         'en': ('Joson Wong', 'JosonWong'),
         'zh': ('黃德明',),
         'aliases': ('joson',),
-        'display': '黃德明',
+        'display': 'Joson Wong',
     },
 }
 

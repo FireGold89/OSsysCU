@@ -118,12 +118,11 @@ const StaffRoster = {
 
   displayName(row) {
     if (!row) return '—';
-    const zh = (row.name_zh || '').trim();
-    if (zh) return zh;
-    if (row.person_name) return row.person_name;
     const en = (row.name_en || '').trim();
-    if (zh && en) return `${zh} · ${en}`;
-    return en || zh || '—';
+    const zh = (row.name_zh || '').trim();
+    if (en) return en;
+    if (row.person_name) return row.person_name;
+    return zh || '—';
   },
 
   nameFor(code) {

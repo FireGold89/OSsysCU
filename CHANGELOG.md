@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-pic-identity-r4` · 分支 `v2/portfolio`
+
+### 變更
+- **項目負責人顯示**：identity 慣用名改英文（Pi Lap Sun、Joson Wong）；名單主欄以 `name_en` 為先，中文保留副標。
+
 `APP_VERSION`: `v2-20261104-pic-identity-r3` · 分支 `v2/portfolio`
 
 ### 修正
