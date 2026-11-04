@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-iso-upload-name` · 分支 `v2/portfolio`
+
+### 變更
+- **ISO 上傳檔名**：實體檔改為 `{原檔主檔名}_{YYYYMMDD}.ext`（保留使用者上傳名稱並附日期）；同項目同目錄同日同名自動加 `_8位hex` 避免覆蓋。畫面顯示仍用 `original_filename`。
+
 `APP_VERSION`: `v2-20261026-project-audit` · 分支 `v2/portfolio`
 
 ### 變更

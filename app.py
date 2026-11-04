@@ -1295,17 +1295,6 @@ def _iso_project_upload_dir(project_id):
     return subdir, f'iso/{code}'
 
 
-def _iso_disk_filename(doc_slot, original_filename):
-    """實體檔名：{槽位中文名}_{YYYYMMDD}_{短ID}.ext"""
-    label = db.iso_slot_disk_label(doc_slot)
-    label = re.sub(r'[\\/:*?"<>|\x00-\x1f\s]+', '_', label.strip())[:40] or 'ISO文件'
-    date = datetime.now().strftime('%Y%m%d')
-    name = (original_filename or 'file.pdf').strip()
-    ext = name.rsplit('.', 1)[-1].lower() if '.' in name else 'pdf'
-    uid = uuid.uuid4().hex[:8]
-    return f"{label}_{date}_{uid}.{ext}"
-
-
 @app.route('/api/projects/<int:project_id>/contract-calc', methods=['GET'])
 def project_contract_calc(project_id):
     """合約金額結算。不組糧期、不等 ISO。"""
@@ -1405,8 +1394,8 @@ def upload_iso_document(project_id):
     sc_id_raw = request.form.get('subcontractor_id')
     subcontractor_id = int(sc_id_raw) if sc_id_raw else None
 
-    unique_name = _iso_disk_filename(doc_slot, file.filename)
     subdir, rel_prefix = _iso_project_upload_dir(project_id)
+    unique_name = db.iso_disk_filename(file.filename, dest_dir=subdir)
     rel_path = f"{rel_prefix}/{unique_name}"
     save_path = os.path.join(UPLOAD_DIR, rel_path.replace('/', os.sep))
     file.save(save_path)

@@ -55,6 +55,8 @@ scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .
 
 資料庫只記 **路徑**；實體檔在 **`/data/uploads/`**，ISO 在 **`/data/uploads/iso/{項目編號}/`**。只還原 `qs_system.db`、未拷貝 `iso/` 子目錄時，畫面仍顯示檔名但預覽會 404。
 
+**新上傳命名（v2-20261104 起）**：`{原檔主檔名}_{YYYYMMDD}.pdf`（同日同名再加 `_8位hex`）。舊資料多為 `{槽位中文}_{日期}_{hex}` 或遷移備份缺中文前綴；預覽 API 會依 `_xxxxxxxx` 尾碼對齊。
+
 **伺服器自查（Workbench / SSH）：**
 
 ```bash
