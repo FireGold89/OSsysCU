@@ -51,6 +51,25 @@ h2 { margin: 0 0 8px; font-size: 16px; font-weight: 650; }
 
 .ops-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+.ops-user {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#opsLogout {
+  border-color: rgba(185, 28, 28, 0.35);
+  color: #b91c1c;
+}
+
+[data-theme="dark"] #opsLogout {
+  color: #fca5a5;
+  border-color: rgba(252, 165, 165, 0.35);
+}
+
 .ops-auto {
   display: flex;
   align-items: center;

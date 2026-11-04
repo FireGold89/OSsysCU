@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-admin-logout` · 分支 `v2/portfolio`
+
+### 新增
+- **/admin 登出**：頂欄顯示已登入帳號；「登出」呼叫 session 登出並回到登入頁（可再進 /admin）。
+
 `APP_VERSION`: `v2-20261104-admin-access` · 分支 `v2/portfolio`
 
 ### 新增

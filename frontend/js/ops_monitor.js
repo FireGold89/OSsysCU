@@ -221,6 +221,26 @@
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('qs_theme', next);
   });
+  $('opsLogout')?.addEventListener('click', () => {
+    adminLogout();
+  });
+
+  function showSessionUser(user) {
+    const el = $('opsUserLine');
+    const btn = $('opsLogout');
+    if (!user) {
+      if (el) el.hidden = true;
+      if (btn) btn.hidden = true;
+      return;
+    }
+    if (el) {
+      const name = user.display_name || user.username || '';
+      el.textContent = name ? `已登入：${name}` : '';
+      el.hidden = !name;
+    }
+    if (btn) btn.hidden = false;
+  }
+
   $('opsRefresh').addEventListener('click', () => {
     if ($('panelAccess') && !$('panelAccess').hidden) {
       AccessAdmin.load().catch(() => toast('載入失敗', 'error'));
@@ -249,6 +269,7 @@
         }
       };
       if (data.auth_required === false) {
+        showSessionUser(null);
         await afterAuth();
         return;
       }
@@ -261,6 +282,7 @@
         showDenied('需要管理員');
         return;
       }
+      showSessionUser(user);
       await afterAuth();
     } catch (_) {
       showDenied('無法連線');

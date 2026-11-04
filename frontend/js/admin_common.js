@@ -48,3 +48,11 @@ async function api(method, path, body, opts = {}) {
 }
 
 window.Auth = { authRequired: true, isAdmin: () => true };
+
+async function adminLogout() {
+  try {
+    await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+  } catch (e) { /* ignore */ }
+  const next = encodeURIComponent('/admin' + (window.location.hash || ''));
+  window.location.href = `/login.html?next=${next}`;
+}
