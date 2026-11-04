@@ -2062,18 +2062,56 @@ def check_invoice_duplicate(project_id):
     return resp({'exists': bool(existing), 'payment': existing})
 
 
+def _resolve_upload_disk_path(filepath):
+    """DB 路徑 → 磁碟檔；備份遷移時中文前綴可能缺失，以 _YYYYMMDD_<uid> 尾碼對齊。"""
+    filepath = filepath.replace('\\', '/')
+    if '..' in filepath or filepath.startswith('/'):
+        return None
+    safe_parts = [os.path.basename(p) for p in filepath.split('/') if p]
+    if not safe_parts:
+        return None
+    path = os.path.join(UPLOAD_DIR, *safe_parts)
+    if os.path.isfile(path):
+        return path
+    fname = safe_parts[-1]
+    uid_m = re.search(r'_([a-f0-9]{8})\.([A-Za-z0-9]+)$', fname)
+    if not uid_m or len(safe_parts) < 2:
+        return None
+    uid, ext = uid_m.group(1).lower(), uid_m.group(2).lower()
+    dir_path = os.path.join(UPLOAD_DIR, *safe_parts[:-1])
+    if not os.path.isdir(dir_path):
+        return None
+    needle = f'_{uid}.{ext}'
+
+    def _scan(folder):
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            return None
+        for alt in names:
+            if needle not in alt.lower():
+                continue
+            candidate = os.path.join(folder, alt)
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
+    found = _scan(dir_path)
+    if found:
+        return found
+    pax = os.path.join(dir_path, 'PaxHeaders.0')
+    if os.path.isdir(pax):
+        return _scan(pax)
+    return None
+
+
 @app.route('/api/uploads/<path:filepath>')
 def serve_upload(filepath):
     """提供上傳文件（PDF/圖片），供瀏覽器內嵌預覽；支援子目錄如 iso/{project_code}/"""
-    filepath = filepath.replace('\\', '/')
-    if '..' in filepath or filepath.startswith('/'):
-        return jsonify({'success': False, 'error': '無效文件名'}), 400
-    safe_parts = [os.path.basename(p) for p in filepath.split('/') if p]
-    if not safe_parts:
-        return jsonify({'success': False, 'error': '無效文件名'}), 400
-    path = os.path.join(UPLOAD_DIR, *safe_parts)
-    if not os.path.isfile(path):
+    path = _resolve_upload_disk_path(filepath)
+    if not path:
         return jsonify({'success': False, 'error': '文件不存在'}), 404
+    safe_parts = [os.path.basename(p) for p in filepath.replace('\\', '/').split('/') if p]
     safe = safe_parts[-1]
     ext = safe.rsplit('.', 1)[-1].lower() if '.' in safe else ''
     mime = {
