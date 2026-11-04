@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-pic-identity-r5` · 分支 `v2/portfolio`
+
+### 修正
+- **項目負責人 identity ec**：Eddy Chan／Eddy 合併為 **ec**（顯示 Eddy Chan）。
+
 `APP_VERSION`: `v2-20261104-pic-identity-r4` · 分支 `v2/portfolio`
 
 ### 變更

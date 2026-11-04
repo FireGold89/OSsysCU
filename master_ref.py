@@ -19,6 +19,7 @@ PERSON_CODE_NAMES = {
     'ny': 'Neelson Yeung',
     'kp': 'Katie Puk',
     'kl': 'Kelvin Li',
+    'ec': 'Eddy Chan',
 }
 
 # 同一人 Master List 多種寫法 → 報價尾碼／staff code（勿用英文首字母 ps）
@@ -33,6 +34,11 @@ PERSON_IDENTITY_BY_CODE = {
         'zh': ('黃德明',),
         'aliases': ('joson',),
         'display': 'Joson Wong',
+    },
+    'ec': {
+        'en': ('Eddy Chan',),
+        'aliases': ('eddy',),
+        'display': 'Eddy Chan',
     },
 }
 
