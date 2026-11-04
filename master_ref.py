@@ -28,11 +28,21 @@ PERSON_IDENTITY_BY_CODE = {
         'zh': ('皮立新',),
         'display': '皮立新',
     },
+    'jw': {
+        'en': ('Joson Wong', 'JosonWong'),
+        'zh': ('黃德明',),
+        'aliases': ('joson',),
+        'display': '黃德明',
+    },
 }
 
 
 def _normalize_identity_label(s):
     return re.sub(r'\s+', ' ', (s or '').strip().lower())
+
+
+def _compact_identity_label(s):
+    return re.sub(r'\s+', '', _normalize_identity_label(s))
 
 
 def person_identity_code(label):
@@ -41,12 +51,19 @@ def person_identity_code(label):
     if not raw:
         return None
     key = _normalize_identity_label(raw)
+    compact = _compact_identity_label(raw)
+    code_val = normalize_person_code(raw)
+    if code_val and code_val in PERSON_IDENTITY_BY_CODE:
+        return code_val
     for code, meta in PERSON_IDENTITY_BY_CODE.items():
         for en in meta.get('en', ()):
-            if _normalize_identity_label(en) == key:
+            if _normalize_identity_label(en) == key or _compact_identity_label(en) == compact:
                 return code
         for zh in meta.get('zh', ()):
             if (zh or '').strip() == raw or _normalize_identity_label(zh) == key:
+                return code
+        for alias in meta.get('aliases', ()):
+            if _normalize_identity_label(alias) == key or _compact_identity_label(alias) == compact:
                 return code
     for code, full in PERSON_CODE_NAMES.items():
         if _normalize_identity_label(full) == key:
@@ -65,7 +82,7 @@ def person_identity_labels(code):
         return [full] if full else []
     seen = set()
     out = []
-    for bucket in ('display', 'en', 'zh'):
+    for bucket in ('display', 'en', 'zh', 'aliases'):
         val = meta.get(bucket)
         if isinstance(val, str) and val.strip():
             items = (val,)

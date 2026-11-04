@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-pic-identity-r3` · 分支 `v2/portfolio`
+
+### 修正
+- **項目負責人 identity jw**：Joson Wong／JosonWong／joson／黃德明 合併為縮寫 **jw**（顯示名 黃德明）。
+
 `APP_VERSION`: `v2-20261104-pic-identity-r2` · 分支 `v2/portfolio`
 
 ### 修正
