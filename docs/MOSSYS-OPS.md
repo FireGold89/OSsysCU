@@ -51,6 +51,45 @@ sudo docker run -d --name ossys --restart unless-stopped \
 scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .\Backup\
 ```
 
+## ISO / 附件遷移（預覽 404「文件不在伺服器」）
+
+資料庫只記 **路徑**；實體檔在 **`/data/uploads/`**，ISO 在 **`/data/uploads/iso/{項目編號}/`**。只還原 `qs_system.db`、未拷貝 `iso/` 子目錄時，畫面仍顯示檔名但預覽會 404。
+
+**伺服器自查（Workbench / SSH）：**
+
+```bash
+sudo ls /data/uploads/iso
+# 某項目例：MS/Q1161/25 → 目錄名多為底線版，如 MS_Q1161_25
+sudo find /data/uploads/iso -type f | head
+```
+
+**做法 A — 本機有完整 `uploads`（含 `iso/`）**
+
+1. 部署含新版 `restore-uploads` 的程式（保留 zip 內子目錄）。
+2. PowerShell（`.env` 設 `RESTORE_TOKEN`，與 mossys 相同）：
+
+```powershell
+cd C:\Users\hiufung_lau\Documents\Pro\OSsysCU-v2
+python scripts\push_uploads_to_prod.py
+```
+
+3. 看輸出 `synced` 應 > 0；再開 ISO 預覽。
+
+**做法 B — 直接 scp 目錄（大檔、略過 zip）**
+
+```powershell
+# 本機 uploads\iso 整棵樹 → 伺服器
+scp -r -i $env:USERPROFILE\.ssh\aliyun-ossys `
+  "C:\Users\hiufung_lau\Documents\Pro\OSsysCU-v2\uploads\iso" `
+  admin@43.103.44.4:/tmp/iso-restore
+ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 `
+  "sudo mkdir -p /data/uploads/iso && sudo cp -a /tmp/iso-restore/. /data/uploads/iso/ && sudo chown -R root:root /data/uploads"
+```
+
+舊環境備份若只有 zip，解壓後須保留 **`iso/項目編號/*.pdf`** 結構，不要只拷貝 uploads 根目錄的散檔。
+
+**仍 404 時**：對照 DB 內 `file_path`（例 `iso/MS_Q1161_25/xxx.pdf`）與磁碟檔名是否一致；缺檔只能自舊站再拷或於 ISO 頁重新上傳。
+
 ## API 压测（可重复）
 
 脚本在 Git 仓库 **`scripts/mossys_load_smoke.py`**（宿主机 `/opt/ossys/scripts/…`）。**容器里没有 `/opt/ossys`**（镜像只有 `/app`，未打包 scripts），须先 **`docker cp` 进容器** 再 `docker exec` 执行。脚本在容器内用 env 登入，模拟首屏／切项目／并行 GET；单请求 **≥22s** 会标 `slow`。**不能代替浏览器点 UI**。

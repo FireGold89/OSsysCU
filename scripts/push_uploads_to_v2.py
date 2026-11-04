@@ -35,10 +35,13 @@ def _build_zip():
     buf = io.BytesIO()
     count = 0
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name in sorted(os.listdir(UPLOADS_DIR)):
-            path = os.path.join(UPLOADS_DIR, name)
-            if os.path.isfile(path):
-                zf.write(path, arcname=name)
+        for root, _dirs, files in os.walk(UPLOADS_DIR):
+            for name in sorted(files):
+                if name.startswith('.'):
+                    continue
+                path = os.path.join(root, name)
+                arcname = os.path.relpath(path, UPLOADS_DIR).replace('\\', '/')
+                zf.write(path, arcname=arcname)
                 count += 1
     if not count:
         print('uploads 資料夾為空，略過', file=sys.stderr)

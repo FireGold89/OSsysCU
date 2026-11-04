@@ -81,3 +81,33 @@ def enrich_person_fields(rec):
     """以 person_in_charge 為主；person_code 僅保留 Excel 明示的編號尾碼"""
     rec['person_code'] = normalize_person_code(rec.get('person_code'))
     return rec
+
+
+def _name_matches_canonical(full_name, name_en, name_zh):
+    full = (full_name or '').strip().lower()
+    if not full:
+        return False
+    for candidate in (name_en, name_zh):
+        c = (candidate or '').strip().lower()
+        if c and c == full:
+            return True
+    return False
+
+
+def canonical_quotation_suffix(name_en=None, name_zh=None):
+    """
+    報價編號尾碼慣例（MS/Q001/26/dc 的 dc）。
+    優先 PERSON_CODE_NAMES；否則英文雙名取首字母（Dennis Chan→dc）。
+    """
+    en = (name_en or '').strip()
+    zh = (name_zh or '').strip()
+    for code, full in PERSON_CODE_NAMES.items():
+        if _name_matches_canonical(full, en, zh):
+            return code.lower()
+    if en and ' ' in en:
+        parts = [p for p in en.split() if p]
+        if len(parts) >= 2:
+            a, b = parts[0][:1], parts[-1][:1]
+            if a.isalpha() and b.isalpha():
+                return (a + b).lower()
+    return None

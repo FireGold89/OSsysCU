@@ -3031,13 +3031,19 @@ def restore_uploads():
             for info in zf.infolist():
                 if info.is_dir():
                     continue
-                base = os.path.basename(info.filename)
-                if not base or base.startswith('.') or '..' in base:
+                rel = info.filename.replace('\\', '/').lstrip('/')
+                if rel.startswith('uploads/'):
+                    rel = rel[len('uploads/'):]
+                parts = [p for p in rel.split('/') if p]
+                if not parts or any(p in ('.', '..') for p in parts):
                     continue
-                dest = os.path.join(UPLOAD_DIR, base)
-                if os.path.exists(dest):
+                if parts[-1].startswith('.'):
+                    continue
+                dest = os.path.join(UPLOAD_DIR, *parts)
+                if os.path.isfile(dest):
                     skipped += 1
                     continue
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
                 with zf.open(info) as src, open(dest, 'wb') as dst:
                     shutil.copyfileobj(src, dst)
                 synced += 1
@@ -3047,10 +3053,9 @@ def restore_uploads():
         if os.path.exists(tmp_zip):
             os.remove(tmp_zip)
 
-    upload_count = len([
-        f for f in os.listdir(UPLOAD_DIR)
-        if os.path.isfile(os.path.join(UPLOAD_DIR, f))
-    ])
+    upload_count = 0
+    for _root, _dirs, files in os.walk(UPLOAD_DIR):
+        upload_count += len(files)
     return resp({
         'message': 'uploads 已同步',
         'synced': synced,

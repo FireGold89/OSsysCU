@@ -554,6 +554,7 @@ def _migrate_db(conn):
             ))
     _migrate_pic_abbreviations(conn)
     _migrate_staff_roster(conn)
+    _sync_staff_canonical_codes(conn)
     _migrate_master_source_filenames(conn)
     _migrate_qs_subcon_registry_fields(conn)
     pay_cols = {r[1] for r in conn.execute("PRAGMA table_info(payment_records)")}
@@ -7439,7 +7440,61 @@ def _normalize_staff_code(code):
     return c
 
 
+def _build_staff_name_lookup(staff_rows):
+    """姓名 → staff 列；勿把 2～4 字母尾碼當姓名鍵（避免 dc、iy 串錯人）。"""
+    by_name = {}
+    for s in staff_rows:
+        scode = (s.get('code') or '').strip().lower()
+        names = list(_staff_display_names(s))
+        canon = _staff_canonical_name(s)
+        if canon:
+            names.append(canon)
+        for n in names:
+            key = (n or '').strip().lower()
+            if not key:
+                continue
+            if _is_pic_abbreviation_label(n) and key != scode:
+                continue
+            prev = by_name.get(key)
+            if prev is None or (not prev.get('is_active') and s.get('is_active')):
+                by_name[key] = s
+    return by_name
+
+
+def _sync_staff_canonical_codes(conn):
+    """依 PERSON_CODE_NAMES／英文首字母修正 staff_members.code（如 Dennis Chan→dc）。"""
+    from master_ref import canonical_quotation_suffix
+
+    rows = [dict(r) for r in conn.execute(
+        "SELECT id, code, name_en, name_zh FROM staff_members WHERE is_active=1"
+    ).fetchall()]
+    for row in rows:
+        want = canonical_quotation_suffix(row.get('name_en'), row.get('name_zh'))
+        if not want:
+            continue
+        have = (row.get('code') or '').strip().lower()
+        if have == want:
+            continue
+        taken = conn.execute(
+            "SELECT id FROM staff_members WHERE lower(code)=? AND id!=?",
+            (want, row['id']),
+        ).fetchone()
+        if taken:
+            continue
+        conn.execute(
+            "UPDATE staff_members SET code=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (want, row['id']),
+        )
+
+
 def _derive_staff_code(conn, name_en, name_zh):
+    from master_ref import canonical_quotation_suffix
+
+    canon = canonical_quotation_suffix(name_en, name_zh)
+    if canon and not conn.execute(
+        "SELECT 1 FROM staff_members WHERE code=?", (canon,)
+    ).fetchone():
+        return canon
     raw = (name_en or name_zh or 'staff').lower()
     letters = re.sub(r'[^a-z]', '', raw.replace(' ', ''))
     base = letters[:6] if len(letters) >= 2 else 'st'
@@ -7458,20 +7513,7 @@ def list_master_person_roster(active_only=False, conn=None):
         conn = get_conn()
     by_person = _registry_by_person(conn)
     staff_rows = [dict(r) for r in conn.execute("SELECT * FROM staff_members").fetchall()]
-    staff_by_lower = {}
-    for s in staff_rows:
-        for n in _staff_display_names(s):
-            key = n.lower()
-            if not key:
-                continue
-            prev = staff_by_lower.get(key)
-            if prev is None or (not prev.get('is_active') and s.get('is_active')):
-                staff_by_lower[key] = s
-        key = _staff_canonical_name(s).lower()
-        if key:
-            prev = staff_by_lower.get(key)
-            if prev is None or (not prev.get('is_active') and s.get('is_active')):
-                staff_by_lower[key] = s
+    staff_by_lower = _build_staff_name_lookup(staff_rows)
 
     roster = []
     for p in by_person:
@@ -7600,7 +7642,13 @@ def list_master_person_roster(active_only=False, conn=None):
 
 
 def list_staff_members(active_only=False):
-    return list_master_person_roster(active_only=active_only)
+    conn = get_conn()
+    try:
+        _sync_staff_canonical_codes(conn)
+        conn.commit()
+        return list_master_person_roster(active_only=active_only, conn=conn)
+    finally:
+        conn.close()
 
 
 def list_quotations_for_roster_person(person_label, limit=100, offset=0, sort_dir='desc'):
@@ -7745,6 +7793,10 @@ def create_staff_member(data):
     if raw_code and not code:
         conn.close()
         raise ValueError('編號縮寫須為 2～4 位英文字母（例：jy、dc、ily）')
+    if not code:
+        from master_ref import canonical_quotation_suffix
+        code = canonical_quotation_suffix(data['name_en'], data['name_zh'])
+        code = _normalize_staff_code(code) if code else None
     if not code:
         code = _derive_staff_code(conn, data['name_en'], data['name_zh'])
     data['code'] = code

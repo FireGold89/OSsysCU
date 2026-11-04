@@ -17,6 +17,19 @@ const StaffRoster = {
     return { roles: this.roles, departments: this.departments };
   },
 
+  suggestCodeFromName() {
+    const codeEl = document.getElementById('staffCode');
+    const en = document.getElementById('staffNameEn')?.value.trim() || '';
+    if (!codeEl || codeEl.value.trim() || !en) return;
+    const parts = en.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) return;
+    const a = parts[0][0];
+    const b = parts[parts.length - 1][0];
+    if (a && b && /[A-Za-z]/.test(a) && /[A-Za-z]/.test(b)) {
+      codeEl.value = (a + b).toLowerCase();
+    }
+  },
+
   _looksLikeLatinAbbrev(name) {
     const s = (name || '').trim();
     if (!s || /\s/.test(s) || /[\u4e00-\u9fff]/.test(s)) return false;
