@@ -77,13 +77,23 @@ python scripts\push_uploads_to_prod.py
 
 **做法 B — 直接 scp 目錄（大檔、略過 zip）**
 
+PowerShell **勿用變數名 `$host`**（系統保留），請用 `$remote` 等：
+
 ```powershell
-# 本機 uploads\iso 整棵樹 → 伺服器
-scp -r -i $env:USERPROFILE\.ssh\aliyun-ossys `
-  "C:\Users\hiufung_lau\Documents\Pro\OSsysCU-v2\uploads\iso" `
-  admin@43.103.44.4:/tmp/iso-restore
-ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 `
-  "sudo mkdir -p /data/uploads/iso && sudo cp -a /tmp/iso-restore/. /data/uploads/iso/ && sudo chown -R root:root /data/uploads"
+$key = "$env:USERPROFILE\.ssh\aliyun-ossys"
+$remote = "admin@43.103.44.4"
+# 例：Zeabur 備份解壓後的 iso 路徑
+$ISO = "$env:USERPROFILE\Downloads\backup-6ae94ee684ee3b8379e9ee23\data\datav2\uploads\iso"
+
+scp -r -i $key $ISO "${remote}:/tmp/iso-restore"
+ssh -i $key $remote "sudo mkdir -p /data/uploads/iso && sudo cp -a /tmp/iso-restore/iso/. /data/uploads/iso/ 2>/dev/null; sudo cp -a /tmp/iso-restore/MS_Q*. /data/uploads/iso/ 2>/dev/null; sudo cp -a /tmp/iso-restore/. /data/uploads/iso/"
+ssh -i $key $remote "sudo find /data/uploads/iso/MS_Q1161_25_jc -type f | head"
+```
+
+若 `scp` 上傳後 `/tmp/iso-restore` 底下直接是 `MS_Q1161_25_jc` 等資料夾，第三行可簡化為：
+
+```bash
+sudo cp -a /tmp/iso-restore/. /data/uploads/iso/
 ```
 
 舊環境備份若只有 zip，解壓後須保留 **`iso/項目編號/*.pdf`** 結構，不要只拷貝 uploads 根目錄的散檔。
