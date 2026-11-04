@@ -7578,9 +7578,11 @@ def _merge_staff_by_identity(conn):
             if not name_zh and (r.get('name_zh') or '').strip():
                 name_zh = r['name_zh'].strip()
         for r in matched[1:]:
+            # 釋放 UNIQUE code（停用列仍佔用 pi 會令保留列無法寫入）
+            off_code = f"_off{r['id']}"
             conn.execute(
-                "UPDATE staff_members SET is_active=0, updated_at=datetime('now','localtime') WHERE id=?",
-                (r['id'],),
+                "UPDATE staff_members SET is_active=0, code=?, updated_at=datetime('now','localtime') WHERE id=?",
+                (off_code, r['id']),
             )
         conn.execute("""
             UPDATE staff_members

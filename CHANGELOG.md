@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261104-pic-identity-r1` · 分支 `v2/portfolio`
+
+### 修正
+- **staff 合併**：停用重複負責人時釋放 `code` UNIQUE，避免生產 init_db 失敗。
+
 `APP_VERSION`: `v2-20261104-pic-identity` · 分支 `v2/portfolio`
 
 ### 修正
