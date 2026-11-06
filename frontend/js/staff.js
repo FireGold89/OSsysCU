@@ -6,6 +6,10 @@ const StaffRoster = {
   _quotPerson: null,
   _quotOffset: 0,
   _quotLimit: 50,
+  /** @type {'name'|'department'|'email'|'role'|'usage'|'status'} */
+  _sortKey: 'usage',
+  /** @type {'asc'|'desc'} */
+  _sortDir: 'desc',
 
   async loadRoles() {
     if (this.roles.length && this.departments.length) {
@@ -200,6 +204,111 @@ const StaffRoster = {
     selectEl.innerHTML = html;
   },
 
+  setSort(key) {
+    const valid = ['name', 'department', 'email', 'role', 'usage', 'status'];
+    if (!valid.includes(key)) return;
+    if (this._sortKey === key) {
+      this._sortDir = this._sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this._sortKey = key;
+      this._sortDir = key === 'usage' || key === 'status' ? 'desc' : 'asc';
+    }
+    this.render();
+  },
+
+  _sortStatusValue(s) {
+    if (!s.in_staff_table) return 0;
+    if (s.is_active) return 2;
+    return 1;
+  },
+
+  _sortRoleValue(s) {
+    return this.roleLabel(s.access_role);
+  },
+
+  getSortedList() {
+    const dir = this._sortDir === 'asc' ? 1 : -1;
+    const key = this._sortKey;
+    const cmpStr = (a, b) => {
+      if (a < b) return -1 * dir;
+      if (a > b) return 1 * dir;
+      return 0;
+    };
+    return [...this.list].sort((a, b) => {
+      let c = 0;
+      switch (key) {
+        case 'name':
+          c = cmpStr(
+            this.displayName(a).toLowerCase(),
+            this.displayName(b).toLowerCase(),
+          );
+          break;
+        case 'department':
+          c = cmpStr(
+            (a.department || '\uFFFF').toLowerCase(),
+            (b.department || '\uFFFF').toLowerCase(),
+          );
+          break;
+        case 'email':
+          c = cmpStr(
+            (a.email || '\uFFFF').toLowerCase(),
+            (b.email || '\uFFFF').toLowerCase(),
+          );
+          break;
+        case 'role':
+          c = cmpStr(
+            this._sortRoleValue(a).toLowerCase(),
+            this._sortRoleValue(b).toLowerCase(),
+          );
+          break;
+        case 'usage': {
+          const ua = (a.quotation_count || 0) * 1_000_000 + (a.project_count || 0);
+          const ub = (b.quotation_count || 0) * 1_000_000 + (b.project_count || 0);
+          c = ua < ub ? -1 * dir : ua > ub ? 1 * dir : 0;
+          break;
+        }
+        case 'status': {
+          const sa = this._sortStatusValue(a);
+          const sb = this._sortStatusValue(b);
+          c = sa < sb ? -1 * dir : sa > sb ? 1 * dir : 0;
+          break;
+        }
+        default:
+          c = 0;
+      }
+      if (c !== 0) return c;
+      return cmpStr(
+        this.displayName(a).toLowerCase(),
+        this.displayName(b).toLowerCase(),
+      );
+    });
+  },
+
+  _renderStaffHeader() {
+    const thead = document.getElementById('staffTableHead');
+    if (!thead) return;
+    const k = this._sortKey;
+    const d = this._sortDir;
+    const th = (col, label, cls = '') => {
+      const active = k === col;
+      const sortCls = active ? `sort-${d}` : '';
+      const icon = active ? (d === 'asc' ? '▲' : '▼') : '⇅';
+      return `<th scope="col" class="th-sortable ${sortCls} ${cls}" data-staff-sort="${col}" title="點擊排序">${label}<span class="sort-icon">${icon}</span></th>`;
+    };
+    thead.innerHTML = `<tr>
+      ${th('name', '項目負責人')}
+      ${th('department', '部門')}
+      ${th('email', '電郵')}
+      ${th('role', '權限角色')}
+      ${th('usage', '使用情況', 'th-num')}
+      ${th('status', '狀態')}
+      <th scope="col"></th>
+    </tr>`;
+    thead.querySelectorAll('[data-staff-sort]').forEach((el) => {
+      el.onclick = () => this.setSort(el.getAttribute('data-staff-sort'));
+    });
+  },
+
   async refresh() {
     const tbody = document.getElementById('staffTableBody');
     try {
@@ -219,6 +328,7 @@ const StaffRoster = {
   render() {
     const tbody = document.getElementById('staffTableBody');
     if (!tbody) return;
+    this._renderStaffHeader();
     const inRoster = this.list.filter(s => s.in_staff_table && s.is_active);
     document.getElementById('staffStatActive').textContent = inRoster.length;
     document.getElementById('staffStatTotal').textContent = this.list.length;
@@ -228,7 +338,8 @@ const StaffRoster = {
       return;
     }
 
-    tbody.innerHTML = this.list.map(s => {
+    const rows = this.getSortedList();
+    tbody.innerHTML = rows.map(s => {
       const name = this.displayName(s);
       const subParts = [];
       if (s.code && s.in_staff_table) {

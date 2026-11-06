@@ -3157,6 +3157,11 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .th-sortable.th-num {
   text-align: right;
 }
+
+/* 項目負責人名單表頭排序 */
+.staff-roster-table thead th.th-sortable.th-num {
+  text-align: right;
+}
 .amount-input-wrap { position: relative; }
 .amount-input-wrap::before {
   content: 'HK$';

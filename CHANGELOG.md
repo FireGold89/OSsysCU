@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261106-staff-sort` · 分支 `v2/portfolio`
+
+### 新增
+- **項目負責人管理**：表頭可排序（點欄標題切換升冪／降冪；預設依報價＋項目數降冪）。
+
 `APP_VERSION`: `v2-20261106-staff-deactivate` · 分支 `v2/portfolio`
 
 ### 修正
