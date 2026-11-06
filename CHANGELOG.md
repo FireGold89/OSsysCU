@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261106-staff-deactivate` · 分支 `v2/portfolio`
+
+### 修正
+- **項目負責人停用**：DELETE `/api/staff/<id>` 不再因缺姓名欄位而 500。
+
 `APP_VERSION`: `v2-20261104-pic-identity-r5` · 分支 `v2/portfolio`
 
 ### 修正

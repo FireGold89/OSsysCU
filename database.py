@@ -8087,7 +8087,21 @@ def update_staff_member(staff_id, data):
 
 
 def deactivate_staff_member(staff_id):
-    return update_staff_member(staff_id, {'is_active': 0})
+    """停用 staff；勿走 update_staff_member（僅傳 is_active 會缺姓名而失敗）。"""
+    conn = get_conn()
+    row = conn.execute("SELECT id FROM staff_members WHERE id=?", (staff_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    conn.execute(
+        "UPDATE staff_members SET is_active=0, updated_at=datetime('now','localtime') WHERE id=?",
+        (staff_id,),
+    )
+    conn.commit()
+    conn.close()
+    from master_ref import invalidate_staff_name_cache
+    invalidate_staff_name_cache()
+    return True
 
 
 if __name__ == '__main__':

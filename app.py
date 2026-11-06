@@ -2549,7 +2549,11 @@ def update_staff(staff_id):
 def deactivate_staff(staff_id):
     if not db.get_staff_member(staff_id):
         return resp(error='找不到人員', status=404)
-    db.deactivate_staff_member(staff_id)
+    try:
+        if not db.deactivate_staff_member(staff_id):
+            return resp(error='找不到人員', status=404)
+    except ValueError as e:
+        return resp(error=str(e), status=400)
     return resp({'message': '已停用'})
 
 
