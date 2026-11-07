@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261107-user-menu` · 分支 `v2/portfolio`
+
+### 變更
+- **登入帳戶 UI**：使用者資訊、登出、我的權限與管理員捷徑改至頂欄右上角選單；側欄底部僅保留匯入與收合。
+
 `APP_VERSION`: `v2-20261106-staff-sort` · 分支 `v2/portfolio`
 
 ### 新增

@@ -1572,20 +1572,10 @@ const Auth = {
   },
 
   applyUi() {
-    const badge = document.getElementById('authUserBadge');
-    const logoutBtn = document.getElementById('authLogoutBtn');
-    const authWrap = document.getElementById('authUserWrap');
     const settingsNav = document.querySelector('.nav-item[data-page="settings"]');
     const showAuth = this.authRequired && this.user;
-    if (authWrap) authWrap.style.display = showAuth ? '' : 'none';
-    if (logoutBtn) logoutBtn.style.display = showAuth ? '' : 'none';
-    if (badge) {
-      if (showAuth) {
-        badge.textContent = `${this.user.username} · ${this.roleLabel(this.user.role)}`;
-        badge.style.display = '';
-      } else {
-        badge.style.display = 'none';
-      }
+    if (typeof UserMenu !== 'undefined') {
+      UserMenu.syncFromAuth();
     }
     if (settingsNav) {
       settingsNav.style.display = this.authRequired && !this.isAdmin() ? 'none' : '';
@@ -1633,6 +1623,176 @@ const Auth = {
       await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (e) {}
     window.location.href = '/login.html';
+  },
+};
+
+// ─── 頂欄使用者選單 ─────────────────────────────────────────
+const UserMenu = {
+  _bound: false,
+  _catalog: null,
+  _permsOpen: false,
+
+  init() {
+    if (this._bound) return;
+    this._bound = true;
+    const trigger = document.getElementById('topbarUserTrigger');
+    const permsToggle = document.getElementById('topbarUserPermsToggle');
+    trigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggle();
+    });
+    permsToggle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.togglePerms();
+    });
+    document.addEventListener('click', (e) => {
+      const root = document.getElementById('topbarUserMenu');
+      if (!root?.classList.contains('is-open')) return;
+      if (e.target.closest('#topbarUserMenu')) return;
+      this.close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.close();
+    });
+  },
+
+  toggle() {
+    const root = document.getElementById('topbarUserMenu');
+    if (!root || root.hidden) return;
+    if (root.classList.contains('is-open')) this.close();
+    else this.open();
+  },
+
+  open() {
+    const root = document.getElementById('topbarUserMenu');
+    const panel = document.getElementById('topbarUserPanel');
+    const trigger = document.getElementById('topbarUserTrigger');
+    root?.classList.add('is-open');
+    if (panel) panel.hidden = false;
+    trigger?.setAttribute('aria-expanded', 'true');
+  },
+
+  close() {
+    const root = document.getElementById('topbarUserMenu');
+    const panel = document.getElementById('topbarUserPanel');
+    const trigger = document.getElementById('topbarUserTrigger');
+    root?.classList.remove('is-open');
+    if (panel) panel.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+    this._permsOpen = false;
+    const perms = document.getElementById('topbarUserPerms');
+    if (perms) perms.hidden = true;
+    const toggle = document.getElementById('topbarUserPermsToggle');
+    if (toggle) toggle.textContent = '我的權限';
+  },
+
+  navigate(page) {
+    this.close();
+    if (typeof App !== 'undefined' && App.navigate) App.navigate(page);
+  },
+
+  userInitial(user) {
+    const src = (user?.display_name || user?.username || '?').trim();
+    const ch = src.charAt(0);
+    return /[a-z]/i.test(ch) ? ch.toUpperCase() : ch;
+  },
+
+  displayTitle(user) {
+    const dn = (user?.display_name || '').trim();
+    if (dn) return dn;
+    return user?.username || '—';
+  },
+
+  levelLabel(level) {
+    const map = { none: '不可見', view: '只看', edit: '可編輯' };
+    return map[level] || level || '—';
+  },
+
+  levelClass(level) {
+    const map = { none: 'is-none', view: 'is-view', edit: 'is-edit' };
+    return map[level] || 'is-none';
+  },
+
+  async togglePerms() {
+    const box = document.getElementById('topbarUserPerms');
+    const btn = document.getElementById('topbarUserPermsToggle');
+    if (!box || !btn) return;
+    this._permsOpen = !this._permsOpen;
+    if (!this._permsOpen) {
+      box.hidden = true;
+      btn.textContent = '我的權限';
+      return;
+    }
+    btn.textContent = '收起權限';
+    box.hidden = false;
+    box.innerHTML = '<div class="topbar-user-perms-summary">載入中…</div>';
+    try {
+      await this._renderPerms(box);
+    } catch (e) {
+      box.innerHTML = `<div class="topbar-user-perms-summary">${escHtml(e?.message || '無法載入權限')}</div>`;
+    }
+  },
+
+  async _renderPerms(box) {
+    if (typeof Auth === 'undefined' || !Auth.user) return;
+    if (Auth.isAdmin()) {
+      box.innerHTML = '<p class="topbar-user-perms-summary">管理員帳號可存取所有範圍（含系統設定與帳號管理）。</p>';
+      return;
+    }
+    if (!this._catalog) {
+      this._catalog = await api('GET', '/admin/permission-catalog', null, { silent: true });
+    }
+    const areas = this._catalog?.areas || [];
+    const perms = Auth.permissions || {};
+    const rows = areas.map((a) => {
+      const lv = perms[a.id] || 'none';
+      return `<div class="topbar-user-perms-row">
+        <span class="topbar-user-perms-label">${escHtml(a.label)}</span>
+        <span class="topbar-user-perms-level ${this.levelClass(lv)}">${escHtml(this.levelLabel(lv))}</span>
+      </div>`;
+    }).join('');
+    box.innerHTML = `<p class="topbar-user-perms-summary">以下為你目前登入帳號在各模組的權限（與側欄可見項目一致）。</p>${rows}`;
+  },
+
+  syncFromAuth() {
+    const root = document.getElementById('topbarUserMenu');
+    if (!root) return;
+    const show = Auth.authRequired && Auth.user;
+    root.hidden = !show;
+    if (!show) {
+      this.close();
+      this._catalog = null;
+      return;
+    }
+    const user = Auth.user;
+    const avatar = document.getElementById('topbarUserAvatar');
+    const name = document.getElementById('topbarUserName');
+    const role = document.getElementById('topbarUserRole');
+    const title = document.getElementById('topbarUserPanelTitle');
+    const sub = document.getElementById('topbarUserPanelSub');
+    const note = document.getElementById('topbarUserPanelNote');
+    const adminBlock = document.getElementById('topbarUserAdminLinks');
+    const adminDiv = document.getElementById('topbarUserAdminDivider');
+
+    const display = this.displayTitle(user);
+    const rl = Auth.roleLabel(user.role);
+    if (avatar) avatar.textContent = this.userInitial(user);
+    if (name) name.textContent = display;
+    if (role) role.textContent = rl;
+    if (title) title.textContent = display;
+    if (sub) sub.textContent = `@${user.username || '—'}`;
+    if (note) {
+      if (user.from_env) {
+        note.hidden = false;
+        note.textContent = '此為伺服器環境變數預設帳號，不會出現在「帳號與權限」列表。';
+      } else {
+        note.hidden = true;
+        note.textContent = '';
+      }
+    }
+    const isAdmin = Auth.isAdmin();
+    if (adminBlock) adminBlock.hidden = !isAdmin;
+    if (adminDiv) adminDiv.hidden = !isAdmin;
   },
 };
 
@@ -1889,6 +2049,7 @@ const App = {
     VaultEntry.showHoldOpenFromLogin();
     const ok = await Auth.ensure();
     if (!ok) return;
+    UserMenu.init();
     VaultEntry.playIfNeeded();
     Theme.init();
     TextScale.init();
