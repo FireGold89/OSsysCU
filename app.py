@@ -342,6 +342,28 @@ def auth_touch():
     return resp({'message': 'ok'})
 
 
+@app.route('/api/auth/profile', methods=['PATCH'])
+def auth_profile_patch():
+    if not auth.is_enabled() or not auth.current_user():
+        return resp(error='請先登入', status=401)
+    body = request.json or {}
+    err = auth.update_self_profile(body.get('display_name'))
+    if err:
+        return resp(error=err, status=400)
+    return resp(auth.auth_status_payload())
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+def auth_change_password():
+    if not auth.is_enabled() or not auth.current_user():
+        return resp(error='請先登入', status=401)
+    body = request.json or {}
+    err = auth.change_self_password(body.get('current_password'), body.get('new_password'))
+    if err:
+        return resp(error=err, status=400)
+    return resp({'message': '密碼已更新'})
+
+
 # ─── 前端路由 ───────────────────────────────────────────────────────────
 _FRONTEND_BUILD_TOKEN = '__APP_BUILD__'
 

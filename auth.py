@@ -292,12 +292,14 @@ def auth_status_payload(user=None):
             'auth_required': True,
             'user': None,
         }
+    from_env = bool(actor.get('from_env'))
     base_user = {
         'username': actor.get('username'),
         'role': actor.get('role'),
         'display_name': actor.get('display_name'),
         'is_admin': bool(actor.get('is_admin')),
-        'from_env': bool(actor.get('from_env')),
+        'from_env': from_env,
+        'profile_editable': bool(actor.get('id')) and not from_env,
     }
     return {
         'auth_required': True,
@@ -318,6 +320,49 @@ def current_user():
         'username': name,
         'role': session.get(SESSION_ROLE_KEY) or 'user',
     }
+
+
+def _actor_db_row():
+    user = current_user()
+    if not user:
+        return None
+    try:
+        return db.get_app_user_by_username(user['username'])
+    except Exception:
+        return None
+
+
+def update_self_profile(display_name):
+    """資料庫帳號可改顯示名（不可改帳號／角色）。"""
+    row = _actor_db_row()
+    if not row:
+        return '此為伺服器預設帳號，無法在此修改'
+    if not row.get('is_active'):
+        return '帳號已停用'
+    name = (display_name or '').strip()
+    if not name:
+        return '請填寫顯示名稱'
+    if len(name) > 80:
+        return '顯示名稱過長'
+    db.update_app_user_display_name(row['id'], name)
+    return None
+
+
+def change_self_password(current_password, new_password):
+    """資料庫帳號可自行改密碼。"""
+    row = _actor_db_row()
+    if not row:
+        return '此為伺服器預設帳號，無法在此修改'
+    if not row.get('is_active'):
+        return '帳號已停用'
+    cur = current_password or ''
+    new = new_password or ''
+    if not verify_password(cur, row.get('password_hash')):
+        return '目前密碼不正確'
+    if len(new) < 6:
+        return '新密碼至少 6 個字元'
+    db.update_app_user_password_hash(row['id'], hash_password(new))
+    return None
 
 
 def actor_display_name():

@@ -1703,6 +1703,17 @@ const UserMenu = {
     return user?.username || '—';
   },
 
+  panelMeta(user) {
+    const rl = Auth.roleLabel(user?.role);
+    const uname = (user?.username || '').trim();
+    const dn = (user?.display_name || '').trim();
+    const display = this.displayTitle(user);
+    if (dn && dn.toLowerCase() !== uname.toLowerCase() && display.toLowerCase() !== uname.toLowerCase()) {
+      return `@${uname} · 角色：${rl}`;
+    }
+    return `角色：${rl}`;
+  },
+
   levelLabel(level) {
     const map = { none: '不可見', view: '只看', edit: '可編輯' };
     return map[level] || level || '—';
@@ -1767,7 +1778,6 @@ const UserMenu = {
     const user = Auth.user;
     const avatar = document.getElementById('topbarUserAvatar');
     const name = document.getElementById('topbarUserName');
-    const role = document.getElementById('topbarUserRole');
     const title = document.getElementById('topbarUserPanelTitle');
     const sub = document.getElementById('topbarUserPanelSub');
     const note = document.getElementById('topbarUserPanelNote');
@@ -1775,12 +1785,10 @@ const UserMenu = {
     const adminDiv = document.getElementById('topbarUserAdminDivider');
 
     const display = this.displayTitle(user);
-    const rl = Auth.roleLabel(user.role);
     if (avatar) avatar.textContent = this.userInitial(user);
     if (name) name.textContent = display;
-    if (role) role.textContent = rl;
     if (title) title.textContent = display;
-    if (sub) sub.textContent = `@${user.username || '—'}`;
+    if (sub) sub.textContent = this.panelMeta(user);
     if (note) {
       if (user.from_env) {
         note.hidden = false;
@@ -1793,6 +1801,82 @@ const UserMenu = {
     const isAdmin = Auth.isAdmin();
     if (adminBlock) adminBlock.hidden = !isAdmin;
     if (adminDiv) adminDiv.hidden = !isAdmin;
+  },
+
+  openAccountSettings() {
+    this.close();
+    const modal = document.getElementById('accountSettingsModal');
+    const envOnly = document.getElementById('accountSettingsEnvOnly');
+    const form = document.getElementById('accountSettingsForm');
+    const footer = document.getElementById('accountSettingsFooter');
+    if (!modal || !Auth.user) return;
+    const editable = !!Auth.user.profile_editable;
+    if (envOnly) envOnly.hidden = editable;
+    if (form) form.hidden = !editable;
+    if (footer) footer.hidden = !editable;
+    if (editable) {
+      const dn = document.getElementById('accountSettingsDisplayName');
+      const un = document.getElementById('accountSettingsUsername');
+      const cur = document.getElementById('accountSettingsCurrentPwd');
+      const n1 = document.getElementById('accountSettingsNewPwd');
+      const n2 = document.getElementById('accountSettingsNewPwd2');
+      if (dn) dn.value = (Auth.user.display_name || '').trim() || Auth.user.username || '';
+      if (un) un.value = Auth.user.username || '';
+      if (cur) cur.value = '';
+      if (n1) n1.value = '';
+      if (n2) n2.value = '';
+    }
+    modal.classList.add('open');
+  },
+
+  closeAccountSettings() {
+    document.getElementById('accountSettingsModal')?.classList.remove('open');
+  },
+
+  async saveAccountSettings() {
+    if (!Auth.user?.profile_editable) return;
+    const dn = (document.getElementById('accountSettingsDisplayName')?.value || '').trim();
+    const cur = document.getElementById('accountSettingsCurrentPwd')?.value || '';
+    const n1 = document.getElementById('accountSettingsNewPwd')?.value || '';
+    const n2 = document.getElementById('accountSettingsNewPwd2')?.value || '';
+    if (!dn) {
+      toast('請填寫顯示名稱', 'warning');
+      return;
+    }
+    if (n1 || n2 || cur) {
+      if (!cur) {
+        toast('變更密碼請填寫目前密碼', 'warning');
+        return;
+      }
+      if (n1.length < 6) {
+        toast('新密碼至少 6 個字元', 'warning');
+        return;
+      }
+      if (n1 !== n2) {
+        toast('兩次新密碼不一致', 'warning');
+        return;
+      }
+    }
+    try {
+      const payload = await api('PATCH', '/auth/profile', { display_name: dn });
+      if (payload?.user) {
+        Auth.user = payload.user;
+        if (payload.permissions) Auth.permissions = payload.permissions;
+        this.syncFromAuth();
+      } else {
+        await Auth.ensure();
+      }
+      if (n1) {
+        await api('POST', '/auth/change-password', {
+          current_password: cur,
+          new_password: n1,
+        });
+      }
+      this.closeAccountSettings();
+      toast('帳戶已更新', 'success');
+    } catch (e) {
+      /* api 已 toast */
+    }
   },
 };
 

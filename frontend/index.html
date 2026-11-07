@@ -243,10 +243,7 @@
           <button type="button" class="topbar-user-trigger" id="topbarUserTrigger"
             aria-haspopup="menu" aria-expanded="false" aria-controls="topbarUserPanel">
             <span class="topbar-user-avatar" id="topbarUserAvatar" aria-hidden="true">?</span>
-            <span class="topbar-user-trigger-text">
-              <span class="topbar-user-name" id="topbarUserName">帳號</span>
-              <span class="topbar-user-role badge badge-muted" id="topbarUserRole">—</span>
-            </span>
+            <span class="topbar-user-name" id="topbarUserName">帳號</span>
             <span class="topbar-user-chevron" aria-hidden="true">▾</span>
           </button>
           <div class="topbar-user-panel" id="topbarUserPanel" role="menu" hidden>
@@ -256,6 +253,8 @@
               <div class="topbar-user-panel-note" id="topbarUserPanelNote" hidden></div>
             </div>
             <div class="topbar-user-perms" id="topbarUserPerms" hidden></div>
+            <button type="button" class="topbar-user-item" role="menuitem" id="topbarUserAccountBtn"
+              onclick="UserMenu.openAccountSettings()">帳戶設定</button>
             <button type="button" class="topbar-user-item" role="menuitem" id="topbarUserPermsToggle">
               我的權限
             </button>
@@ -3864,6 +3863,50 @@
   </div>
 </div>
 <input type="file" id="pfImportFile" accept=".xlsx,.xls" style="display:none" onchange="PortfolioCommon.onImportFile(event)">
+
+<!-- ─── 模態框：帳戶設定 ──────────────────────── -->
+<div class="modal-backdrop" id="accountSettingsModal" onclick="if(event.target===this)UserMenu.closeAccountSettings()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">帳戶設定</div>
+      <button type="button" class="modal-close" onclick="UserMenu.closeAccountSettings()" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="accountSettingsEnvOnly" hidden style="font-size:13px;line-height:1.6;color:var(--text-secondary)">
+        <p>目前為<strong>伺服器預設登入帳號</strong>（環境變數）。顯示名稱與密碼需由管理員在伺服器設定檔調整，此處無法自行變更。</p>
+        <p class="td-muted" style="margin-top:8px;font-size:12px">若需專屬帳號與自行改密碼，請管理員在「帳號與權限」建立資料庫帳號。</p>
+      </div>
+      <div id="accountSettingsForm" hidden>
+        <div class="form-group">
+          <label class="form-label" for="accountSettingsDisplayName">顯示名稱</label>
+          <input type="text" class="form-input" id="accountSettingsDisplayName" autocomplete="name" placeholder="登入後顯示用">
+        </div>
+        <div class="form-group">
+          <label class="form-label">登入帳號</label>
+          <input type="text" class="form-input" id="accountSettingsUsername" disabled>
+        </div>
+        <div class="section-title" style="margin-top:16px">變更密碼</div>
+        <p class="td-muted" style="font-size:12px;margin-bottom:10px">若不變更密碼，請留空下列欄位。</p>
+        <div class="form-group">
+          <label class="form-label" for="accountSettingsCurrentPwd">目前密碼</label>
+          <input type="password" class="form-input" id="accountSettingsCurrentPwd" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="accountSettingsNewPwd">新密碼</label>
+          <input type="password" class="form-input" id="accountSettingsNewPwd" autocomplete="new-password" minlength="6">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="accountSettingsNewPwd2">確認新密碼</label>
+          <input type="password" class="form-input" id="accountSettingsNewPwd2" autocomplete="new-password" minlength="6">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="accountSettingsFooter" hidden>
+      <button type="button" class="btn btn-secondary" onclick="UserMenu.closeAccountSettings()">取消</button>
+      <button type="button" class="btn btn-primary" id="accountSettingsSaveBtn" onclick="UserMenu.saveAccountSettings()">儲存</button>
+    </div>
+  </div>
+</div>
 
 <!-- Scripts -->
 <script src="js/load_perf.js?v=__APP_BUILD__"></script>

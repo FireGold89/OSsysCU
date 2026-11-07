@@ -897,6 +897,32 @@ def delete_app_user(user_id):
     conn.close()
 
 
+def update_app_user_display_name(user_id, display_name):
+    conn = get_conn()
+    conn.execute(
+        """
+        UPDATE app_users SET display_name=?, updated_at=datetime('now', 'localtime')
+        WHERE id=?
+        """,
+        (display_name, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_app_user_password_hash(user_id, password_hash):
+    conn = get_conn()
+    conn.execute(
+        """
+        UPDATE app_users SET password_hash=?, updated_at=datetime('now', 'localtime')
+        WHERE id=?
+        """,
+        (password_hash, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def _migrate_portfolio_tables(conn):
     """全公司 N 項目結算總表 / 進度表（V2 P1）"""
     conn.execute("""

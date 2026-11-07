@@ -712,14 +712,6 @@ html.sidebar-collapsed .sidebar-toggle-btn {
   flex-shrink: 0;
   text-transform: uppercase;
 }
-.topbar-user-trigger-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  text-align: left;
-}
 .topbar-user-name {
   font-size: 12px;
   font-weight: 600;
@@ -727,13 +719,7 @@ html.sidebar-collapsed .sidebar-toggle-btn {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 140px;
-}
-.topbar-user-trigger .topbar-user-role {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  line-height: 1.3;
+  max-width: 120px;
 }
 .topbar-user-chevron {
   font-size: 10px;
@@ -848,7 +834,7 @@ html.sidebar-collapsed .sidebar-toggle-btn {
 .topbar-user-perms-level.is-edit { color: var(--success, #2e7d32); }
 
 @media (max-width: 720px) {
-  .topbar-user-trigger-text {
+  .topbar-user-name {
     display: none;
   }
   .topbar-user-trigger {
