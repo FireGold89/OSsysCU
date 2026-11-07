@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261107-login-hint` · 分支 `v2/portfolio`
+
+### 變更
+- **登入頁**：補充忘記密碼請聯絡系統管理員之說明。
+
 `APP_VERSION`: `v2-20261107-account-ui` · 分支 `v2/portfolio`
 
 ### 變更
