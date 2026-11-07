@@ -1057,6 +1057,17 @@ def list_sc_contract_registry_api():
     return resp({'rows': rows, 'status': status, 'filters': filters, 'ref': ref_status()})
 
 
+@app.route('/api/sc-contract-registry/<path:sub_contract_no>/usage', methods=['GET'])
+def sc_contract_registry_usage_api(sub_contract_no):
+    items = db.list_sc_contract_registry_usage_detail(sub_contract_no)
+    return resp({
+        'sub_contract_no': sub_contract_no,
+        'sc_count': len(items),
+        'project_count': len({r['project_id'] for r in items}),
+        'items': items,
+    })
+
+
 @app.route('/api/sc-contract-registry/options', methods=['GET'])
 def sc_contract_registry_options_api():
     """工程項目判項表單用：依 project_core／關鍵字取少量候選 MS/C。"""

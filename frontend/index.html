@@ -1761,6 +1761,8 @@
             <button class="btn btn-secondary btn-sm" onclick="MasterTradeCats.openManage()">📂 工作範疇</button>
             <button class="btn btn-primary btn-sm" onclick="MasterList.openSync()">🔄 同步 Master List</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.exportExcel()">📥 匯出 Excel</button>
+            <button type="button" class="btn btn-secondary btn-sm" title="依目前篩選開啟 MS/C 登記表"
+              onclick="MasterList.openScRegistry()">🔗 MS/C 登記表</button>
             <div class="col-picker-wrap" id="masterColPickerWrap">
               <button type="button" class="btn btn-secondary btn-sm" onclick="MasterList.toggleColPicker(event)">⚙️ 欄位</button>
               <div class="col-picker-panel" id="masterColPickerPanel" hidden></div>
@@ -3743,6 +3745,22 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="StaffRoster.closeQuotModal()">關閉</button>
       <button class="btn btn-secondary" onclick="StaffRoster.openInMasterList()">📋 在 Master List 查看</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：MS/C 掛載明細 ───────────────────────────────── -->
+<div class="modal-backdrop" id="scrUsageModal" onclick="if(event.target===this)ScContractRegistry.closeUsageModal()">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title">掛載明細 · <span id="scrUsageTitle" class="td-mono">—</span></div>
+      <button type="button" class="modal-close" onclick="ScContractRegistry.closeUsageModal()" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body" id="scrUsageBody">
+      <div class="empty-state" style="padding:24px">載入中…</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="ScContractRegistry.closeUsageModal()">關閉</button>
     </div>
   </div>
 </div>

@@ -272,6 +272,41 @@ const MasterList = {
     }
   },
 
+  _projectSearchToken(r) {
+    const raws = [r?.mp_contract_code, r?.project_code, r?.quotation_no, r?.account_code];
+    for (const raw of raws) {
+      if (!raw) continue;
+      let t = String(raw).trim().toUpperCase().replace(/[/-]/g, '_').replace(/_+/g, '_');
+      const m = t.match(/^(MS_Q\d+_\d+)/);
+      if (m) return m[1];
+      const m2 = t.match(/^Q(\d+_\d+)/);
+      if (m2) return `MS_Q${m2[1]}`;
+      if (t.startsWith('MS_Q')) return t.split('_kp')[0].split('_jy')[0];
+    }
+    return (r?.mp_contract_code || r?.project_code || '').trim();
+  },
+
+  _scrNavPayload(extra = {}) {
+    const q = document.getElementById('masterSearch')?.value?.trim() || extra.q || '';
+    const person = document.getElementById('masterPersonFilter')?.value?.trim() || extra.person || '';
+    const payload = { clearYear: true, ...extra };
+    if (q) payload.q = q;
+    if (person) payload.person = person;
+    return payload;
+  },
+
+  openScRegistry() {
+    App.navigate('sc-contract-registry', { scr: this._scrNavPayload() });
+  },
+
+  openScRegistryForRow(rowId) {
+    const r = this._rowFromCache(rowId);
+    if (!r) return;
+    const token = this._projectSearchToken(r);
+    const scr = this._scrNavPayload(token ? { q: token } : {});
+    App.navigate('sc-contract-registry', { scr });
+  },
+
   search() {
     this.offset = 0;
     this.load();
@@ -370,6 +405,7 @@ const MasterList = {
           <div class="table-row-actions">
             <button type="button" class="btn btn-icon btn-secondary btn-sm" title="編輯" onclick="MasterList.openEdit(${r.id})">✏️</button>
             <button type="button" class="btn btn-icon btn-secondary btn-sm" title="配對項目" onclick="MasterList.openLink(${r.id})">🔗</button>
+            ${r.project_id ? `<button type="button" class="btn btn-icon btn-secondary btn-sm" title="查 MS/C 登記表" onclick="MasterList.openScRegistryForRow(${r.id})">📋</button>` : ''}
             ${r.project_id ? `<button type="button" class="btn btn-icon btn-secondary btn-sm" title="解除配對" onclick="MasterList.unlink(${r.id})">🔓</button>` : ''}
           </div>
         </td>

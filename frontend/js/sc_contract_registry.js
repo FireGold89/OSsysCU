@@ -6,6 +6,7 @@ const ScContractRegistry = {
   _editNo: null,
   COLS: 14,
   refInfo: null,
+  _pendingNav: null,
   _sortKey: localStorage.getItem('qs_scr_sort_key') || 'sub_contract_no',
   _sortDir: localStorage.getItem('qs_scr_sort_dir') || 'asc',
   _defaultYear: '2026',
@@ -151,9 +152,29 @@ const ScContractRegistry = {
     if (el) localStorage.setItem('qs_scr_year_filter', el.value || '');
   },
 
+  _applyPendingNav() {
+    const nav = this._pendingNav;
+    this._pendingNav = null;
+    if (!nav) return;
+    const search = document.getElementById('scrSearch');
+    const year = document.getElementById('scrYearFilter');
+    const person = document.getElementById('scrPersonFilter');
+    if (nav.clearYear && year) {
+      year.value = '';
+      localStorage.setItem('qs_scr_year_filter', '');
+    }
+    if (nav.q != null && search) search.value = String(nav.q);
+    if (nav.person != null && person) person.value = String(nav.person);
+    if (nav.company != null) {
+      const co = document.getElementById('scrCompanyFilter');
+      if (co) co.value = String(nav.company);
+    }
+  },
+
   async load() {
     const root = document.getElementById('scrContent');
     if (!root) return;
+    this._applyPendingNav();
     root.innerHTML = `<tr><td colspan="${this.COLS}"><div class="empty-state" style="padding:40px"><div class="spinner"></div></div></td></tr>`;
     try {
       const qs = new URLSearchParams();
@@ -311,7 +332,12 @@ const ScContractRegistry = {
         <td class="scr-col-flag" data-col="countersign">${this._flagCell(r.countersign)}</td>
         <td class="scr-col-flag" data-col="partner">${this._flagCell(r.partner)}</td>
         <td class="scr-col-flag" data-col="tender">${this._flagCell(r.tender_minutes)}</td>
-        <td class="scr-col-usage td-muted" data-col="usage" title="判項數 · 項目數">${r.usage_sc_count ? `${r.usage_sc_count} 判項` : '—'}${r.usage_project_count ? ` · ${r.usage_project_count} 項` : ''}</td>
+        <td class="scr-col-usage" data-col="usage">${
+          r.usage_sc_count
+            ? `<button type="button" class="btn btn-link btn-sm scr-usage-btn" title="查看掛載明細"
+                onclick="ScContractRegistry.showUsage('${noArg}')">${r.usage_sc_count} 判項 · ${r.usage_project_count || 0} 項</button>`
+            : '<span class="text-muted">—</span>'
+        }</td>
         <td class="scr-col-flag" data-col="fa">${this._flagCell(r.final_account)}</td>
         <td class="scr-col-flag" data-col="iso">${this._flagCell(r.iso_flag)}</td>
         <td class="scr-col-remark td-muted" data-col="remark">${this._shortText(r.remark, 32)}</td>
@@ -407,6 +433,61 @@ const ScContractRegistry = {
       return;
     }
     document.getElementById('scrProjectCode').value = p.project_code || p.mp_contract_code || '';
+  },
+
+  async showUsage(subContractNo) {
+    const modal = document.getElementById('scrUsageModal');
+    const body = document.getElementById('scrUsageBody');
+    const title = document.getElementById('scrUsageTitle');
+    if (!modal || !body) return;
+    if (title) title.textContent = subContractNo;
+    body.innerHTML = '<div class="empty-state" style="padding:24px"><div class="spinner"></div></div>';
+    modal.classList.add('open');
+    try {
+      const data = await api(
+        'GET',
+        `/sc-contract-registry/${encodeURIComponent(subContractNo)}/usage`,
+      );
+      const items = data?.items || [];
+      if (!items.length) {
+        body.innerHTML = '<div class="empty-state" style="padding:24px">尚無地盤判項使用此 MS/C</div>';
+        return;
+      }
+      body.innerHTML = `<table class="master-preview-table" style="font-size:13px">
+        <thead><tr><th>項目</th><th>判項</th><th>分判商</th><th class="td-amount">合約金額</th><th></th></tr></thead>
+        <tbody>${items.map((it) => {
+          const pid = it.project_id;
+          const pcode = (it.project_code || it.mp_contract_code || '—');
+          const pname = projectNameOneLine(it, 28);
+          const co = (it.company_name_zh || it.company_name_en || '—');
+          const amt = it.contract_sum != null ? fmt(it.contract_sum) : fmt(it.contract_amount);
+          return `<tr>
+            <td class="td-mono" title="${escHtml(pname)}">${escHtml(pcode)}</td>
+            <td class="td-mono">${escHtml(it.sc_no || '—')}</td>
+            <td>${escHtml(co)}</td>
+            <td class="td-amount">${amt}</td>
+            <td><button type="button" class="btn btn-secondary btn-sm"
+              onclick="ScContractRegistry.goProject(${pid})">開項目</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+    } catch (e) {
+      body.innerHTML = `<div class="empty-state" style="padding:24px">${escHtml(e?.message || '載入失敗')}</div>`;
+    }
+  },
+
+  closeUsageModal() {
+    document.getElementById('scrUsageModal')?.classList.remove('open');
+  },
+
+  async goProject(projectId) {
+    this.closeUsageModal();
+    try {
+      await App.selectProject(projectId);
+      App.navigate('projects');
+    } catch (e) {
+      toast(e?.message || '無法開啟項目', 'warning');
+    }
   },
 };
 

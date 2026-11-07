@@ -2494,6 +2494,26 @@ def get_sc_contract_registry_status():
     }
 
 
+def list_sc_contract_registry_usage_detail(sub_contract_no):
+    """某 MS/C 編號掛在哪些項目、哪些判項上。"""
+    no = (sub_contract_no or '').strip()
+    if not no:
+        return []
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT s.id AS sc_id, s.project_id, s.sc_no, s.company_name_en, s.company_name_zh,
+               s.contract_sum, s.contract_amount,
+               p.project_code, p.mp_contract_code, p.project_name_en, p.project_name_zh
+        FROM subcontractors s
+        INNER JOIN projects p ON p.id = s.project_id
+        WHERE s.sub_contract_no = ?
+          AND COALESCE(s.is_excluded, 0) = 0
+        ORDER BY COALESCE(p.project_code, p.mp_contract_code), s.sc_no
+    """, (no,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_sc_contract_registry_usage_map():
     """各 MS/C 編號在多少項目、多少張判項上使用（未排除）。"""
     conn = get_conn()

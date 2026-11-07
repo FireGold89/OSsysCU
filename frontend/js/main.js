@@ -2565,7 +2565,10 @@ const App = {
     else if (page === 'reports') Reports.load();
     else if (page === 'projects') Projects.load();
     else if (page === 'master-list') MasterList.load();
-    else if (page === 'sc-contract-registry') ScContractRegistry.load();
+    else if (page === 'sc-contract-registry') {
+      if (options?.scr) ScContractRegistry._pendingNav = options.scr;
+      ScContractRegistry.load();
+    }
     else if (page === 'staff') StaffRoster.refresh();
     else if (page === 'settings') Settings.load();
     else if (page === 'activity-log') ActivityLog.load();

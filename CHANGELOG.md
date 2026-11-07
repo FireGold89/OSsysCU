@@ -4,6 +4,12 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261107-sc-registry-r2` · 分支 `v2/portfolio`
+
+### 變更
+- **Master List**：工具列與已配對列可跳轉 MS/C 登記表（帶搜尋條件）。
+- **MS/C 掛載**：點掛載數開啟明細，可直達地盤項目。
+
 `APP_VERSION`: `v2-20261107-sc-registry` · 分支 `v2/portfolio`
 
 ### 變更
