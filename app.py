@@ -1033,12 +1033,43 @@ def list_sc_contract_registry_api():
     sheet = request.args.get('year') or request.args.get('sheet')
     person = request.args.get('person')
     company = request.args.get('company')
+    limit = request.args.get('limit')
+    try:
+        row_limit = min(5000, max(1, int(limit))) if limit else 2000
+    except (TypeError, ValueError):
+        row_limit = 2000
     rows = db.search_sc_contract_registry(
-        q=q, project_core=project_core, sheet=sheet, person=person, company=company,
+        q=q,
+        project_core=project_core,
+        sheet=sheet,
+        person=person,
+        company=company,
+        limit=row_limit,
     )
+    usage = db.get_sc_contract_registry_usage_map()
+    for row in rows:
+        u = usage.get((row.get('sub_contract_no') or '').strip()) or {}
+        row['usage_sc_count'] = int(u.get('sc_count') or 0)
+        row['usage_project_count'] = int(u.get('project_count') or 0)
     status = db.get_sc_contract_registry_status()
     filters = db.get_sc_contract_registry_filters()
-    return resp({'rows': rows, 'status': status, 'filters': filters})
+    from sc_contract_ref import ref_status
+    return resp({'rows': rows, 'status': status, 'filters': filters, 'ref': ref_status()})
+
+
+@app.route('/api/sc-contract-registry/options', methods=['GET'])
+def sc_contract_registry_options_api():
+    """工程項目判項表單用：依 project_core／關鍵字取少量候選 MS/C。"""
+    q = request.args.get('q')
+    project_core = request.args.get('project_core')
+    try:
+        limit = min(200, max(1, int(request.args.get('limit', 80))))
+    except (TypeError, ValueError):
+        limit = 80
+    rows = db.search_sc_contract_registry(
+        q=q, project_core=project_core, limit=limit,
+    )
+    return resp({'rows': rows})
 
 
 @app.route('/api/sc-contract-registry', methods=['POST'])
@@ -1584,6 +1615,7 @@ def create_subcontractor():
     ocr_id = data.pop('ocr_id', None)
     data['ocr_id'] = ocr_id
     sc_id = db.upsert_subcontractor(data)
+    db.merge_registry_from_subcontractor(data['project_id'], data)
     if ocr_id:
         db.link_ocr_extraction(ocr_id, project_id=data['project_id'], sc_id=sc_id, doc_type='quotation')
     return resp({'id': sc_id}, status=201)

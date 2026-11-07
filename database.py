@@ -2494,6 +2494,91 @@ def get_sc_contract_registry_status():
     }
 
 
+def get_sc_contract_registry_usage_map():
+    """各 MS/C 編號在多少項目、多少張判項上使用（未排除）。"""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT sub_contract_no,
+               COUNT(*) AS sc_count,
+               COUNT(DISTINCT project_id) AS project_count
+        FROM subcontractors
+        WHERE sub_contract_no IS NOT NULL
+          AND TRIM(sub_contract_no) != ''
+          AND COALESCE(is_excluded, 0) = 0
+        GROUP BY sub_contract_no
+    """).fetchall()
+    conn.close()
+    out = {}
+    for r in rows:
+        no = (r['sub_contract_no'] or '').strip()
+        if not no:
+            continue
+        out[no] = {
+            'sc_count': int(r['sc_count'] or 0),
+            'project_count': int(r['project_count'] or 0),
+        }
+    return out
+
+
+def merge_registry_from_subcontractor(project_id, data):
+    """判項儲存時回寫 MS/C 登記表；失敗時不拋錯（不阻擋判項儲存）。"""
+    sub_no = (data.get('sub_contract_no') or '').strip()
+    if not sub_no:
+        return
+    try:
+        from sc_contract_ref import display_p1_sub_contract_no, validate_ms_c_input
+
+        ok, norm = validate_ms_c_input(sub_no)
+        if not ok or not norm or display_p1_sub_contract_no(norm) == '—':
+            return
+        project = get_project(project_id)
+        if not project:
+            return
+        project_code = (
+            (project.get('project_code') or project.get('mp_contract_code') or '').strip()
+        )
+        company = (data.get('company_name_zh') or '').strip() or (
+            data.get('company_name_en') or ''
+        ).strip()
+        desc = (data.get('description') or '').strip()
+        works = desc.split('\n')[0].strip()[:240] if desc else ''
+        amount = float(data.get('contract_sum') or data.get('contract_amount') or 0)
+        existing = get_sc_contract_registry_row(norm)
+        payload = {
+            'sub_contract_no': norm,
+            'source_file': 'subcontractor',
+        }
+        if project_code:
+            payload['project_code'] = project_code
+        elif existing and existing.get('project_code'):
+            payload['project_code'] = existing['project_code']
+        elif not existing:
+            return
+        if company:
+            payload['company'] = company
+        elif existing:
+            payload['company'] = existing.get('company')
+        if works:
+            payload['works'] = works
+        elif existing:
+            payload['works'] = existing.get('works')
+        if amount:
+            payload['amount'] = amount
+        elif existing:
+            payload['amount'] = existing.get('amount')
+        if existing:
+            for key in (
+                'countersign', 'partner', 'tender_minutes', 'final_account',
+                'final_account_statement', 'iso_flag', 'remark', 'sheet',
+                'person_in_charge', 'legacy_contract_no',
+            ):
+                if existing.get(key) is not None:
+                    payload[key] = existing.get(key)
+        save_sc_contract_registry_row(payload)
+    except (ValueError, TypeError):
+        return
+
+
 def _scr_sync_values(r, source_file=None):
     return (
         r.get('legacy_contract_no'),

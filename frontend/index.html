@@ -1837,6 +1837,7 @@
             2023 年起 MS/C 新格式：<code>MS/C月份-序號/年份/負責人</code>；2023 前為 <code>YYYY/MP/…</code> 舊格式，一併顯示。
             批量維護可編輯 <code>Ref/分判工程合約編號 YYYY.xlsx</code> 後按「同步 Ref Excel」。
             <span id="scrStatMeta" style="margin-left:8px"></span>
+            <span id="scrRefWarn" class="badge badge-warning" style="display:none;margin-left:8px" title="Ref Excel 檔案較新">Ref 可能有更新</span>
           </div>
         </div>
         <div class="card scr-list-card">
@@ -1857,11 +1858,15 @@
                   <th class="scr-col-flag" data-col="countersign" title="合約會簽表">會簽</th>
                   <th class="scr-col-flag" data-col="partner" title="合作伙伴">伙伴</th>
                   <th class="scr-col-flag" data-col="tender" title="定標會議紀錄">定標</th>
+                  <th class="scr-col-usage" data-col="usage" title="地盤判項掛載數">掛載</th>
+                  <th class="scr-col-flag" data-col="fa" title="Final Account">FAC</th>
+                  <th class="scr-col-flag" data-col="iso" title="ISO">ISO</th>
+                  <th class="scr-col-remark" data-col="remark">備註</th>
                   <th class="scr-col-actions" data-col="act"></th>
                 </tr>
               </thead>
               <tbody id="scrContent">
-                <tr><td colspan="10"><div class="empty-state" style="padding:40px">載入中…</div></td></tr>
+                <tr><td colspan="14"><div class="empty-state" style="padding:40px">載入中…</div></td></tr>
               </tbody>
             </table>
           </div>

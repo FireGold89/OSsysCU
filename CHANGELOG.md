@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261107-sc-registry` · 分支 `v2/portfolio`
+
+### 變更
+- **MS/C 登記表**：判項儲存回寫登記表；列表顯示掛載數與 FAC／ISO／備註欄；Ref 較新提示；`/options` 優化判項選單。
+
 `APP_VERSION`: `v2-20261107-login-hint` · 分支 `v2/portfolio`
 
 ### 變更

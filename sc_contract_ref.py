@@ -373,13 +373,32 @@ def invalidate_cache():
 
 
 def ref_status() -> dict:
+    from datetime import datetime
+
     path = _find_ref_workbook()
     rows = _load_ref_rows()
+    ref_mtime = None
+    ref_mtime_iso = None
+    if path and os.path.isfile(path):
+        try:
+            ref_mtime = os.path.getmtime(path)
+            ref_mtime_iso = datetime.fromtimestamp(ref_mtime).strftime('%Y-%m-%d %H:%M')
+        except OSError:
+            ref_mtime = None
     try:
         import database as db
         db_status = db.get_sc_contract_registry_status()
     except Exception:
         db_status = {'row_count': 0, 'last_import': None}
+    ref_newer_than_import = False
+    last = db_status.get('last_import') or {}
+    imported_at = (last.get('imported_at') or '').strip()
+    if ref_mtime and imported_at:
+        try:
+            imp_dt = datetime.strptime(imported_at[:19], '%Y-%m-%d %H:%M:%S')
+            ref_newer_than_import = ref_mtime > imp_dt.timestamp() + 1
+        except ValueError:
+            pass
     return {
         'path': path,
         'row_count': len(rows),
@@ -387,6 +406,8 @@ def ref_status() -> dict:
         'db_row_count': db_status.get('row_count', 0),
         'last_import': db_status.get('last_import'),
         'source': 'database' if db_status.get('row_count') else 'excel',
+        'ref_mtime_iso': ref_mtime_iso,
+        'ref_newer_than_import': ref_newer_than_import,
     }
 
 

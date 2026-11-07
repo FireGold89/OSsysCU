@@ -1530,20 +1530,11 @@ const SC = {
     const core = this._projectCoreFromCurrent();
     let rows = [];
     try {
-      if (core) {
-        const data = await api('GET', `/sc-contract-registry?project_core=${encodeURIComponent(core)}`, null, { silent: true });
-        rows = data?.rows || [];
-      }
-      if (rows.length < 8) {
-        const extra = await api('GET', '/sc-contract-registry', null, { silent: true });
-        const seen = new Set(rows.map(r => r.sub_contract_no));
-        (extra?.rows || []).forEach(r => {
-          if (r.sub_contract_no && !seen.has(r.sub_contract_no)) {
-            seen.add(r.sub_contract_no);
-            rows.push(r);
-          }
-        });
-      }
+      const qs = new URLSearchParams();
+      if (core) qs.set('project_core', core);
+      qs.set('limit', '120');
+      const data = await api('GET', `/sc-contract-registry/options?${qs}`, null, { silent: true });
+      rows = data?.rows || [];
     } catch (e) {
       rows = [];
     }

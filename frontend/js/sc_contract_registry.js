@@ -4,7 +4,8 @@ const ScContractRegistry = {
   status: null,
   filters: null,
   _editNo: null,
-  COLS: 10,
+  COLS: 14,
+  refInfo: null,
   _sortKey: localStorage.getItem('qs_scr_sort_key') || 'sub_contract_no',
   _sortDir: localStorage.getItem('qs_scr_sort_dir') || 'asc',
   _defaultYear: '2026',
@@ -19,6 +20,10 @@ const ScContractRegistry = {
     { id: 'countersign', label: '會簽' },
     { id: 'partner', label: '伙伴' },
     { id: 'tender', label: '定標' },
+    { id: 'usage', label: '掛載' },
+    { id: 'fa', label: 'FAC' },
+    { id: 'iso', label: 'ISO' },
+    { id: 'remark', label: '備註' },
     { id: 'act', label: '操作', locked: true },
   ],
 
@@ -164,6 +169,7 @@ const ScContractRegistry = {
       const data = await api('GET', `/sc-contract-registry${suffix}`);
       this.rows = data?.rows || [];
       this.status = data?.status || null;
+      this.refInfo = data?.ref || null;
       this._applyFilters(data?.filters);
       this.render();
     } catch (e) {
@@ -267,11 +273,21 @@ const ScContractRegistry = {
     if (statEl) {
       statEl.textContent = `資料庫 ${st.row_count ?? '—'} 筆 · ${imported}`;
     }
+    const refWarn = document.getElementById('scrRefWarn');
+    if (refWarn) {
+      refWarn.style.display = this.refInfo?.ref_newer_than_import ? '' : 'none';
+    }
     const countEl = document.getElementById('scrListCount');
     if (countEl) countEl.textContent = `顯示 ${this.rows.length} 筆`;
 
     if (!this.rows.length) {
-      root.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:48px"><div class="empty-icon">📋</div><div class="empty-title">尚無記錄</div><div class="empty-sub">可新增或從 Ref Excel 同步</div></div></td></tr>`;
+      const year = this._readYearFilter();
+      const q = document.getElementById('scrSearch')?.value?.trim();
+      let hint = '可新增或從 Ref Excel 同步';
+      if (year || q) {
+        hint = '可改選「全部年份」、清除搜尋條件，或從 Ref Excel 同步';
+      }
+      root.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:48px"><div class="empty-icon">📋</div><div class="empty-title">尚無記錄</div><div class="empty-sub">${escHtml(hint)}</div></div></td></tr>`;
       this._updateSortHeaders();
       this.applyColVisibility();
       return;
@@ -295,6 +311,10 @@ const ScContractRegistry = {
         <td class="scr-col-flag" data-col="countersign">${this._flagCell(r.countersign)}</td>
         <td class="scr-col-flag" data-col="partner">${this._flagCell(r.partner)}</td>
         <td class="scr-col-flag" data-col="tender">${this._flagCell(r.tender_minutes)}</td>
+        <td class="scr-col-usage td-muted" data-col="usage" title="判項數 · 項目數">${r.usage_sc_count ? `${r.usage_sc_count} 判項` : '—'}${r.usage_project_count ? ` · ${r.usage_project_count} 項` : ''}</td>
+        <td class="scr-col-flag" data-col="fa">${this._flagCell(r.final_account)}</td>
+        <td class="scr-col-flag" data-col="iso">${this._flagCell(r.iso_flag)}</td>
+        <td class="scr-col-remark td-muted" data-col="remark">${this._shortText(r.remark, 32)}</td>
         <td class="scr-col-actions" data-col="act">
           <div class="scr-row-actions" onclick="event.stopPropagation()">
             <button type="button" class="btn btn-secondary btn-sm btn-icon" title="編輯" onclick="ScContractRegistry.openEdit('${noArg}')">✏️</button>
