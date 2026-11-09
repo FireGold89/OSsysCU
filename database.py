@@ -3636,6 +3636,17 @@ def get_subcontractor_by_sc_no(project_id, sc_no):
     return dict(row) if row else None
 
 
+def set_subcontractor_sub_contract_no(sc_id, sub_contract_no):
+    """只寫入 MS/C，不動其他判項欄位。"""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE subcontractors SET sub_contract_no=? WHERE id=?",
+        ((sub_contract_no or '').strip() or None, sc_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def upsert_subcontractor(data):
     """新增或更新分判商"""
     conn = get_conn()

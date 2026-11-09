@@ -1135,6 +1135,17 @@ def delete_sc_contract_registry_api(sub_contract_no):
     return resp({'deleted': sub_contract_no})
 
 
+@app.route('/api/projects/<int:project_id>/subcontractors/ms-c-auto-link', methods=['POST'])
+def auto_link_project_ms_c_api(project_id):
+    from sc_contract_ref import auto_link_project_ms_c
+    body = request.json or {}
+    dry_run = bool(body.get('dry_run'))
+    result = auto_link_project_ms_c(project_id, dry_run=dry_run)
+    if not result.get('ok'):
+        return resp(error=result.get('error') or '自動配對失敗', status=400)
+    return resp(result)
+
+
 @app.route('/api/projects/<int:project_id>/subcontractors/ms-c-resolve', methods=['POST'])
 def resolve_ms_c_preview_api(project_id):
     from sc_contract_ref import display_p1_sub_contract_no, resolve_sub_contract_no
@@ -1632,11 +1643,21 @@ def create_subcontractor():
     data.setdefault('sc_entry_type', 'quotation')
     data.setdefault('retention_sum', None)
     data.setdefault('sub_contract_no', None)
-    from sc_contract_ref import normalize_ms_c_input, validate_ms_c_input
+    from sc_contract_ref import (
+        apply_resolved_ms_c_to_payload,
+        normalize_ms_c_input,
+        validate_ms_c_input,
+    )
     ok, msg = validate_ms_c_input(data.get('sub_contract_no'))
     if not ok:
         return resp(error=msg, status=400)
     data['sub_contract_no'] = normalize_ms_c_input(data.get('sub_contract_no'))
+    ms_c_suggestion = None
+    if not data.get('sub_contract_no'):
+        project = db.get_project(data['project_id'])
+        all_scs = db.get_subcontractors(data['project_id']) if project else []
+        if project:
+            ms_c_suggestion = apply_resolved_ms_c_to_payload(project, data, all_scs)
     if data.get('contract_sum') is not None or data.get('vo_amount') is not None:
         data['contract_amount'] = float(data.get('contract_sum') or 0) + float(data.get('vo_amount') or 0)
     from sc_ref import derive_parent_sc_no
@@ -1647,7 +1668,11 @@ def create_subcontractor():
     db.merge_registry_from_subcontractor(data['project_id'], data)
     if ocr_id:
         db.link_ocr_extraction(ocr_id, project_id=data['project_id'], sc_id=sc_id, doc_type='quotation')
-    return resp({'id': sc_id}, status=201)
+    return resp({
+        'id': sc_id,
+        'sub_contract_no': data.get('sub_contract_no'),
+        'ms_c_suggestion': ms_c_suggestion,
+    }, status=201)
 
 
 @app.route('/api/subcontractors/<int:sc_id>', methods=['GET'])

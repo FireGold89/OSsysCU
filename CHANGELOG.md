@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261109-msc-autolink` · 分支 `v2/portfolio`
+
+### 新增
+- **MS/C 自動配對**：本項目分判判項可一鍵寫入有把握的登記表編號，並核對金額；儲存判項時若欄位空白亦會自動帶入。
+
 `APP_VERSION`: `v2-20261109-sc-reconcile` · 分支 `v2/portfolio`
 
 ### 新增

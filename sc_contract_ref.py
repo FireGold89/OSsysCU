@@ -563,6 +563,176 @@ def resolve_sub_contract_no(
     return '—'
 
 
+def _confident_match_row(sc: dict, matched: list[dict]) -> tuple[dict | None, str]:
+    """只在有把握時自動寫入。回傳 (row, unique|amount|ambiguous|none)。"""
+    if not matched:
+        return None, 'none'
+    if len(matched) == 1:
+        return matched[0], 'unique'
+    amt = float(sc.get('contract_sum') or sc.get('contract_amount') or 0)
+    if amt <= 0:
+        return None, 'ambiguous'
+    ranked = sorted(
+        matched,
+        key=lambda r: abs(float(r.get('amount') or 0) - amt),
+    )
+    d0 = abs(float(ranked[0].get('amount') or 0) - amt)
+    d1 = abs(float(ranked[1].get('amount') or 0) - amt)
+    if d0 <= 0.5 and d1 - d0 >= 1:
+        return ranked[0], 'amount'
+    if d0 <= max(1.0, amt * 0.002) and d1 > d0 * 3:
+        return ranked[0], 'amount'
+    return None, 'ambiguous'
+
+
+def _amount_ok(registry_amount, site_amount, tol=0.5):
+    try:
+        a = float(registry_amount or 0)
+        b = float(site_amount or 0)
+    except (TypeError, ValueError):
+        return False
+    return abs(a - b) <= tol
+
+
+def suggest_ms_c_for_sc(project: dict, sc: dict, all_scs: list | None = None) -> dict:
+    """判項建議 MS/C（不寫入）。"""
+    existing = (sc.get('sub_contract_no') or '').strip()
+    sn = (sc.get('sc_no') or '').strip().upper()
+    site_amt = float(sc.get('contract_sum') or sc.get('contract_amount') or 0)
+    if existing:
+        row = db.get_sc_contract_registry_row(existing)
+        reg_amt = float((row or {}).get('amount') or 0)
+        return {
+            'sc_id': sc.get('id'),
+            'sc_no': sc.get('sc_no'),
+            'company': (sc.get('company_name_zh') or sc.get('company_name_en') or ''),
+            'resolved': existing,
+            'source': 'manual',
+            'confidence': 'kept',
+            'registry_amount': reg_amt,
+            'site_amount': site_amt,
+            'amount_ok': _amount_ok(reg_amt, site_amt) if row else None,
+            'action': 'kept',
+        }
+    if sn.startswith('O-') or sn.startswith('M-'):
+        return {
+            'sc_id': sc.get('id'),
+            'sc_no': sc.get('sc_no'),
+            'company': (sc.get('company_name_zh') or sc.get('company_name_en') or ''),
+            'resolved': None,
+            'source': 'na',
+            'confidence': 'na',
+            'registry_amount': None,
+            'site_amount': site_amt,
+            'amount_ok': None,
+            'action': 'skipped_na',
+        }
+    qn = (sc.get('quotation_no') or '').strip()
+    if _is_ms_c_contract_no(qn):
+        row = db.get_sc_contract_registry_row(qn)
+        reg_amt = float((row or {}).get('amount') or 0)
+        return {
+            'sc_id': sc.get('id'),
+            'sc_no': sc.get('sc_no'),
+            'company': (sc.get('company_name_zh') or sc.get('company_name_en') or ''),
+            'resolved': qn,
+            'source': 'quotation',
+            'confidence': 'unique',
+            'registry_amount': reg_amt,
+            'site_amount': site_amt,
+            'amount_ok': _amount_ok(reg_amt, site_amt) if row else None,
+            'action': 'link',
+        }
+    matched = _match_rows(project, sc, _load_ref_rows())
+    best, conf = _confident_match_row(sc, matched)
+    if not best:
+        return {
+            'sc_id': sc.get('id'),
+            'sc_no': sc.get('sc_no'),
+            'company': (sc.get('company_name_zh') or sc.get('company_name_en') or ''),
+            'resolved': None,
+            'source': 'none',
+            'confidence': conf,
+            'registry_amount': None,
+            'site_amount': site_amt,
+            'amount_ok': None,
+            'action': 'unmatched' if conf == 'none' else 'ambiguous',
+        }
+    no = best['sub_contract_no']
+    reg_amt = float(best.get('amount') or 0)
+    return {
+        'sc_id': sc.get('id'),
+        'sc_no': sc.get('sc_no'),
+        'company': (sc.get('company_name_zh') or sc.get('company_name_en') or ''),
+        'resolved': no,
+        'source': 'registry',
+        'confidence': conf,
+        'registry_amount': reg_amt,
+        'site_amount': site_amt,
+        'amount_ok': _amount_ok(reg_amt, site_amt),
+        'action': 'link',
+    }
+
+
+def apply_resolved_ms_c_to_payload(project: dict, data: dict, all_scs: list | None = None) -> dict | None:
+    """儲存判項時若未填 MS/C，有把握則寫入。回傳建議摘要。"""
+    suggestion = suggest_ms_c_for_sc(project, data, all_scs)
+    if suggestion.get('action') == 'link' and suggestion.get('resolved'):
+        data['sub_contract_no'] = suggestion['resolved']
+    return suggestion
+
+
+def auto_link_project_ms_c(project_id: int, dry_run: bool = False) -> dict:
+    """本項目：把有把握的 MS/C 寫入尚未填欄的判項，並核對金額。"""
+    project = db.get_project(project_id)
+    if not project:
+        return {'ok': False, 'error': '項目不存在'}
+    scs = db.get_subcontractors(project_id)
+    used = {
+        (s.get('sub_contract_no') or '').strip()
+        for s in scs
+        if (s.get('sub_contract_no') or '').strip()
+    }
+    items = []
+    linked = 0
+    mismatch = 0
+    for sc in scs:
+        if sc.get('is_excluded'):
+            continue
+        sug = suggest_ms_c_for_sc(project, sc, scs)
+        no = (sug.get('resolved') or '').strip()
+        if sug.get('action') == 'link' and no:
+            if no in used and not (sc.get('sub_contract_no') or '').strip():
+                sug = dict(sug)
+                sug['action'] = 'already_used'
+            else:
+                if not dry_run:
+                    db.set_subcontractor_sub_contract_no(sc['id'], no)
+                used.add(no)
+                linked += 1
+                sug = dict(sug)
+                sug['action'] = 'linked'
+        if sug.get('amount_ok') is False:
+            mismatch += 1
+        items.append(sug)
+    return {
+        'ok': True,
+        'dry_run': dry_run,
+        'project_id': project_id,
+        'items': items,
+        'summary': {
+            'linked': linked,
+            'kept': sum(1 for i in items if i.get('action') == 'kept'),
+            'skipped_na': sum(1 for i in items if i.get('action') == 'skipped_na'),
+            'unmatched': sum(1 for i in items if i.get('action') == 'unmatched'),
+            'ambiguous': sum(1 for i in items if i.get('action') == 'ambiguous'),
+            'already_used': sum(1 for i in items if i.get('action') == 'already_used'),
+            'amount_mismatch': mismatch,
+            'amount_ok': sum(1 for i in items if i.get('amount_ok') is True),
+        },
+    }
+
+
 SCR_EXPORT_HEADERS = (
     '合約編號', '分判商', '工程項目', '項目編號', '負責同事', '分判合約合額',
     '合約會簽表', '合作伙伴', '定標會議紀錄',

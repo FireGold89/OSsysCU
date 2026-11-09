@@ -998,6 +998,8 @@
               <input type="text" id="scSearch" placeholder="搜尋判項編號、公司名..." oninput="SC.search(this.value)">
             </div>
             <button class="btn btn-primary" onclick="SC.openAdd()">➕ 新增合約／判項</button>
+            <button type="button" class="btn btn-secondary" onclick="SC.autoLinkMsC()"
+              title="把登記表 MS/C 寫入尚未填欄的分判判項，並核對金額">🔗 自動配對 MS/C</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="SC.expandAllGroups()">展開全部</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="SC.collapseAllGroups()">收合全部</button>
           </div>
@@ -1825,6 +1827,8 @@
           </div>
           <div class="toolbar-right scr-toolbar-actions">
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.syncFromRef()">🔄 同步 Ref Excel</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="SC.autoLinkMsC()"
+              title="為目前項目自動寫入 MS/C 並核對金額">🔗 自動配對目前項目</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.openReconcile()"
               title="登記表合額 vs 地盤判項 contract_sum 加總">💰 金額差異</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.exportExcel()">📥 匯出 Excel</button>
@@ -3001,6 +3005,25 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="SC.closeModal()">取消</button>
       <button class="btn btn-primary" onclick="SC.saveModal()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：MS/C 自動配對結果 ───────────────────────────── -->
+<div class="modal-backdrop" id="scMsCLinkModal" onclick="if(event.target===this)SC.closeAutoLinkMsC()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">自動配對 MS/C 結果</div>
+      <button type="button" class="modal-close" onclick="SC.closeAutoLinkMsC()" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" id="scMsCLinkSummary" style="margin-bottom:12px">—</p>
+      <div id="scMsCLinkBody">
+        <div class="empty-state" style="padding:24px">載入中…</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="SC.closeAutoLinkMsC()">關閉</button>
     </div>
   </div>
 </div>
