@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""上傳本機 qs_system.db 至線上生產（需 RESTORE_TOKEN；舊版另需 admin 登入）"""
+"""上傳本機 qs_system.db 至阿里雲生產 mossys.xyz（需 RESTORE_TOKEN）。
+
+檔名為歷史遺留；**不要再對 Zeabur 上傳**。新腳本見 push_db_to_v2.py。
+"""
 import json
 import os
 import sys

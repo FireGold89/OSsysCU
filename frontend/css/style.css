@@ -2375,6 +2375,10 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .scr-registry-table .scr-col-flag {
   white-space: nowrap;
 }
+.scr-flag-yes {
+  color: var(--success, #059669);
+  font-weight: 600;
+}
 .scr-registry-table .scr-col-actions .scr-row-actions {
   display: flex;
   gap: 4px;

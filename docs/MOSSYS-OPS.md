@@ -119,7 +119,7 @@ PowerShell **勿用變數名 `$host`**（系統保留），請用 `$remote` 等�
 ```powershell
 $key = "$env:USERPROFILE\.ssh\aliyun-ossys"
 $remote = "admin@43.103.44.4"
-# 例：Zeabur 備份解壓後的 iso 路徑
+# 例：舊備份解壓後的 iso 路徑（歷史 Zeabur 包；現行資料在阿里雲 /data）
 $ISO = "$env:USERPROFILE\Downloads\backup-6ae94ee684ee3b8379e9ee23\data\datav2\uploads\iso"
 
 scp -r -i $key $ISO "${remote}:/tmp/iso-restore"

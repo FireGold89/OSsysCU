@@ -8,6 +8,7 @@ alwaysApply: true
 ## 定位
 - QS 付款管理（Flask + SQLite + 靜態前端），生產：https://mossys.xyz（阿里雲；分支 `v2/portfolio`）
 - GitHub：`FireGold89/OSsysCU`；發版 push `v2/portfolio` 後於伺服器跑 `deploy_aliyun_hk.sh`
+- **勿再部署／更新 Zeabur**；現行唯一生產為阿里雲 mossys.xyz
 - 版本號：`startup.py` 的 `APP_VERSION`（同步 `VERSION` 檔；部署後用 `/api/system/status` 核對）
 - 發行基線：`RELEASE.md`；Git tag `release/YYYY-MM-DD`；備份腳本 `scripts/backup_release.ps1`
 

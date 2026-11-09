@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261109-msc-flags` · 分支 `v2/portfolio`
+
+### 變更
+- **MS/C 編輯**：Sheet 改稱「年份」；合約狀態改 ✔／NA／未填下拉（與 ISO 上傳分開）。
+
 `APP_VERSION`: `v2-20261109-msc-open-sc` · 分支 `v2/portfolio`
 
 ### 修正

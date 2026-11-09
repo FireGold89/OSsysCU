@@ -35,8 +35,42 @@ const ScContractRegistry = {
   _flagCell(v) {
     const s = (v || '').trim();
     if (!s) return '<span class="text-muted">—</span>';
-    if (s === '✔' || s === '✓') return '<span class="scr-flag-yes">✔</span>';
+    const n = this._normFlag(s);
+    if (n === '✔') return '<span class="scr-flag-yes">✔</span>';
+    if (n === 'NA') return '<span class="td-muted">NA</span>';
     return this._esc(s);
+  },
+
+  FLAG_IDS: [
+    'scrCountersign', 'scrPartner', 'scrTenderMinutes',
+    'scrFinalAccount', 'scrFinalAccountStatement', 'scrIso',
+  ],
+
+  _normFlag(raw) {
+    const s = (raw || '').trim();
+    if (!s) return '';
+    const u = s.toUpperCase();
+    const compact = u.replace(/[\s./\\-]/g, '');
+    if (s === '✔' || s === '✓' || s === '√' || compact === 'TICK' || compact === 'YES' || s === '是') return '✔';
+    if (compact === 'NA' || s === '不適用') return 'NA';
+    return s;
+  },
+
+  _setFlagSelect(id, raw) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const norm = this._normFlag(raw);
+    const keep = (norm === '✔' || norm === 'NA' || norm === '') ? null : (raw || '').trim();
+    el.innerHTML = '<option value="">（未填）</option>'
+      + '<option value="✔">✔ 已完成</option>'
+      + '<option value="NA">NA 不適用</option>'
+      + (keep ? `<option value="${this._esc(keep)}">${this._esc(keep)}（舊資料）</option>` : '');
+    el.value = keep || norm;
+  },
+
+  _readFlag(id) {
+    const v = this._normFlag(document.getElementById(id)?.value);
+    return v || null;
   },
 
   _shortText(v, max = 48) {
@@ -57,6 +91,10 @@ const ScContractRegistry = {
 
   _clearForm() {
     this._formIds().forEach(id => {
+      if (this.FLAG_IDS.includes(id)) {
+        this._setFlagSelect(id, '');
+        return;
+      }
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -83,12 +121,12 @@ const ScContractRegistry = {
     document.getElementById('scrProjectCode').value = r.project_code || '';
     document.getElementById('scrAmount').value = r.amount != null ? fmtInputNum(r.amount) : '';
     document.getElementById('scrSheet').value = r.sheet || '';
-    document.getElementById('scrCountersign').value = r.countersign || '';
-    document.getElementById('scrPartner').value = r.partner || '';
-    document.getElementById('scrTenderMinutes').value = r.tender_minutes || '';
-    document.getElementById('scrFinalAccount').value = r.final_account || '';
-    document.getElementById('scrFinalAccountStatement').value = r.final_account_statement || '';
-    document.getElementById('scrIso').value = r.iso_flag || '';
+    this._setFlagSelect('scrCountersign', r.countersign);
+    this._setFlagSelect('scrPartner', r.partner);
+    this._setFlagSelect('scrTenderMinutes', r.tender_minutes);
+    this._setFlagSelect('scrFinalAccount', r.final_account);
+    this._setFlagSelect('scrFinalAccountStatement', r.final_account_statement);
+    this._setFlagSelect('scrIso', r.iso_flag);
     document.getElementById('scrRemark').value = r.remark || '';
   },
 
@@ -101,12 +139,12 @@ const ScContractRegistry = {
       person_in_charge: document.getElementById('scrPerson').value.trim() || null,
       amount: parseAmtOrZero(document.getElementById('scrAmount').value),
       sheet: document.getElementById('scrSheet').value.trim() || null,
-      countersign: document.getElementById('scrCountersign').value.trim() || null,
-      partner: document.getElementById('scrPartner').value.trim() || null,
-      tender_minutes: document.getElementById('scrTenderMinutes').value.trim() || null,
-      final_account: document.getElementById('scrFinalAccount').value.trim() || null,
-      final_account_statement: document.getElementById('scrFinalAccountStatement').value.trim() || null,
-      iso_flag: document.getElementById('scrIso').value.trim() || null,
+      countersign: this._readFlag('scrCountersign'),
+      partner: this._readFlag('scrPartner'),
+      tender_minutes: this._readFlag('scrTenderMinutes'),
+      final_account: this._readFlag('scrFinalAccount'),
+      final_account_statement: this._readFlag('scrFinalAccountStatement'),
+      iso_flag: this._readFlag('scrIso'),
       remark: document.getElementById('scrRemark').value.trim() || null,
       source_file: 'UI',
     };

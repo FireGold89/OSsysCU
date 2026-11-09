@@ -1,4 +1,5 @@
-# 上傳本機 qs_system.db 至線上（admin 登入 + RESTORE_TOKEN）
+# 上傳本機 qs_system.db 至阿里雲 https://mossys.xyz（admin 登入 + RESTORE_TOKEN）
+# 檔名為歷史遺留；不要再對 Zeabur 執行。新腳本見 push_db_to_v2.py。
 param(
     [Parameter(Mandatory = $true)]
     [string]$AdminPassword,
