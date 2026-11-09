@@ -467,7 +467,7 @@ const ScContractRegistry = {
             <td>${escHtml(co)}</td>
             <td class="td-amount">${amt}</td>
             <td><button type="button" class="btn btn-secondary btn-sm"
-              onclick="ScContractRegistry.goProject(${pid})">開項目</button></td>
+              onclick="ScContractRegistry.goProject(${pid}, ${Number(it.sc_id) || 'null'})">開判項</button></td>
           </tr>`;
         }).join('')}</tbody>
       </table>`;
@@ -480,11 +480,15 @@ const ScContractRegistry = {
     document.getElementById('scrUsageModal')?.classList.remove('open');
   },
 
-  async goProject(projectId) {
+  async goProject(projectId, scId) {
     this.closeUsageModal();
+    this.closeReconcile();
     try {
       await App.selectProject(projectId);
-      App.navigate('projects');
+      App.navigate('payments', {
+        tab: 'sc',
+        openScId: scId || undefined,
+      });
     } catch (e) {
       toast(e?.message || '無法開啟項目', 'warning');
     }

@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261109-msc-open-sc` · 分支 `v2/portfolio`
+
+### 修正
+- **MS/C 掛載明細**：改開該地盤「分判商登記」並帶出對應判項，不再跳到工程項目表。
+
 `APP_VERSION`: `v2-20261109-msc-child` · 分支 `v2/portfolio`
 
 ### 變更

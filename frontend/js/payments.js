@@ -16,6 +16,7 @@ const Payments = {
   _tab: localStorage.getItem('qs_pay_tab') || 'records',
   _pendingTab: null,
   _pendingOpenPaymentId: null,
+  _pendingOpenScId: null,
 
   _isRevoked(r) {
     return !!(r && r.revoked_at);
@@ -110,7 +111,16 @@ const Payments = {
     if (subEl && App.currentPage === 'payments') {
       subEl.textContent = subs[tab] || subs.records;
     }
-    if (tab === 'sc' && App.currentProject) SC.load();
+    if (tab === 'sc' && App.currentProject) {
+      const pendingSc = this._pendingOpenScId;
+      this._pendingOpenScId = null;
+      const loaded = SC.load();
+      if (pendingSc) {
+        Promise.resolve(loaded).then(() => {
+          if (typeof SC !== 'undefined' && SC.openEdit) SC.openEdit(pendingSc);
+        });
+      }
+    }
     if (tab === 'ocr') OCR.populateScOptions();
     if (options.focusAdd && tab === 'sc') SC.openAdd();
     if (options.focusAdd && tab === 'records') this.openAdd();

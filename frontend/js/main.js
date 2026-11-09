@@ -2553,6 +2553,7 @@ const App = {
     else if (page === 'payments') {
       if (options?.tab) Payments._pendingTab = options.tab;
       if (options?.openPaymentId) Payments._pendingOpenPaymentId = options.openPaymentId;
+      if (options?.openScId) Payments._pendingOpenScId = options.openScId;
       Payments.load();
     }
     else if (page === 'sc-vo-reg') { ScVoReg.populateScFilter(); ScVoReg.load(); }
