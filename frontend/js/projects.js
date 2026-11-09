@@ -2550,6 +2550,7 @@ const SC = {
       unmatched: '找不到對應',
       ambiguous: '多筆候選，未自動寫入',
       already_used: 'MS/C 已用於其他判項',
+      child_of_parent: '附屬於父項',
       link: '可配對',
     };
     return map[action] || action || '—';
@@ -2578,8 +2579,9 @@ const SC = {
       const s = data?.summary || {};
       if (sumEl) {
         sumEl.textContent = `已配對 ${s.linked ?? 0} · 金額一致 ${s.amount_ok ?? 0}`
-          + ` · 金額不符 ${s.amount_mismatch ?? 0} · 找不到 ${s.unmatched ?? 0}`
-          + ` · 不確定 ${s.ambiguous ?? 0} · 其他支出略過 ${s.skipped_na ?? 0}`;
+          + ` · 金額不符 ${s.amount_mismatch ?? 0} · 附屬父項 ${s.child_of_parent ?? 0}`
+          + ` · 找不到 ${s.unmatched ?? 0} · 不確定 ${s.ambiguous ?? 0}`
+          + ` · 其他支出略過 ${s.skipped_na ?? 0}`;
       }
       const items = data?.items || [];
       if (!items.length) {
@@ -2593,15 +2595,20 @@ const SC = {
           <tbody>${items.map((row) => {
             const act = row.action;
             const badge = act === 'linked' ? 'badge-success'
-              : (act === 'kept' ? 'badge-info' : 'badge-warning');
-            const amt = row.amount_ok === true
-              ? '<span class="badge badge-success">一致</span>'
-              : (row.amount_ok === false ? '<span class="badge badge-danger">不符</span>' : '—');
+              : (act === 'kept' || act === 'child_of_parent' ? 'badge-info' : 'badge-warning');
+            const amt = act === 'child_of_parent'
+              ? `<span class="td-muted">跟 ${escHtml(row.parent_sc_no || '父項')}</span>`
+              : (row.amount_ok === true
+                ? '<span class="badge badge-success">一致</span>'
+                : (row.amount_ok === false ? '<span class="badge badge-danger">不符</span>' : '—'));
+            const msLabel = act === 'child_of_parent' && row.parent_sc_no
+              ? `${escHtml(row.resolved || '—')}（${escHtml(row.parent_sc_no)}）`
+              : escHtml(row.resolved || '—');
             return `<tr>
               <td><span class="badge ${badge}">${escHtml(this._msCLinkActionLabel(act))}</span></td>
               <td class="td-mono">${escHtml(row.sc_no || '—')}</td>
               <td>${escHtml(row.company || '—')}</td>
-              <td class="td-mono">${escHtml(row.resolved || '—')}</td>
+              <td class="td-mono">${msLabel}</td>
               <td class="td-amount">${row.registry_amount != null ? fmt(row.registry_amount) : '—'}</td>
               <td class="td-amount">${row.site_amount != null ? fmt(row.site_amount) : '—'}</td>
               <td>${amt}</td>

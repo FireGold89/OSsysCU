@@ -594,11 +594,26 @@ def _amount_ok(registry_amount, site_amount, tol=0.5):
     return abs(a - b) <= tol
 
 
+def _parent_sc_row(sc: dict, all_scs: list | None):
+    """若為子項（SC-004.1 / SC-005A），回傳父判項列。"""
+    cur = (sc.get('sc_no') or '').strip()
+    if not cur:
+        return None
+    parent_no = (sc.get('parent_sc_no') or derive_parent_sc_no(cur) or '').strip()
+    if not parent_no or parent_no.upper() == cur.upper():
+        return None
+    for row in all_scs or []:
+        if (row.get('sc_no') or '').strip().upper() == parent_no.upper():
+            return row
+    return None
+
+
 def suggest_ms_c_for_sc(project: dict, sc: dict, all_scs: list | None = None) -> dict:
     """判項建議 MS/C（不寫入）。"""
     existing = (sc.get('sub_contract_no') or '').strip()
     sn = (sc.get('sc_no') or '').strip().upper()
     site_amt = float(sc.get('contract_sum') or sc.get('contract_amount') or 0)
+    parent = _parent_sc_row(sc, all_scs)
     if existing:
         row = db.get_sc_contract_registry_row(existing)
         reg_amt = float((row or {}).get('amount') or 0)
@@ -613,6 +628,21 @@ def suggest_ms_c_for_sc(project: dict, sc: dict, all_scs: list | None = None) ->
             'site_amount': site_amt,
             'amount_ok': _amount_ok(reg_amt, site_amt) if row else None,
             'action': 'kept',
+        }
+    if parent:
+        parent_ms = (parent.get('sub_contract_no') or '').strip() or None
+        return {
+            'sc_id': sc.get('id'),
+            'sc_no': sc.get('sc_no'),
+            'company': (sc.get('company_name_zh') or sc.get('company_name_en') or ''),
+            'resolved': parent_ms,
+            'parent_sc_no': parent.get('sc_no'),
+            'source': 'parent',
+            'confidence': 'child',
+            'registry_amount': None,
+            'site_amount': site_amt,
+            'amount_ok': None,
+            'action': 'child_of_parent',
         }
     if sn.startswith('O-') or sn.startswith('M-'):
         return {
@@ -704,7 +734,14 @@ def auto_link_project_ms_c(project_id: int, dry_run: bool = False) -> dict:
         if sug.get('action') == 'link' and no:
             if no in used and not (sc.get('sub_contract_no') or '').strip():
                 sug = dict(sug)
-                sug['action'] = 'already_used'
+                parent = _parent_sc_row(sc, scs)
+                parent_ms = (parent.get('sub_contract_no') or '').strip() if parent else ''
+                if parent and parent_ms == no:
+                    sug['action'] = 'child_of_parent'
+                    sug['parent_sc_no'] = parent.get('sc_no')
+                    sug['amount_ok'] = None
+                else:
+                    sug['action'] = 'already_used'
             else:
                 if not dry_run:
                     db.set_subcontractor_sub_contract_no(sc['id'], no)
@@ -712,9 +749,26 @@ def auto_link_project_ms_c(project_id: int, dry_run: bool = False) -> dict:
                 linked += 1
                 sug = dict(sug)
                 sug['action'] = 'linked'
-        if sug.get('amount_ok') is False:
+        if sug.get('action') == 'child_of_parent' and not sug.get('resolved'):
+            parent = _parent_sc_row(sc, scs)
+            if parent:
+                sug = dict(sug)
+                sug['resolved'] = (parent.get('sub_contract_no') or '').strip() or sug.get('resolved')
+                sug['parent_sc_no'] = parent.get('sc_no')
+        if sug.get('action') != 'child_of_parent' and sug.get('amount_ok') is False:
             mismatch += 1
         items.append(sug)
+    parent_ms = {
+        (i.get('sc_no') or '').strip().upper(): (i.get('resolved') or '').strip()
+        for i in items
+        if i.get('action') in ('linked', 'kept') and i.get('resolved')
+    }
+    for i, sug in enumerate(items):
+        if sug.get('action') != 'child_of_parent':
+            continue
+        pno = (sug.get('parent_sc_no') or '').strip().upper()
+        if pno and parent_ms.get(pno) and not (sug.get('resolved') or '').strip():
+            items[i] = dict(sug, resolved=parent_ms[pno])
     return {
         'ok': True,
         'dry_run': dry_run,
@@ -727,6 +781,7 @@ def auto_link_project_ms_c(project_id: int, dry_run: bool = False) -> dict:
             'unmatched': sum(1 for i in items if i.get('action') == 'unmatched'),
             'ambiguous': sum(1 for i in items if i.get('action') == 'ambiguous'),
             'already_used': sum(1 for i in items if i.get('action') == 'already_used'),
+            'child_of_parent': sum(1 for i in items if i.get('action') == 'child_of_parent'),
             'amount_mismatch': mismatch,
             'amount_ok': sum(1 for i in items if i.get('amount_ok') is True),
         },

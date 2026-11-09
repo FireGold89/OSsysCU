@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261109-msc-child` · 分支 `v2/portfolio`
+
+### 變更
+- **MS/C 自動配對**：子項（如 SC-004.1、SC-005A）改標「附屬於父項」，不計入金額不符。
+
 `APP_VERSION`: `v2-20261109-msc-autolink` · 分支 `v2/portfolio`
 
 ### 新增
