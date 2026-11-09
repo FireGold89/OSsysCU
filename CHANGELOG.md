@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261109-sc-reconcile` · 分支 `v2/portfolio`
+
+### 新增
+- **MS/C 金額差異**：登記表合額 vs 地盤 `contract_sum` 加總（只讀對照，不含 VO）。
+
 `APP_VERSION`: `v2-20261107-sc-registry-r2` · 分支 `v2/portfolio`
 
 ### 變更

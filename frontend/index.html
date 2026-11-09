@@ -1825,6 +1825,8 @@
           </div>
           <div class="toolbar-right scr-toolbar-actions">
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.syncFromRef()">🔄 同步 Ref Excel</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.openReconcile()"
+              title="登記表合額 vs 地盤判項 contract_sum 加總">💰 金額差異</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.exportExcel()">📥 匯出 Excel</button>
             <button type="button" class="btn btn-primary btn-sm" onclick="ScContractRegistry.openAdd()">➕ 新增 MS/C</button>
             <div class="col-picker-wrap" id="scrColPickerWrap">
@@ -3745,6 +3747,30 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="StaffRoster.closeQuotModal()">關閉</button>
       <button class="btn btn-secondary" onclick="StaffRoster.openInMasterList()">📋 在 Master List 查看</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 模態框：MS/C 金額差異 ───────────────────────────────── -->
+<div class="modal-backdrop" id="scrReconcileModal" onclick="if(event.target===this)ScContractRegistry.closeReconcile()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">金額差異（登記表 vs 地盤）</div>
+      <button type="button" class="modal-close" onclick="ScContractRegistry.closeReconcile()" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" id="scrReconcileNote" style="margin-bottom:12px">—</p>
+      <p class="form-hint" id="scrReconcileSummary" style="margin-bottom:12px">—</p>
+      <label class="master-check" style="display:inline-flex;margin-bottom:12px">
+        <input type="checkbox" id="scrReconcileOnlyDiff" checked onchange="ScContractRegistry.loadReconcile()">
+        只顯示差異（隱藏完全一致）
+      </label>
+      <div id="scrReconcileBody">
+        <div class="empty-state" style="padding:24px">載入中…</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="ScContractRegistry.closeReconcile()">關閉</button>
     </div>
   </div>
 </div>

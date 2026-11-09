@@ -489,6 +489,92 @@ const ScContractRegistry = {
       toast(e?.message || '無法開啟項目', 'warning');
     }
   },
+
+  _reconcileQuery() {
+    const qs = new URLSearchParams();
+    const q = document.getElementById('scrSearch')?.value?.trim();
+    const year = this._readYearFilter();
+    const person = document.getElementById('scrPersonFilter')?.value;
+    const company = document.getElementById('scrCompanyFilter')?.value;
+    const onlyDiff = document.getElementById('scrReconcileOnlyDiff')?.checked !== false;
+    if (q) qs.set('q', q);
+    if (year) qs.set('year', year);
+    if (person) qs.set('person', person);
+    if (company) qs.set('company', company);
+    qs.set('only_diff', onlyDiff ? '1' : '0');
+    return qs.toString();
+  },
+
+  _reconcileStatusLabel(status) {
+    const map = {
+      mismatch: '金額不符',
+      no_site: '未有地盤掛載',
+      no_registry_amount: '登記無金額',
+      site_only: '登記表無此編號',
+      match: '一致',
+    };
+    return map[status] || status || '—';
+  },
+
+  openReconcile() {
+    document.getElementById('scrReconcileModal')?.classList.add('open');
+    this.loadReconcile();
+  },
+
+  closeReconcile() {
+    document.getElementById('scrReconcileModal')?.classList.remove('open');
+  },
+
+  async loadReconcile() {
+    const body = document.getElementById('scrReconcileBody');
+    const noteEl = document.getElementById('scrReconcileNote');
+    const sumEl = document.getElementById('scrReconcileSummary');
+    if (!body) return;
+    body.innerHTML = '<div class="empty-state" style="padding:24px"><div class="spinner"></div></div>';
+    try {
+      const suffix = this._reconcileQuery();
+      const data = await api('GET', `/sc-contract-registry/reconcile?${suffix}`);
+      if (noteEl) noteEl.textContent = data?.note || '';
+      const s = data?.summary || {};
+      if (sumEl) {
+        sumEl.textContent = `顯示 ${s.shown ?? 0} 筆 · 金額不符 ${s.mismatch ?? 0}`
+          + ` · 無掛載 ${s.no_site ?? 0} · 登記無金額 ${s.no_registry_amount ?? 0}`
+          + ` · 僅地盤有 ${s.site_only ?? 0}`;
+      }
+      const items = data?.items || [];
+      if (!items.length) {
+        body.innerHTML = '<div class="empty-state" style="padding:32px">沒有差異（或請取消「只顯示差異」查看全部）</div>';
+        return;
+      }
+      body.innerHTML = `<div class="table-wrap"><table class="master-preview-table" style="font-size:13px">
+        <thead><tr>
+          <th>狀態</th><th>MS/C</th><th>分判商</th><th class="td-amount">登記合額</th>
+          <th class="td-amount">地盤加總</th><th class="td-amount">差額</th><th>判項</th><th></th>
+        </tr></thead>
+        <tbody>${items.map((row) => {
+          const no = row.sub_contract_no || '—';
+          const noArg = escHtml(no).replace(/'/g, "\\'");
+          const st = row.status;
+          const badge = st === 'mismatch' ? 'badge-danger' : 'badge-warning';
+          const multi = row.multi_sc ? ' <span class="td-muted">(多判項)</span>' : '';
+          return `<tr>
+            <td><span class="badge ${badge}">${escHtml(this._reconcileStatusLabel(st))}</span>${multi}</td>
+            <td class="td-mono"><code>${escHtml(no)}</code></td>
+            <td>${escHtml(row.company || '—')}</td>
+            <td class="td-amount">${fmt(row.registry_amount)}</td>
+            <td class="td-amount">${fmt(row.site_sum)}</td>
+            <td class="td-amount">${fmt(row.diff)}</td>
+            <td>${row.sc_count ? `${row.sc_count} 判項` : '—'}</td>
+            <td>
+              ${row.sc_count ? `<button type="button" class="btn btn-secondary btn-sm" onclick="ScContractRegistry.showUsage('${noArg}')">明細</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+    } catch (e) {
+      body.innerHTML = `<div class="empty-state" style="padding:24px">${escHtml(e?.message || '載入失敗')}</div>`;
+    }
+  },
 };
 
 ColPicker.attach(ScContractRegistry, {

@@ -1057,6 +1057,24 @@ def list_sc_contract_registry_api():
     return resp({'rows': rows, 'status': status, 'filters': filters, 'ref': ref_status()})
 
 
+@app.route('/api/sc-contract-registry/reconcile', methods=['GET'])
+def sc_contract_registry_reconcile_api():
+    only_diff = request.args.get('only_diff', '1').strip().lower() not in ('0', 'false', 'no')
+    q = request.args.get('q')
+    project_core = request.args.get('project_core')
+    sheet = request.args.get('year') or request.args.get('sheet')
+    person = request.args.get('person')
+    company = request.args.get('company')
+    return resp(db.sc_contract_amount_reconcile(
+        q=q,
+        project_core=project_core,
+        sheet=sheet,
+        person=person,
+        company=company,
+        only_diff=only_diff,
+    ))
+
+
 @app.route('/api/sc-contract-registry/<path:sub_contract_no>/usage', methods=['GET'])
 def sc_contract_registry_usage_api(sub_contract_no):
     items = db.list_sc_contract_registry_usage_detail(sub_contract_no)

@@ -2494,6 +2494,122 @@ def get_sc_contract_registry_status():
     }
 
 
+def sc_contract_amount_reconcile(
+    q=None,
+    project_core=None,
+    sheet=None,
+    person=None,
+    company=None,
+    only_diff=True,
+    tolerance=0.01,
+):
+    """登記表 amount 與地盤判項 contract_sum 加總對照（不含 VO；只讀）。"""
+    tol = float(tolerance or 0.01)
+    regs = search_sc_contract_registry(
+        q=q,
+        project_core=project_core,
+        sheet=sheet,
+        person=person,
+        company=company,
+        limit=5000,
+    )
+    conn = get_conn()
+    agg_rows = conn.execute("""
+        SELECT sub_contract_no,
+               COUNT(*) AS sc_count,
+               COUNT(DISTINCT project_id) AS project_count,
+               SUM(COALESCE(contract_sum, 0)) AS site_sum
+        FROM subcontractors
+        WHERE sub_contract_no IS NOT NULL AND TRIM(sub_contract_no) != ''
+          AND COALESCE(is_excluded, 0) = 0
+        GROUP BY sub_contract_no
+    """).fetchall()
+    conn.close()
+    site_agg = {r['sub_contract_no']: dict(r) for r in agg_rows}
+
+    def _classify(reg_amt, site_sum, sc_count):
+        if sc_count <= 0:
+            if reg_amt > tol:
+                return 'no_site'
+            return 'no_site'
+        if reg_amt <= tol and site_sum > tol:
+            return 'no_registry_amount'
+        if abs(site_sum - reg_amt) <= tol:
+            return 'match'
+        return 'mismatch'
+
+    items = []
+    for reg in regs:
+        no = (reg.get('sub_contract_no') or '').strip()
+        a = site_agg.get(no, {})
+        reg_amt = float(reg.get('amount') or 0)
+        site_sum = float(a.get('site_sum') or 0)
+        sc_count = int(a.get('sc_count') or 0)
+        proj_count = int(a.get('project_count') or 0)
+        status = _classify(reg_amt, site_sum, sc_count)
+        if only_diff and status == 'match':
+            continue
+        if only_diff and status == 'no_site' and reg_amt <= tol:
+            continue
+        items.append({
+            'sub_contract_no': no,
+            'company': reg.get('company'),
+            'project_code': reg.get('project_code'),
+            'registry_amount': reg_amt,
+            'site_sum': site_sum,
+            'diff': round(site_sum - reg_amt, 2),
+            'sc_count': sc_count,
+            'project_count': proj_count,
+            'status': status,
+            'multi_sc': sc_count > 1,
+        })
+
+    conn2 = get_conn()
+    reg_nos = {
+        (row[0] or '').strip()
+        for row in conn2.execute("SELECT sub_contract_no FROM sc_contract_registry")
+    }
+    conn2.close()
+    for no, a in site_agg.items():
+        if no in reg_nos:
+            continue
+        site_sum = float(a.get('site_sum') or 0)
+        if site_sum <= tol:
+            continue
+        items.append({
+            'sub_contract_no': no,
+            'company': None,
+            'project_code': None,
+            'registry_amount': 0,
+            'site_sum': site_sum,
+            'diff': round(site_sum, 2),
+            'sc_count': int(a.get('sc_count') or 0),
+            'project_count': int(a.get('project_count') or 0),
+            'status': 'site_only',
+            'multi_sc': int(a.get('sc_count') or 0) > 1,
+        })
+
+    items.sort(
+        key=lambda x: (
+            0 if x['status'] == 'mismatch' else 1,
+            -abs(float(x.get('diff') or 0)),
+        ),
+    )
+    summary = {
+        'shown': len(items),
+        'mismatch': sum(1 for i in items if i['status'] == 'mismatch'),
+        'no_site': sum(1 for i in items if i['status'] == 'no_site'),
+        'no_registry_amount': sum(1 for i in items if i['status'] == 'no_registry_amount'),
+        'site_only': sum(1 for i in items if i['status'] == 'site_only'),
+    }
+    return {
+        'items': items,
+        'summary': summary,
+        'only_diff': bool(only_diff),
+        'note': '登記表為 MS/C 登記合額；地盤為各判項 contract_sum 加總（不含 VO）。多判項共用同一 MS/C 時以加總比對。',
+    }
+
+
 def list_sc_contract_registry_usage_detail(sub_contract_no):
     """某 MS/C 編號掛在哪些項目、哪些判項上。"""
     no = (sub_contract_no or '').strip()
