@@ -5,7 +5,7 @@ import threading
 import database as db
 from config import BASE_DIR, DATA_DIR, DB_PATH, migrate_legacy_data
 
-APP_VERSION = 'v2-20261109-msc-flags'
+APP_VERSION = 'v2-20261109-sc-pdf-path'
 
 # V2 試用環境標識（環境變數可覆寫 DEPLOYMENT_TIER=production 還原為無標籤）
 DEPLOYMENT_TIER = (os.environ.get('DEPLOYMENT_TIER') or 'v2').strip().lower()

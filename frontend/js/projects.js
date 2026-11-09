@@ -1751,7 +1751,8 @@ const SC = {
       items.push({ file_path, label, when, removable });
     };
     const activePdf = this._pendingQuotationPdf
-      || (s?.quotation_saved && !this._quotationPdfRemoved ? s.quotation_saved : null);
+      || (s?.quotation_saved && !this._quotationPdfRemoved && isUploadPath(s.quotation_saved)
+        ? s.quotation_saved : null);
     if (activePdf) {
       const when = this._pendingQuotationPdf
         ? (document.getElementById('scQuotDate')?.value || s?.quotation_date)
@@ -1759,6 +1760,7 @@ const SC = {
       push(activePdf, '報價 PDF', when, true);
     }
     docs.forEach(d => {
+      if (!isUploadPath(d.file_path)) return;
       const kind = { quotation: '報價', invoice: '發票', scan: '掃描' }[d.doc_type] || '存證';
       push(d.file_path, `${kind} PDF`, d.created_at, false);
     });
@@ -1806,7 +1808,8 @@ const SC = {
 
   removeQuotationPdf() {
     const hasPdf = this._pendingQuotationPdf
-      || (this._editSc?.quotation_saved && !this._quotationPdfRemoved);
+      || (this._editSc?.quotation_saved && !this._quotationPdfRemoved
+        && isUploadPath(this._editSc.quotation_saved));
     if (!hasPdf) return;
     if (!confirm('移除報價 PDF 連結？\n\n已上傳的編輯中檔案會取消；已儲存檔案須按「儲存」才會正式移除。\n\n確定移除？')) return;
     this._quotationPdfRemoved = true;

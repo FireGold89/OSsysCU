@@ -8,8 +8,9 @@ import json
 import re
 from datetime import datetime
 
-from config import DB_PATH
+from config import DB_PATH, UPLOAD_DIR
 from sc_ref import derive_parent_sc_no, suggest_next_sc_no
+from upload_naming import looks_like_upload_path, to_upload_relpath
 
 
 def get_conn():
@@ -677,6 +678,7 @@ def _migrate_db(conn):
     _migrate_iso_documents_v2(conn)
     _migrate_iso_documents_v3(conn)
     _migrate_iso_documents_v4(conn)
+    _migrate_quotation_saved_flags(conn)
     _migrate_portfolio_tables(conn)
     _migrate_activity_log(conn)
     _migrate_app_users(conn)
@@ -1068,6 +1070,33 @@ def _migrate_iso_documents_v4(conn):
         CREATE INDEX IF NOT EXISTS idx_iso_doc_slot_list
         ON iso_document_files(project_id, scope, IFNULL(subcontractor_id, 0), doc_slot)
     """)
+    conn.commit()
+
+
+def _migrate_quotation_saved_flags(conn):
+    """Excel P 欄「Quotation saved／OK」不是檔案路徑；清掉以免預覽 404。"""
+    rows = conn.execute(
+        """SELECT id, quotation_saved FROM subcontractors
+           WHERE quotation_saved IS NOT NULL AND TRIM(quotation_saved) != ''"""
+    ).fetchall()
+    for r in rows:
+        rel = to_upload_relpath(r['quotation_saved'], UPLOAD_DIR)
+        if rel == (r['quotation_saved'] or '').strip().replace('\\', '/'):
+            continue
+        conn.execute(
+            "UPDATE subcontractors SET quotation_saved=? WHERE id=?",
+            (rel, r['id']),
+        )
+    docs = conn.execute("SELECT id, file_path FROM sc_documents").fetchall()
+    for r in docs:
+        rel = to_upload_relpath(r['file_path'], UPLOAD_DIR)
+        if not rel:
+            conn.execute("DELETE FROM sc_documents WHERE id=?", (r['id'],))
+        elif rel != (r['file_path'] or '').replace('\\', '/'):
+            conn.execute(
+                "UPDATE sc_documents SET file_path=? WHERE id=?",
+                (rel, r['id']),
+            )
     conn.commit()
 
 
@@ -3669,6 +3698,8 @@ def upsert_subcontractor(data):
         data['retention_sum'] = None
 
     clear_pdf = bool(data.pop('clear_quotation_pdf', False))
+    if data.get('quotation_saved'):
+        data['quotation_saved'] = to_upload_relpath(data.get('quotation_saved'), UPLOAD_DIR)
 
     if existing:
         old = dict(existing)
@@ -3689,7 +3720,7 @@ def upsert_subcontractor(data):
         if not data.get('quotation_date') and old.get('quotation_date'):
             data['quotation_date'] = old['quotation_date']
         if not clear_pdf and not data.get('quotation_saved') and old.get('quotation_saved'):
-            data['quotation_saved'] = old['quotation_saved']
+            data['quotation_saved'] = to_upload_relpath(old.get('quotation_saved'), UPLOAD_DIR)
         if 'sub_contract_no' not in data and old.get('sub_contract_no'):
             data['sub_contract_no'] = old['sub_contract_no']
         conn.execute("""
@@ -3738,6 +3769,7 @@ def upsert_subcontractor(data):
 def add_sc_document(project_id, sc_id, sc_no, doc_type, file_path,
                     original_filename=None, ocr_id=None, conn=None):
     """存檔 PDF/圖片（每次掃描保留，不覆蓋舊檔）"""
+    file_path = to_upload_relpath(file_path, UPLOAD_DIR)
     if not file_path:
         return None
     own = conn is None
@@ -3762,7 +3794,7 @@ def get_sc_documents(sc_id):
         SELECT * FROM sc_documents WHERE sc_id=? ORDER BY created_at DESC, id DESC
     """, (sc_id,)).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [dict(r) for r in rows if looks_like_upload_path(r['file_path'])]
 
 
 def attach_quotation_pdf(sc_id, file_path, original_filename=None, ocr_id=None):

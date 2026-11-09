@@ -17,6 +17,7 @@ from config import BASE_DIR, FRONTEND_DIR, UPLOAD_DIR
 from upload_naming import (
     GENERATED_EXPORTS,
     UPLOAD_CATEGORIES,
+    to_upload_relpath,
     upload_rel_path,
     upload_slug,
     upload_storage_summary,
@@ -672,6 +673,7 @@ def portfolio_update_sc_status_api(portfolio_id):
 
 
 def _save_uploaded_file(category, file, project_code=None, detail_slug=None):
+    """回傳 (磁碟絕對路徑, uploads 相對路徑)。"""
     code = db.iso_safe_project_code(project_code) if project_code else None
     rel = upload_rel_path(
         category,
@@ -951,7 +953,7 @@ def upload_main_con_fac_attachment(project_id):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
     project = db.get_project(project_id)
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
-    rel, save_path = _save_uploaded_file(
+    save_path, rel = _save_uploaded_file(
         'main-fac', file, project_code=code, detail_slug=att_type,
     )
     db.update_main_fac_attachment(project_id, att_type, rel, file.filename)
@@ -1693,7 +1695,7 @@ def upload_file():
     if not file.filename or not allowed_file(file.filename):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
 
-    rel, _save_path = _save_uploaded_file('misc', file, detail_slug='generic')
+    _save_path, rel = _save_uploaded_file('misc', file, detail_slug='generic')
     return resp({'pdf_path': rel, 'filename': file.filename})
 
 
@@ -1712,7 +1714,7 @@ def upload_sc_quotation_pdf(sc_id):
     project = db.get_project(sc.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     sc_tag = upload_slug(sc.get('sc_no') or sc_id)
-    rel, _save_path = _save_uploaded_file(
+    _save_path, rel = _save_uploaded_file(
         'quotations', file, project_code=code, detail_slug=sc_tag,
     )
     db.attach_quotation_pdf(sc_id, rel, original_filename=file.filename)
@@ -1963,7 +1965,7 @@ def upload_sc_vo_attachment(record_id):
         return resp(error='不支援的文件格式（請上傳 PDF/PNG/JPG）', status=400)
     project = db.get_project(row.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
-    rel, save_path = _save_uploaded_file(
+    save_path, rel = _save_uploaded_file(
         'sc-vo',
         file,
         project_code=code,
@@ -2124,7 +2126,7 @@ def ocr_upload():
         project = db.get_project(project_id)
         if project:
             ocr_project_code = project.get('project_code')
-    rel, save_path = _save_uploaded_file('ocr', file, project_code=ocr_project_code)
+    save_path, rel = _save_uploaded_file('ocr', file, project_code=ocr_project_code)
 
     api_key = db.get_setting('gemini_api_key') or None
     quark_id = db.get_setting('quark_client_id') or None
@@ -2209,8 +2211,9 @@ def check_invoice_duplicate(project_id):
 
 def _resolve_upload_disk_path(filepath):
     """DB 路徑 → 磁碟檔；備份遷移時中文前綴可能缺失，以 _YYYYMMDD_<uid> 尾碼對齊。"""
+    filepath = to_upload_relpath(filepath, UPLOAD_DIR) or ''
     filepath = filepath.replace('\\', '/')
-    if '..' in filepath or filepath.startswith('/'):
+    if not filepath or '..' in filepath.split('/') or filepath.startswith('/'):
         return None
     safe_parts = [os.path.basename(p) for p in filepath.split('/') if p]
     if not safe_parts:
@@ -2370,7 +2373,7 @@ def upload_ip_receipt_attachment(ip_id):
     project = db.get_project(existing.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     ip_no = existing.get('ip_no') or ip_id
-    rel, _save_path = _save_uploaded_file(
+    _save_path, rel = _save_uploaded_file(
         'ip', file, project_code=code, detail_slug=f'IP{ip_no}_receipt',
     )
     record_index = request.form.get('record_index', request.args.get('record_index', 0))
@@ -2425,7 +2428,7 @@ def upload_ip_application_attachment(ip_id):
     project = db.get_project(existing.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     ip_no = existing.get('ip_no') or ip_id
-    rel, _save_path = _save_uploaded_file(
+    _save_path, rel = _save_uploaded_file(
         'ip', file, project_code=code, detail_slug=f'IP{ip_no}_application',
     )
     old_path = existing.get('ip_application_attachment')
@@ -2475,7 +2478,7 @@ def upload_ip_cert_attachment(ip_id):
     project = db.get_project(existing.get('project_id'))
     code = db.iso_safe_project_code(project.get('project_code') if project else None)
     ip_no = existing.get('ip_no') or ip_id
-    rel, _save_path = _save_uploaded_file(
+    _save_path, rel = _save_uploaded_file(
         'ip', file, project_code=code, detail_slug=f'IP{ip_no}_cert',
     )
     db.set_ip_cert_attachment(ip_id, rel, file.filename)

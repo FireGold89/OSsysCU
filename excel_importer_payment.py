@@ -15,6 +15,7 @@ import sys
 from datetime import datetime
 import database as db
 from sc_ref import derive_parent_sc_no, resolve_contract_amounts
+from upload_naming import to_upload_relpath
 
 
 def safe_str(val):
@@ -564,7 +565,9 @@ def import_excel(filepath, project_code=None):
                 oa_ref = safe_str(row_vals[12]) if len(row_vals) > 12 else None
                 oa_no = safe_str(row_vals[13]) if len(row_vals) > 13 else None
                 oa_date = safe_date(row_vals[14]) if len(row_vals) > 14 else None
-                quotation_saved = safe_str(row_vals[15]) if len(row_vals) > 15 else None
+                quotation_saved = to_upload_relpath(
+                    safe_str(row_vals[15]) if len(row_vals) > 15 else None
+                )
                 payment_note = safe_str(row_vals[10]) if len(row_vals) > 10 else None
 
                 company_en, company_zh = _resolve_project_summary_sc(
@@ -797,7 +800,9 @@ def sync_excel_data(filepath, project_id=None):
                 oa_ref = safe_str(row_vals[12]) if len(row_vals) > 12 else None
                 oa_no = safe_str(row_vals[13]) if len(row_vals) > 13 else None
                 oa_date = safe_date(row_vals[14]) if len(row_vals) > 14 else None
-                quotation_saved = safe_str(row_vals[15]) if len(row_vals) > 15 else None
+                quotation_saved = to_upload_relpath(
+                    safe_str(row_vals[15]) if len(row_vals) > 15 else None
+                )
                 payment_note = safe_str(row_vals[10]) if len(row_vals) > 10 else None
                 company_en, company_zh = _resolve_project_summary_sc(
                     sc_no, company_en, company_zh, description, contract_amt)

@@ -136,8 +136,17 @@ const TextScale = {
   },
 };
 
+function isUploadPath(filename) {
+  const s = String(filename || '').trim().replace(/\\/g, '/');
+  if (!s || s.startsWith('/') || s.includes('..')) return false;
+  const name = s.split('/').pop() || '';
+  if (/^(-|—|n\/?a|ok|yes|no|true|false|quotation saved|saved|tick)$/i.test(s)
+      || /^(✔|✓|√|是|有|無)$/.test(s)) return false;
+  return /\.(pdf|png|jpe?g|gif|webp)$/i.test(name);
+}
+
 function uploadUrl(filename) {
-  if (!filename) return null;
+  if (!isUploadPath(filename)) return null;
   const parts = String(filename).replace(/\\/g, '/').split('/').filter(Boolean).map(encodeURIComponent);
   return `${window.location.origin}/api/uploads/${parts.join('/')}`;
 }

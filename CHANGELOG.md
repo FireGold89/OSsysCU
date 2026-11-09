@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261109-sc-pdf-path` · 分支 `v2/portfolio`
+
+### 修正
+- **分判報價 PDF**：Excel「Quotation saved／OK」不再當成檔案路徑，避免點選 404；上傳改存相對路徑。
+
 `APP_VERSION`: `v2-20261109-msc-flags` · 分支 `v2/portfolio`
 
 ### 變更

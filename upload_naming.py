@@ -7,6 +7,11 @@ from datetime import datetime
 _FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 _LEGACY_HEX_PDF = re.compile(r'^[a-f0-9]{32}\.pdf$', re.I)
 _GENERAL_BUCKET = '_general'
+_UPLOAD_EXT = re.compile(r'\.(pdf|png|jpe?g|gif|webp)$', re.I)
+_EXCEL_FLAG_VALUES = {
+    '', '-', '—', '*', 'n/a', 'na', 'ok', 'yes', 'no', 'true', 'false',
+    'quotation saved', 'saved', 'tick', '✔', '✓', '√', '是', '有', '無',
+}
 
 # 會寫入 uploads 的功能（路徑第一層目錄 id → 說明）
 UPLOAD_CATEGORIES = {
@@ -68,6 +73,42 @@ GENERATED_EXPORTS = [
     {'id': 'portfolio-xlsx', 'label': 'N 項目／進行中匯出', 'feature': 'Portfolio · 直接下載 xlsx'},
     {'id': 'master-xlsx', 'label': 'Master List 匯出', 'feature': 'Master List · 直接下載'},
 ]
+
+
+def looks_like_upload_path(value):
+    """是否為 uploads 相對／絕對檔名（排除 Excel「Quotation saved」「OK」等旗標）。"""
+    s = (value or '').strip().replace('\\', '/')
+    if not s or s.lower() in _EXCEL_FLAG_VALUES:
+        return False
+    name = s.rsplit('/', 1)[-1]
+    return bool(_UPLOAD_EXT.search(name))
+
+
+def to_upload_relpath(value, upload_dir=None):
+    """正規成 uploads 相對路徑；旗標或 uploads 以外的絕對路徑回傳 None。"""
+    if not looks_like_upload_path(value):
+        return None
+    s = (value or '').strip().replace('\\', '/')
+    if upload_dir:
+        root = os.path.abspath(upload_dir)
+        try:
+            if os.path.isabs(s) or (len(s) >= 3 and s[1] == ':'):
+                abs_p = os.path.abspath(s)
+                root_prefix = root.rstrip('\\/') + os.sep
+                if abs_p == root or abs_p.startswith(root_prefix):
+                    return os.path.relpath(abs_p, root).replace('\\', '/')
+        except (OSError, ValueError):
+            pass
+    if s.startswith('/') or (len(s) >= 3 and s[1] == ':'):
+        idx = s.lower().find('/uploads/')
+        if idx >= 0:
+            return s[idx + len('/uploads/'):]
+        return None
+    if '..' in s.split('/'):
+        return None
+    if s.lower().startswith('uploads/'):
+        return s[8:]
+    return s.lstrip('/')
 
 
 def sanitize_original_basename(original_filename):
