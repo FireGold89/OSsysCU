@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261110-scr-scroll` · 分支 `v2/portfolio`
+
+### 修正
+- **MS/C 列表**：表格設最小欄寬與橫向捲動，避免多欄被壓縮後無法左右查看。
+
 `APP_VERSION`: `v2-20261110-scr-usage` · 分支 `v2/portfolio`
 
 ### 修正

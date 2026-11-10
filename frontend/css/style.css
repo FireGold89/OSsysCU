@@ -2346,9 +2346,31 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   color: var(--warning, #d97706);
 }
 .scr-table-wrap {
-  /* 與 proj-summary-table 相同：100% 寬度 + 必要時橫向捲動 */
   overflow-x: auto;
+  overflow-y: visible;
   max-width: 100%;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.scr-list-card {
+  /* 讓內層 table-wrap 的橫向捲軸可見、可拖動 */
+  overflow: visible;
+}
+.scr-list-card .scr-table-wrap {
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+.scr-list-card .scr-table-scroll-hint {
+  margin-left: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+.scr-list-card .card-header {
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 .scr-toolbar-filters {
   display: flex;
@@ -2363,7 +2385,8 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 }
 .scr-registry-table {
   table-layout: fixed;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   font-size: 12px;
 }
 .scr-registry-table tbody tr {
@@ -2379,12 +2402,12 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   vertical-align: top;
   line-height: 1.35;
 }
-.scr-registry-table .scr-col-ms { width: 118px; }
-.scr-registry-table .scr-col-co { width: 13%; }
-.scr-registry-table .scr-col-works { width: 26%; }
-.scr-registry-table .scr-col-proj { width: 112px; }
-.scr-registry-table .scr-col-person { width: 92px; }
-.scr-registry-table .scr-col-amt { width: 108px; }
+.scr-registry-table .scr-col-ms { width: 118px; min-width: 118px; }
+.scr-registry-table .scr-col-co { width: 140px; min-width: 140px; }
+.scr-registry-table .scr-col-works { width: 220px; min-width: 180px; }
+.scr-registry-table .scr-col-proj { width: 120px; min-width: 120px; }
+.scr-registry-table .scr-col-person { width: 96px; min-width: 96px; }
+.scr-registry-table .scr-col-amt { width: 112px; min-width: 112px; }
 .scr-registry-table .scr-col-flag { width: 50px; text-align: center; }
 .scr-registry-table thead .scr-col-usage { text-align: center; }
 .scr-registry-table .scr-col-actions { width: 72px; }
