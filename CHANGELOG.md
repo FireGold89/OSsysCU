@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261110-scr-usage` · 分支 `v2/portfolio`
+
+### 修正
+- **MS/C 掛載欄**：改緊湊雙行 chip、固定欄寬置中，避免多欄表換行错位。
+
 `APP_VERSION`: `v2-20261109-sc-pdf-path` · 分支 `v2/portfolio`
 
 ### 修正

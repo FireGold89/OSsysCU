@@ -73,6 +73,17 @@ const ScContractRegistry = {
     return v || null;
   },
 
+  _usageCell(r, noArg) {
+    const n = r.usage_sc_count || 0;
+    if (!n) return '<span class="text-muted">—</span>';
+    const p = r.usage_project_count || 0;
+    return `<button type="button" class="scr-usage-btn" title="${n} 判項 · ${p} 地盤 · 點擊查看掛載明細"
+      onclick="ScContractRegistry.showUsage('${noArg}')">
+      <span class="scr-usage-chip"><span class="scr-usage-num">${n}</span><span class="scr-usage-lbl">判</span></span>
+      <span class="scr-usage-chip"><span class="scr-usage-num">${p}</span><span class="scr-usage-lbl">項</span></span>
+    </button>`;
+  },
+
   _shortText(v, max = 48) {
     const s = (v || '').trim();
     if (!s) return '<span class="text-muted">—</span>';
@@ -370,12 +381,7 @@ const ScContractRegistry = {
         <td class="scr-col-flag" data-col="countersign">${this._flagCell(r.countersign)}</td>
         <td class="scr-col-flag" data-col="partner">${this._flagCell(r.partner)}</td>
         <td class="scr-col-flag" data-col="tender">${this._flagCell(r.tender_minutes)}</td>
-        <td class="scr-col-usage" data-col="usage">${
-          r.usage_sc_count
-            ? `<button type="button" class="btn btn-link btn-sm scr-usage-btn" title="查看掛載明細"
-                onclick="ScContractRegistry.showUsage('${noArg}')">${r.usage_sc_count} 判項 · ${r.usage_project_count || 0} 項</button>`
-            : '<span class="text-muted">—</span>'
-        }</td>
+        <td class="scr-col-usage" data-col="usage">${this._usageCell(r, noArg)}</td>
         <td class="scr-col-flag" data-col="fa">${this._flagCell(r.final_account)}</td>
         <td class="scr-col-flag" data-col="iso">${this._flagCell(r.iso_flag)}</td>
         <td class="scr-col-remark td-muted" data-col="remark">${this._shortText(r.remark, 32)}</td>
