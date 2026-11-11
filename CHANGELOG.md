@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261111-access-roles` · 分支 `v2/portfolio`
+
+### 變更
+- **帳號角色範本**：新增工程部；財務與行政分開（行政＝Master 可編輯；財務＝報表可編輯）；舊 finance 範本帳號啟動時自動改為行政。
+
 `APP_VERSION`: `v2-20261110-scr-scroll` · 分支 `v2/portfolio`
 
 ### 修正

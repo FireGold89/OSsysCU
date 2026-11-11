@@ -1574,6 +1574,8 @@ const Auth = {
       admin: '管理員',
       qs: 'QS',
       user: 'QS',
+      eng_dept: '工程部',
+      ga: '行政',
       finance: '財務',
       viewer: '唯讀',
     };

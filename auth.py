@@ -29,8 +29,8 @@ _ADMIN_API_PREFIXES = (
 )
 
 _WRITE_METHODS = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
-_LOGIN_ROLES = frozenset({'admin', 'user', 'qs', 'finance', 'viewer'})
-# 財務帳號可改 Master List（開票／報價主檔），不可改地盤付款、ISO、系統設定
+_LOGIN_ROLES = frozenset({'admin', 'user', 'qs', 'eng_dept', 'ga', 'finance', 'viewer'})
+# 行政帳號可改 Master List（開票／報價主檔），不可改地盤付款、ISO、系統設定
 _FINANCE_WRITE_PREFIXES = (
     '/api/master/item',
     '/api/master/quotations',
@@ -398,7 +398,7 @@ def requires_admin(path, method):
 
 
 def role_allows_write(role, path):
-    """寫入權限：admin 全部；qs/user 除管理員 API；finance 僅 Master；viewer 只讀"""
+    """寫入權限：admin 全部；qs/user 除管理員 API；ga 僅 Master；viewer 只讀"""
     role = (role or 'user').strip().lower()
     if role == 'admin':
         return True
@@ -406,7 +406,7 @@ def role_allows_write(role, path):
         return False
     if requires_admin(path, 'POST'):
         return False
-    if role == 'finance':
+    if role == 'ga':
         return any(path == p or path.startswith(p + '/') for p in _FINANCE_WRITE_PREFIXES)
     return role in ('user', 'qs')
 

@@ -792,6 +792,12 @@ def _migrate_app_users(conn):
         )
     """)
     conn.commit()
+    try:
+        import access_control
+        access_control.migrate_app_user_roles(conn)
+        conn.commit()
+    except Exception:
+        pass
 
 
 def _app_user_public(row):

@@ -1,5 +1,7 @@
 """登入權限：範圍 × 不可見／只看／可編輯。管理員帳號不受個別範圍限制。"""
 
+import json
+
 AREAS = (
     {'id': 'projects', 'label': '工程項目／概覽', 'hint': '項目資料、概覽、工程分類'},
     {'id': 'iso', 'label': 'ISO 文件', 'hint': '主合約及分判附件'},
@@ -18,17 +20,30 @@ AREAS = (
 )
 
 LEVELS = ('none', 'view', 'edit')
-PRESET_ROLES = ('admin', 'qs', 'finance', 'viewer', 'custom')
+PRESET_ROLES = ('admin', 'qs', 'eng_dept', 'ga', 'finance', 'viewer', 'custom')
 
 _QS = {
     'projects': 'edit', 'iso': 'edit', 'payments': 'edit', 'vo': 'edit', 'ip': 'edit',
     'fac': 'edit', 'sc': 'edit', 'docs': 'edit', 'master': 'view', 'sc_contract': 'edit',
     'portfolio': 'view', 'eng': 'view', 'reports': 'view', 'staff': 'view',
 }
-_FINANCE = {
+# 行政：Master List 開票／糧期可編輯；地盤資料只看
+_GA = {
     'projects': 'view', 'iso': 'view', 'payments': 'view', 'vo': 'view', 'ip': 'view',
     'fac': 'view', 'sc': 'view', 'docs': 'view', 'master': 'edit', 'sc_contract': 'view',
     'portfolio': 'view', 'eng': 'none', 'reports': 'view', 'staff': 'view',
+}
+# 財務：報表與總覽；Master 只看、不可改開票欄
+_FINANCE = {
+    'projects': 'view', 'iso': 'view', 'payments': 'view', 'vo': 'view', 'ip': 'view',
+    'fac': 'view', 'sc': 'view', 'docs': 'view', 'master': 'view', 'sc_contract': 'view',
+    'portfolio': 'view', 'eng': 'none', 'reports': 'edit', 'staff': 'view',
+}
+# 工程部：項目登記·會簽出表可編輯；其餘僅查閱
+_ENG_DEPT = {
+    'projects': 'view', 'iso': 'view', 'payments': 'none', 'vo': 'view', 'ip': 'view',
+    'fac': 'view', 'sc': 'view', 'docs': 'view', 'master': 'view', 'sc_contract': 'view',
+    'portfolio': 'view', 'eng': 'edit', 'reports': 'none', 'staff': 'view',
 }
 _VIEW = {a['id']: 'view' for a in AREAS}
 _ADMIN = {a['id']: 'edit' for a in AREAS}
@@ -38,6 +53,8 @@ PRESETS = {
     'admin': _ADMIN,
     'qs': _QS,
     'user': _QS,
+    'eng_dept': _ENG_DEPT,
+    'ga': _GA,
     'finance': _FINANCE,
     'viewer': _VIEW,
     'custom': _NONE,
@@ -102,12 +119,38 @@ def catalog_payload():
         'presets': [
             {'id': 'admin', 'label': '管理員', 'hint': '全部可編輯，含帳號與系統設定'},
             {'id': 'qs', 'label': 'QS', 'hint': '地盤付款、糧期、ISO、結算可編輯；Master List 只看'},
-            {'id': 'finance', 'label': '財務／行政', 'hint': 'Master List 可編輯；地盤資料只看'},
+            {'id': 'eng_dept', 'label': '工程部', 'hint': '項目登記·會簽出表可編輯；Master／項目僅查閱'},
+            {'id': 'ga', 'label': '行政', 'hint': 'Master List 開票／糧期可編輯；地盤資料只看'},
+            {'id': 'finance', 'label': '財務', 'hint': '財務報表可編輯；Master 與地盤資料只看'},
             {'id': 'viewer', 'label': '唯讀', 'hint': '全部只看'},
             {'id': 'custom', 'label': '自訂', 'hint': '按下方範圍逐項設定'},
         ],
-        'matrices': {key: preset_matrix(key) for key in ('admin', 'qs', 'finance', 'viewer', 'custom')},
+        'matrices': {
+            key: preset_matrix(key)
+            for key in ('admin', 'qs', 'eng_dept', 'ga', 'finance', 'viewer', 'custom')
+        },
     }
+
+
+def migrate_app_user_roles(conn):
+    """舊「財務／行政」範本（Master 可編輯）→ 角色 ga（行政）。"""
+    ga_matrix = preset_matrix('ga')
+    rows = conn.execute(
+        "SELECT id, role, perm_json FROM app_users WHERE lower(trim(role))='finance'"
+    ).fetchall()
+    for row in rows:
+        raw = row['perm_json']
+        if not raw or not str(raw).strip():
+            conn.execute("UPDATE app_users SET role='ga' WHERE id=?", (row['id'],))
+            continue
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        if normalize_matrix(parsed, 'ga') == ga_matrix:
+            conn.execute("UPDATE app_users SET role='ga' WHERE id=?", (row['id'],))
 
 
 def area_for_path(path):
