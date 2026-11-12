@@ -216,13 +216,15 @@ def _access_user_payload(body, creating, existing=None):
             return None, '帳號須為 2–40 位英數、點、底線或連字號'
         if db.get_app_user_by_username(username):
             return None, '帳號已存在'
+    templates = {item['id']: item for item in db.list_role_templates()}
     role = (body.get('role') or 'qs').strip().lower()
-    if role not in access_control.PRESET_ROLES:
+    if role not in templates and role != 'custom':
         role = 'custom'
-    perms = access_control.normalize_matrix(body.get('permissions'), role)
+    base = (templates.get(role) or {}).get('matrix')
+    perms = access_control.normalize_matrix(body.get('permissions'), role, base=base)
     if role == 'admin':
         perms = access_control.preset_matrix('admin')
-    elif role != 'custom' and not access_control.matrix_matches(role, perms):
+    elif role != 'custom' and perms != templates[role]['matrix']:
         role = 'custom'
     password = body.get('password') or ''
     password_hash = None
@@ -246,9 +248,76 @@ def _access_user_payload(body, creating, existing=None):
     }, None
 
 
+def _role_template_payload(body):
+    label = (body.get('label') or '').strip()
+    if not label or len(label) > 40:
+        return None, '請填寫範本名稱（40 字以內）'
+    hint = (body.get('hint') or '').strip()
+    if len(hint) > 120:
+        return None, '說明請在 120 字以內'
+    matrix = access_control.normalize_matrix(body.get('permissions'), 'custom', base=access_control.preset_matrix('custom'))
+    return {'label': label, 'hint': hint, 'matrix': matrix}, None
+
+
 @app.route('/api/admin/permission-catalog', methods=['GET'])
 def admin_permission_catalog():
-    return resp(access_control.catalog_payload())
+    return resp(access_control.catalog_payload(db.list_role_templates()))
+
+
+@app.route('/api/admin/role-templates', methods=['GET'])
+def admin_role_templates_list():
+    return resp(db.list_role_templates())
+
+
+@app.route('/api/admin/role-templates', methods=['POST'])
+def admin_role_templates_create():
+    data, err = _role_template_payload(request.json or {})
+    if err:
+        return resp(error=err, status=400)
+    try:
+        row, _updated = db.save_role_template(data)
+    except ValueError as exc:
+        return resp(error=str(exc), status=400)
+    return resp(row)
+
+
+@app.route('/api/admin/role-templates/<template_id>', methods=['PUT'])
+def admin_role_templates_update(template_id):
+    data, err = _role_template_payload(request.json or {})
+    if err:
+        return resp(error=err, status=400)
+    try:
+        row, updated = db.save_role_template(data, template_id=template_id)
+    except ValueError as exc:
+        return resp(error=str(exc), status=400)
+    if not row:
+        return resp(error='找不到範本', status=404)
+    row['updated_users'] = updated
+    return resp(row)
+
+
+@app.route('/api/admin/role-templates/<template_id>/restore', methods=['POST'])
+def admin_role_templates_restore(template_id):
+    try:
+        row, updated = db.restore_role_template(template_id)
+    except ValueError as exc:
+        return resp(error=str(exc), status=400)
+    if not row:
+        return resp(error='找不到可還原的內建範本', status=404)
+    row['updated_users'] = updated
+    return resp(row)
+
+
+@app.route('/api/admin/role-templates/<template_id>', methods=['DELETE'])
+def admin_role_templates_delete(template_id):
+    detach = (request.args.get('detach') or '').strip().lower() in ('1', 'true', 'yes')
+    try:
+        row = db.delete_role_template(template_id, detach=detach)
+    except ValueError as exc:
+        return resp(error=str(exc), status=400)
+    if not row:
+        return resp(error='找不到範本', status=404)
+    return resp({'deleted': template_id})
 
 
 @app.route('/api/admin/users', methods=['GET'])

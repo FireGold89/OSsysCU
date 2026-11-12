@@ -87,19 +87,31 @@ _SYSTEM_PREFIXES = (
 )
 
 
+BUILTIN_TEMPLATES = (
+    {'id': 'admin', 'label': '管理員', 'hint': '全部可編輯，含帳號與系統設定', 'locked': True, 'sort': 10},
+    {'id': 'qs', 'label': 'QS', 'hint': '地盤付款、糧期、ISO、結算可編輯；Master List 只看', 'locked': False, 'sort': 20},
+    {'id': 'eng_dept', 'label': '工程部', 'hint': '項目登記·會簽出表可編輯；Master／項目僅查閱', 'locked': False, 'sort': 30},
+    {'id': 'ga', 'label': '行政', 'hint': 'Master List 開票／糧期可編輯；地盤資料只看', 'locked': False, 'sort': 40},
+    {'id': 'finance', 'label': '財務', 'hint': '財務報表可編輯；Master 與地盤資料只看', 'locked': False, 'sort': 50},
+    {'id': 'viewer', 'label': '唯讀', 'hint': '全部只看', 'locked': False, 'sort': 60},
+)
+CUSTOM_PRESET = {'id': 'custom', 'label': '自訂', 'hint': '按下方範圍逐項設定', 'locked': False}
+
+
 def preset_matrix(role):
     base = PRESETS.get((role or '').strip().lower()) or _QS
     return {a['id']: base.get(a['id'], 'none') for a in AREAS}
 
 
-def normalize_matrix(raw, role):
-    """缺欄用角色預設補上；非法值當成 none。"""
-    base = preset_matrix(role if role in PRESETS else 'custom')
+def normalize_matrix(raw, role, base=None):
+    """缺欄用角色預設或傳入的 base 補上；非法值當成 none。"""
+    if base is None:
+        base = preset_matrix(role if role in PRESETS else 'custom')
     if not isinstance(raw, dict):
-        return base
+        return {a['id']: base.get(a['id'], 'none') for a in AREAS}
     out = {}
     for area in AREAS:
-        val = raw.get(area['id'], base[area['id']])
+        val = raw.get(area['id'], base.get(area['id'], 'none'))
         out[area['id']] = val if val in LEVELS else 'none'
     return out
 
@@ -108,27 +120,49 @@ def matrix_matches(role, matrix):
     return matrix == preset_matrix(role)
 
 
-def catalog_payload():
+def follows_template(perm_json, matrix):
+    """空權限，或與範本逐格相同，視為仍跟隨該範本。"""
+    if perm_json is None or not str(perm_json).strip():
+        return True
+    try:
+        parsed = json.loads(perm_json) if isinstance(perm_json, str) else perm_json
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(parsed, dict):
+        return False
+    return normalize_matrix(parsed, 'custom', base=matrix) == matrix
+
+
+def catalog_payload(templates=None):
+    levels = [
+        {'id': 'none', 'label': '不可見'},
+        {'id': 'view', 'label': '只看'},
+        {'id': 'edit', 'label': '可編輯'},
+    ]
+    if templates is None:
+        presets = [
+            {'id': item['id'], 'label': item['label'], 'hint': item['hint'], 'locked': item['locked']}
+            for item in BUILTIN_TEMPLATES
+        ]
+        matrices = {item['id']: preset_matrix(item['id']) for item in BUILTIN_TEMPLATES}
+    else:
+        presets = [
+            {
+                'id': item['id'],
+                'label': item['label'],
+                'hint': item.get('hint') or '',
+                'locked': bool(item.get('locked')),
+            }
+            for item in templates
+        ]
+        matrices = {item['id']: item['matrix'] for item in templates}
+    presets.append(dict(CUSTOM_PRESET))
+    matrices['custom'] = preset_matrix('custom')
     return {
         'areas': list(AREAS),
-        'levels': [
-            {'id': 'none', 'label': '不可見'},
-            {'id': 'view', 'label': '只看'},
-            {'id': 'edit', 'label': '可編輯'},
-        ],
-        'presets': [
-            {'id': 'admin', 'label': '管理員', 'hint': '全部可編輯，含帳號與系統設定'},
-            {'id': 'qs', 'label': 'QS', 'hint': '地盤付款、糧期、ISO、結算可編輯；Master List 只看'},
-            {'id': 'eng_dept', 'label': '工程部', 'hint': '項目登記·會簽出表可編輯；Master／項目僅查閱'},
-            {'id': 'ga', 'label': '行政', 'hint': 'Master List 開票／糧期可編輯；地盤資料只看'},
-            {'id': 'finance', 'label': '財務', 'hint': '財務報表可編輯；Master 與地盤資料只看'},
-            {'id': 'viewer', 'label': '唯讀', 'hint': '全部只看'},
-            {'id': 'custom', 'label': '自訂', 'hint': '按下方範圍逐項設定'},
-        ],
-        'matrices': {
-            key: preset_matrix(key)
-            for key in ('admin', 'qs', 'eng_dept', 'ga', 'finance', 'viewer', 'custom')
-        },
+        'levels': levels,
+        'presets': presets,
+        'matrices': matrices,
     }
 
 

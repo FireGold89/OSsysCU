@@ -6,6 +6,7 @@ import sqlite3
 import os
 import json
 import re
+import secrets
 from datetime import datetime
 
 from config import DB_PATH, UPLOAD_DIR
@@ -798,6 +799,7 @@ def _migrate_app_users(conn):
         conn.commit()
     except Exception:
         pass
+    _migrate_role_templates(conn)
 
 
 def _app_user_public(row):
@@ -916,6 +918,236 @@ def update_app_user_display_name(user_id, display_name):
     )
     conn.commit()
     conn.close()
+
+
+def _migrate_role_templates(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS role_templates (
+            id          TEXT PRIMARY KEY,
+            label       TEXT NOT NULL,
+            hint        TEXT,
+            matrix_json TEXT NOT NULL,
+            is_builtin  INTEGER DEFAULT 0,
+            sort_order  INTEGER DEFAULT 0,
+            updated_at  TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    import access_control
+    existing = {
+        row[0] for row in conn.execute("SELECT id FROM role_templates").fetchall()
+    }
+    for item in access_control.BUILTIN_TEMPLATES:
+        if item['id'] in existing:
+            continue
+        matrix = access_control.preset_matrix(item['id'])
+        conn.execute(
+            """
+            INSERT INTO role_templates (id, label, hint, matrix_json, is_builtin, sort_order)
+            VALUES (?, ?, ?, ?, 1, ?)
+            """,
+            (
+                item['id'],
+                item['label'],
+                item['hint'],
+                json.dumps(matrix, ensure_ascii=False),
+                item['sort'],
+            ),
+        )
+    conn.commit()
+
+
+def _role_template_public(row, users):
+    import access_control
+    data = dict(row)
+    role_id = data['id']
+    try:
+        raw = json.loads(data.get('matrix_json') or '{}')
+    except json.JSONDecodeError:
+        raw = {}
+    base_role = role_id if role_id in access_control.PRESETS else 'custom'
+    matrix = access_control.normalize_matrix(raw, base_role)
+    locked = role_id == 'admin'
+    if locked:
+        matrix = access_control.preset_matrix('admin')
+    followers = []
+    for user in users:
+        if (user.get('role') or '') != role_id:
+            continue
+        if access_control.follows_template(user.get('perm_json'), matrix):
+            followers.append(user['username'])
+    return {
+        'id': role_id,
+        'label': data.get('label') or role_id,
+        'hint': data.get('hint') or '',
+        'matrix': matrix,
+        'is_builtin': bool(data.get('is_builtin')),
+        'locked': locked,
+        'user_count': len(followers),
+        'usernames': followers,
+    }
+
+
+def list_role_templates():
+    conn = get_conn()
+    _migrate_role_templates(conn)
+    rows = conn.execute(
+        "SELECT * FROM role_templates ORDER BY sort_order, label COLLATE NOCASE"
+    ).fetchall()
+    users = conn.execute(
+        "SELECT username, role, perm_json FROM app_users"
+    ).fetchall()
+    conn.close()
+    user_rows = [dict(u) for u in users]
+    return [_role_template_public(row, user_rows) for row in rows]
+
+
+def get_role_template(template_id):
+    template_id = (template_id or '').strip()
+    for item in list_role_templates():
+        if item['id'] == template_id:
+            return item
+    return None
+
+
+def _label_taken(conn, label, exclude_id=None):
+    rows = conn.execute("SELECT id, label FROM role_templates").fetchall()
+    want = (label or '').strip().casefold()
+    for row in rows:
+        if exclude_id and row['id'] == exclude_id:
+            continue
+        if (row['label'] or '').strip().casefold() == want:
+            return True
+    return False
+
+
+def save_role_template(data, template_id=None):
+    """新增或更新範本。更新時同步仍跟隨舊矩陣的帳號。回傳 (row, updated_users)。"""
+    import access_control
+    conn = get_conn()
+    _migrate_role_templates(conn)
+    label = (data.get('label') or '').strip()
+    hint = (data.get('hint') or '').strip()
+    matrix = data.get('matrix')
+    if template_id:
+        row = conn.execute(
+            "SELECT * FROM role_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            conn.close()
+            return None, 0
+        current = _role_template_public(row, [])
+        if current['locked']:
+            conn.close()
+            raise ValueError('管理員範本不可修改')
+        if _label_taken(conn, label, exclude_id=template_id):
+            conn.close()
+            raise ValueError('已有相同名稱的範本')
+        old_matrix = current['matrix']
+        users = [dict(u) for u in conn.execute(
+            "SELECT id, username, role, perm_json FROM app_users WHERE role=?",
+            (template_id,),
+        ).fetchall()]
+        updated = 0
+        matrix_text = json.dumps(matrix, ensure_ascii=False)
+        for user in users:
+            if not access_control.follows_template(user.get('perm_json'), old_matrix):
+                continue
+            conn.execute(
+                """
+                UPDATE app_users
+                SET perm_json=?, updated_at=datetime('now', 'localtime')
+                WHERE id=?
+                """,
+                (matrix_text, user['id']),
+            )
+            updated += 1
+        conn.execute(
+            """
+            UPDATE role_templates
+            SET label=?, hint=?, matrix_json=?, updated_at=datetime('now', 'localtime')
+            WHERE id=?
+            """,
+            (label, hint, matrix_text, template_id),
+        )
+        conn.commit()
+        conn.close()
+        return get_role_template(template_id), updated
+    if _label_taken(conn, label):
+        conn.close()
+        raise ValueError('已有相同名稱的範本')
+    new_id = 't' + secrets.token_hex(4)
+    while conn.execute(
+        "SELECT 1 FROM role_templates WHERE id=?", (new_id,)
+    ).fetchone():
+        new_id = 't' + secrets.token_hex(4)
+    sort = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), 60) FROM role_templates"
+    ).fetchone()[0]
+    conn.execute(
+        """
+        INSERT INTO role_templates (id, label, hint, matrix_json, is_builtin, sort_order)
+        VALUES (?, ?, ?, ?, 0, ?)
+        """,
+        (
+            new_id,
+            label,
+            hint,
+            json.dumps(matrix, ensure_ascii=False),
+            int(sort or 60) + 10,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return get_role_template(new_id), 0
+
+
+def restore_role_template(template_id):
+    import access_control
+    spec = next((item for item in access_control.BUILTIN_TEMPLATES if item['id'] == template_id), None)
+    if not spec:
+        return None, 0
+    if spec.get('locked'):
+        raise ValueError('管理員範本不可修改')
+    matrix = access_control.preset_matrix(template_id)
+    return save_role_template(
+        {'label': spec['label'], 'hint': spec['hint'], 'matrix': matrix},
+        template_id=template_id,
+    )
+
+
+def delete_role_template(template_id, detach=False):
+    conn = get_conn()
+    _migrate_role_templates(conn)
+    row = conn.execute(
+        "SELECT * FROM role_templates WHERE id=?", (template_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    if row['is_builtin'] or row['id'] == 'admin':
+        conn.close()
+        raise ValueError('內建範本不可刪除')
+    current = _role_template_public(row, [
+        dict(u) for u in conn.execute(
+            "SELECT username, role, perm_json FROM app_users WHERE role=?",
+            (template_id,),
+        ).fetchall()
+    ])
+    if current['user_count'] and not detach:
+        conn.close()
+        raise ValueError('仍有帳號使用此範本')
+    conn.execute(
+        """
+        UPDATE app_users
+        SET role='custom', updated_at=datetime('now', 'localtime')
+        WHERE role=?
+        """,
+        (template_id,),
+    )
+    conn.execute("DELETE FROM role_templates WHERE id=?", (template_id,))
+    conn.commit()
+    conn.close()
+    return current
 
 
 def update_app_user_password_hash(user_id, password_hash):

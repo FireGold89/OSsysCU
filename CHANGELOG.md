@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261112-role-templates` · 分支 `v2/portfolio`
+
+### 變更
+- **角色範本**：管理員可在「帳號與權限」新增、修改、還原內建範本；儲存時更新仍整套套用該範本的帳號。管理員範本維持全部可編輯。
+
 `APP_VERSION`: `v2-20261111-access-roles` · 分支 `v2/portfolio`
 
 ### 變更

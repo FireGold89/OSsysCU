@@ -1979,6 +1979,51 @@
             </div>
           </div>
         </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <div class="card-title">角色範本</div>
+            <div class="card-sub">改範本會更新仍套用該範本、且沒有逐格改過的帳號。已自訂的帳號不受影響。</div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="AccessAdmin.openCreateTemplate()">新增範本</button>
+          </div>
+          <div class="table-wrap">
+            <table class="master-preview-table">
+              <thead>
+                <tr><th>名稱</th><th>說明</th><th>使用中</th><th></th></tr>
+              </thead>
+              <tbody id="roleTemplateBody">
+                <tr><td colspan="4"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" id="roleTemplateEditor" style="display:none;margin-top:16px">
+          <div class="card-header"><div class="card-title" id="roleTemplateTitle">範本</div></div>
+          <div class="card-body" style="padding:16px">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="roleTemplateName" class="form-label">名稱</label>
+                <input class="form-input" id="roleTemplateName" maxlength="40">
+              </div>
+              <div class="form-group">
+                <label for="roleTemplateHint" class="form-label">說明</label>
+                <input class="form-input" id="roleTemplateHint" maxlength="120">
+              </div>
+            </div>
+            <p class="form-hint" id="roleTemplateUsers"></p>
+            <div class="table-wrap" style="margin-top:12px">
+              <table class="master-preview-table">
+                <thead><tr><th>範圍</th><th>權限</th></tr></thead>
+                <tbody id="roleTemplateMatrix"></tbody>
+              </table>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn btn-primary btn-sm" id="roleTemplateSave" onclick="AccessAdmin.saveTemplate()">儲存範本</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="roleTemplateRestore" onclick="AccessAdmin.restoreTemplate()">還原預設</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="roleTemplateDelete" onclick="AccessAdmin.removeTemplate()">刪除</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="AccessAdmin.closeTemplateEditor()">取消</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ─── 操作紀錄 ──────────────────────── -->

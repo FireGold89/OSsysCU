@@ -145,6 +145,53 @@
           </div>
         </div>
       </section>
+      <section class="ops-card">
+        <div class="ops-card-head">
+          <div>
+            <h2>角色範本</h2>
+            <p class="ops-sub">改範本會更新仍套用該範本、且沒有逐格改過的帳號。已自訂的帳號不受影響。</p>
+          </div>
+          <button type="button" class="ops-btn ops-btn-primary" onclick="AccessAdmin.openCreateTemplate()">新增範本</button>
+        </div>
+        <div class="ops-table-wrap">
+          <table>
+            <thead>
+              <tr><th>名稱</th><th>說明</th><th>使用中</th><th></th></tr>
+            </thead>
+            <tbody id="roleTemplateBody">
+              <tr><td colspan="4">載入中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="ops-card" id="roleTemplateEditor" style="display:none">
+        <h2 id="roleTemplateTitle">範本</h2>
+        <div class="admin-form">
+          <div class="admin-form-row">
+            <div class="admin-field">
+              <label for="roleTemplateName" class="admin-label">名稱</label>
+              <input class="admin-input" id="roleTemplateName" maxlength="40">
+            </div>
+            <div class="admin-field">
+              <label for="roleTemplateHint" class="admin-label">說明</label>
+              <input class="admin-input" id="roleTemplateHint" maxlength="120">
+            </div>
+          </div>
+          <p class="ops-sub" id="roleTemplateUsers"></p>
+          <div class="ops-table-wrap" style="margin-top:12px">
+            <table>
+              <thead><tr><th>範圍</th><th>權限</th></tr></thead>
+              <tbody id="roleTemplateMatrix"></tbody>
+            </table>
+          </div>
+          <div class="admin-form-actions">
+            <button type="button" class="ops-btn ops-btn-primary" id="roleTemplateSave" onclick="AccessAdmin.saveTemplate()">儲存範本</button>
+            <button type="button" class="ops-btn" id="roleTemplateRestore" onclick="AccessAdmin.restoreTemplate()">還原預設</button>
+            <button type="button" class="ops-btn" id="roleTemplateDelete" onclick="AccessAdmin.removeTemplate()">刪除</button>
+            <button type="button" class="ops-btn" onclick="AccessAdmin.closeTemplateEditor()">取消</button>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
   <script src="js/admin_common.js?v=__APP_BUILD__-ops3"></script>
