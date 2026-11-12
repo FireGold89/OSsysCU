@@ -1968,6 +1968,9 @@ const ActivityLog = {
   modules: {},
   actions: {},
   expandedId: null,
+  expandedAll: false,
+  lastRows: [],
+  colSpan: 8,
 
   setMode(mode) {
     this.mode = mode === 'api' ? 'api' : 'business';
@@ -1984,14 +1987,66 @@ const ActivityLog = {
     const head = document.getElementById('activityLogHead');
     if (!head) return;
     if (this.mode === 'api') {
+      this.colSpan = 7;
       head.innerHTML = `<tr>
         <th>時間</th><th>帳號</th><th>角色</th><th>動作</th><th>路徑</th><th>結果</th><th></th>
       </tr>`;
     } else {
+      this.colSpan = 8;
       head.innerHTML = `<tr>
-        <th>時間</th><th>帳號</th><th>模組</th><th>操作</th><th>對象</th><th>摘要</th><th></th>
+        <th>時間</th><th>帳號</th><th>模組</th><th>操作</th><th>項目</th><th>對象</th><th>摘要</th><th></th>
       </tr>`;
     }
+  },
+
+  detailSummaryText(detail) {
+    if (!detail) return '';
+    const parts = [];
+    (detail.changes || []).forEach((c) => {
+      const label = c.label || c.field || '';
+      parts.push(`${label}：${c.old ?? '—'} → ${c.new ?? '—'}`);
+    });
+    if (detail.snapshot && typeof detail.snapshot === 'object') {
+      Object.entries(detail.snapshot).forEach(([k, v]) => {
+        parts.push(`${k}：${v ?? '—'}`);
+      });
+    }
+    return parts.join('；');
+  },
+
+  setMeta(text, show) {
+    const el = document.getElementById('auditLogMeta');
+    if (!el) return;
+    if (show) {
+      el.textContent = text;
+      el.style.display = '';
+    } else {
+      el.textContent = '';
+      el.style.display = 'none';
+    }
+  },
+
+  toggleBulkButtons(show) {
+    const exp = document.getElementById('auditExpandAllBtn');
+    const col = document.getElementById('auditCollapseAllBtn');
+    if (exp) exp.style.display = show ? '' : 'none';
+    if (col) col.style.display = show ? '' : 'none';
+  },
+
+  expandAll() {
+    this.expandedAll = true;
+    this.expandedId = null;
+    document.querySelectorAll('[data-audit-detail]').forEach((el) => {
+      el.style.display = '';
+    });
+  },
+
+  collapseAll() {
+    this.expandedAll = false;
+    this.expandedId = null;
+    document.querySelectorAll('[data-audit-detail]').forEach((el) => {
+      el.style.display = 'none';
+    });
   },
 
   renderDetail(detail) {
@@ -2017,6 +2072,7 @@ const ActivityLog = {
   },
 
   toggleDetail(id) {
+    this.expandedAll = false;
     this.expandedId = this.expandedId === id ? null : id;
     document.querySelectorAll('[data-audit-detail]').forEach((el) => {
       const show = String(el.dataset.auditDetail) === String(this.expandedId);
@@ -2028,11 +2084,15 @@ const ActivityLog = {
     const body = document.getElementById('activityLogBody');
     if (!body) return;
     if (typeof Auth !== 'undefined' && Auth.authRequired && !Auth.isAdmin()) {
-      body.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="padding:32px">需要管理員帳號</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="8"><div class="empty-state" style="padding:32px">需要管理員帳號</div></td></tr>';
+      this.setMeta('', false);
+      this.toggleBulkButtons(false);
       return;
     }
     this.renderHead();
-    const colSpan = 7;
+    const colSpan = this.colSpan;
+    this.setMeta('', false);
+    this.toggleBulkButtons(false);
     body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>`;
     try {
       if (this.mode === 'api') {
@@ -2055,26 +2115,35 @@ const ActivityLog = {
       const user = (document.getElementById('auditFilterUser')?.value || '').trim();
       const mod = (document.getElementById('auditFilterModule')?.value || '').trim();
       const q = (document.getElementById('auditFilterQ')?.value || '').trim();
-      const qs = new URLSearchParams({ limit: '200' });
+      const since = (document.getElementById('auditFilterSince')?.value || '').trim();
+      const qs = new URLSearchParams({ limit: '500' });
       if (user) qs.set('username', user);
       if (mod) qs.set('module', mod);
       if (q) qs.set('q', q);
+      if (since) qs.set('since_days', since);
       const payload = await api('GET', `/admin/audit-events?${qs.toString()}`) || {};
       this.modules = payload.modules || {};
       this.actions = payload.actions || {};
       const rows = payload.items || [];
+      this.lastRows = rows;
       if (!rows.length) {
-        body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">尚無業務紀錄。部署後對負責人、付款、Master、項目登記的修改才會顯示欄位明細。</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">沒有符合條件的業務紀錄。部署後的新寫入操作才會出現欄位明細。</div></td></tr>`;
+        this.setMeta('顯示 0 筆', true);
         return;
       }
+      const withDetail = rows.filter((r) => r.detail && ((r.detail.changes && r.detail.changes.length)
+        || (r.detail.snapshot && Object.keys(r.detail.snapshot).length)));
+      this.toggleBulkButtons(withDetail.length > 0);
+      this.setMeta(`顯示 ${rows.length} 筆（最多 500）${withDetail.length ? `· ${withDetail.length} 筆可展開明細` : ''}`, true);
       this.expandedId = null;
+      this.expandedAll = false;
       body.innerHTML = rows.map((r) => {
         const who = r.display_name && r.display_name !== r.username
           ? `${r.display_name}（${r.username}）`
           : (r.username || '');
         const modLabel = this.modules[r.module] || r.module || '—';
         const actLabel = this.actions[r.action] || r.action || '—';
-        const proj = r.project_code ? `<div class="form-hint">${escHtml(r.project_code)}</div>` : '';
+        const proj = escHtml(r.project_code || '—');
         const hasDetail = r.detail && ((r.detail.changes && r.detail.changes.length)
           || (r.detail.snapshot && Object.keys(r.detail.snapshot).length));
         const btn = hasDetail
@@ -2088,7 +2157,8 @@ const ActivityLog = {
           <td>${escHtml(who)}</td>
           <td>${escHtml(modLabel)}</td>
           <td>${escHtml(actLabel)}</td>
-          <td>${escHtml(r.object_label || '—')}${proj}</td>
+          <td class="td-mono">${proj}</td>
+          <td>${escHtml(r.object_label || '—')}</td>
           <td>${escHtml(r.summary || '—')}</td>
           <td>${btn}</td>
         </tr>${detailRow}`;
@@ -2096,6 +2166,39 @@ const ActivityLog = {
     } catch (e) {
       body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">${escHtml(e?.message || '載入失敗')}</div></td></tr>`;
     }
+  },
+
+  exportCsv() {
+    if (this.mode !== 'business' || !this.lastRows?.length) {
+      toast('請先搜尋並載入業務紀錄', 'info');
+      return;
+    }
+    const esc = (v) => {
+      const s = String(v ?? '').replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = [['時間', '帳號', '模組', '操作', '項目', '對象', '摘要', '變更明細'].join(',')];
+    this.lastRows.forEach((r) => {
+      const who = r.display_name && r.display_name !== r.username
+        ? `${r.display_name}（${r.username}）`
+        : (r.username || '');
+      lines.push([
+        r.created_at,
+        who,
+        this.modules[r.module] || r.module,
+        this.actions[r.action] || r.action,
+        r.project_code || '',
+        r.object_label || '',
+        r.summary || '',
+        this.detailSummaryText(r.detail),
+      ].map(esc).join(','));
+    });
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `audit-events-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   },
 };
 

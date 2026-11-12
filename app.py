@@ -219,7 +219,10 @@ def admin_audit_events():
     username = (request.args.get('username') or '').strip() or None
     module = (request.args.get('module') or '').strip() or None
     q = (request.args.get('q') or '').strip() or None
-    rows = db.list_audit_events(limit=limit, username=username, module=module, q=q)
+    since_days = request.args.get('since_days', type=int)
+    rows = db.list_audit_events(
+        limit=limit, username=username, module=module, q=q, since_days=since_days,
+    )
     return resp({
         'modules': audit_events.MODULE_LABELS,
         'actions': audit_events.ACTION_LABELS,
@@ -578,6 +581,10 @@ def save_settings():
     data = request.json or {}
     for key, value in data.items():
         db.set_setting(key, str(value))
+    try:
+        audit_events.audit_settings_save(data)
+    except Exception:
+        pass
     return resp({'message': '設定已儲存'})
 
 
@@ -663,6 +670,10 @@ def create_project():
         portfolio.stamp_project_audit(new_id, auth.actor_display_name())
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_project_create(new_id)
+    except Exception:
+        pass
     return resp({'id': new_id}, status=201)
 
 
@@ -683,17 +694,31 @@ def update_project(project_id):
     data.setdefault('quotation_no', None)
     data.setdefault('person_code', None)
     data.setdefault('person_in_charge', None)
+    before = db.get_project(project_id)
+    if not before:
+        return resp(error='項目不存在', status=404)
     try:
         db.update_project(project_id, data)
         portfolio.stamp_project_audit(project_id, auth.actor_display_name())
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_project_update(project_id, before, data)
+    except Exception:
+        pass
     return resp({'message': '已更新'})
 
 
 @app.route('/api/projects/<int:project_id>', methods=['DELETE'])
 def delete_project(project_id):
+    before = db.get_project(project_id)
+    if not before:
+        return resp(error='項目不存在', status=404)
     db.delete_project(project_id)
+    try:
+        audit_events.audit_project_delete(before)
+    except Exception:
+        pass
     return resp({'message': '已刪除'})
 
 
@@ -760,9 +785,14 @@ def portfolio_by_project_api(project_id):
 def portfolio_sync_from_projects_api():
     """P4：從 Cover / Main FAC / 分判回填衍生欄；保留 QS 手填狀態"""
     try:
-        return resp(portfolio.sync_from_system(actor=auth.actor_display_name()))
+        result = portfolio.sync_from_system(actor=auth.actor_display_name())
     except Exception as e:
         return resp(error=f'同步失敗: {e}', status=500)
+    try:
+        audit_events.audit_portfolio_sync(result)
+    except Exception:
+        pass
+    return resp(result)
 
 
 @app.route('/api/portfolio/projects/<int:portfolio_id>', methods=['PUT'])
@@ -837,13 +867,18 @@ def portfolio_import_fa_api():
     try:
         if preview:
             return resp(portfolio_importer.preview_fa_list(path))
-        return resp(portfolio_importer.sync_fa_list(
+        stats = portfolio_importer.sync_fa_list(
             path, create_placeholders=True, actor=auth.actor_display_name(),
-        ))
+        )
     except ValueError as e:
         return resp(error=str(e), status=400)
     except Exception as e:
         return resp(error=f'匯入失敗: {e}', status=500)
+    try:
+        audit_events.audit_import('portfolio_fa', _orig, stats)
+    except Exception:
+        pass
+    return resp(stats)
 
 
 @app.route('/api/portfolio/import/progress-list', methods=['POST'])
@@ -855,13 +890,18 @@ def portfolio_import_progress_api():
     try:
         if preview:
             return resp(portfolio_importer.preview_progress_list(path))
-        return resp(portfolio_importer.sync_progress_list(
+        stats = portfolio_importer.sync_progress_list(
             path, create_placeholders=True, actor=auth.actor_display_name(),
-        ))
+        )
     except ValueError as e:
         return resp(error=str(e), status=400)
     except Exception as e:
         return resp(error=f'匯入失敗: {e}', status=500)
+    try:
+        audit_events.audit_import('portfolio_progress', _orig, stats)
+    except Exception:
+        pass
+    return resp(stats)
 
 
 @app.route('/api/portfolio/export/fa-list', methods=['GET'])
@@ -1009,6 +1049,10 @@ def eng_signoff_generate_api():
     tpl = body.get('template_path')
     try:
         docx_bytes, pdf_bytes, pdf_source = _eng_signoff_docx_and_pdf(payload, template_path=tpl)
+        try:
+            audit_events.audit_eng_signoff(payload, fmt)
+        except Exception:
+            pass
         if fmt == 'pdf':
             response = send_file(
                 BytesIO(pdf_bytes),
@@ -1062,11 +1106,16 @@ def get_main_con_fac_api(project_id):
 @app.route('/api/projects/<int:project_id>/main-con-fac', methods=['POST'])
 def update_main_con_fac_api(project_id):
     data = request.json or {}
-    if not db.get_project(project_id):
+    before = db.get_project(project_id)
+    if not before:
         return resp(error='項目不存在', status=404)
     ok = db.update_main_con_fac(project_id, data)
     if not ok:
         return resp(error='更新失敗', status=400)
+    try:
+        audit_events.audit_main_fac_update(project_id, before, data)
+    except Exception:
+        pass
     return resp(db.get_main_con_fac(project_id))
 
 
@@ -1088,15 +1137,16 @@ def upload_main_con_fac_attachment(project_id):
         'main-fac', file, project_code=code, detail_slug=att_type,
     )
     db.update_main_fac_attachment(project_id, att_type, rel, file.filename)
+    try:
+        audit_events.audit_main_fac_upload(project_id, att_type, file.filename)
+    except Exception:
+        pass
     return resp({
         'path': rel,
         'filename': file.filename,
         'type': att_type,
         'message': '已上傳',
     })
-
-
-@app.route('/api/projects/<int:project_id>/main-con-fac/pdf', methods=['GET'])
 def main_con_fac_pdf_api(project_id):
     fac = db.get_main_con_fac(project_id)
     if not fac:
@@ -1292,6 +1342,10 @@ def auto_link_project_ms_c_api(project_id):
     result = auto_link_project_ms_c(project_id, dry_run=dry_run)
     if not result.get('ok'):
         return resp(error=result.get('error') or '自動配對失敗', status=400)
+    try:
+        audit_events.audit_msc_auto_link(project_id, result)
+    except Exception:
+        pass
     return resp(result)
 
 
@@ -1338,6 +1392,10 @@ def sc_contract_registry_sync_api():
         return resp(error=f'同步失敗: {e}', status=500)
     if not result.get('ok'):
         return resp(error=result.get('error', '同步失敗'), status=400)
+    try:
+        audit_events.audit_import('scr_sync', 'Ref MS/C', result)
+    except Exception:
+        pass
     return resp(result)
 
 
@@ -1518,6 +1576,13 @@ def add_project_document(project_id):
             )
         except ValueError:
             pass
+    try:
+        audit_events.audit_docs_add(
+            {'doc_category': category, 'original_filename': data.get('original_filename'), 'file_path': file_path},
+            project_id,
+        )
+    except Exception:
+        pass
     return resp({'id': doc_id}, status=201)
 
 
@@ -1546,6 +1611,11 @@ def delete_project_document(doc_id):
             finally:
                 conn.close()
     db.delete_project_document(doc_id)
+    try:
+        if row:
+            audit_events.audit_docs_delete(row)
+    except Exception:
+        pass
     return resp({'message': '已刪除'})
 
 
@@ -2130,6 +2200,10 @@ def create_sc_vo_record_api(project_id):
         new_id = db.create_sc_vo_record(data)
     except Exception as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_vo_create(new_id)
+    except Exception:
+        pass
     return resp({'id': new_id}, status=201)
 
 
@@ -2144,20 +2218,32 @@ def get_sc_vo_record_api(record_id):
 @app.route('/api/sc-vo-records/<int:record_id>', methods=['PUT'])
 def update_sc_vo_record_api(record_id):
     data = request.json or {}
+    before = db.get_sc_vo_record(record_id)
+    if not before:
+        return resp(error='記錄不存在', status=404)
     ok = db.update_sc_vo_record(record_id, data)
     if not ok:
         return resp(error='記錄不存在', status=404)
+    try:
+        audit_events.audit_vo_update(record_id, before, data)
+    except Exception:
+        pass
     return resp({'message': '已更新'})
 
 
 @app.route('/api/sc-vo-records/<int:record_id>', methods=['DELETE'])
 def delete_sc_vo_record_api(record_id):
+    before = db.get_sc_vo_record(record_id)
     try:
         ok = db.delete_sc_vo_record(record_id)
     except ValueError as e:
         return resp(error=str(e), status=400)
     if not ok:
         return resp(error='記錄不存在', status=404)
+    try:
+        audit_events.audit_vo_delete(before)
+    except Exception:
+        pass
     return resp({'message': '已刪除'})
 
 
@@ -2196,6 +2282,10 @@ def upload_sc_vo_attachment(record_id):
             except OSError:
                 pass
     db.update_sc_vo_attachment(record_id, att_type, rel, file.filename)
+    try:
+        audit_events.audit_vo_upload(record_id, att_type, file.filename)
+    except Exception:
+        pass
     return resp({
         'path': rel,
         'filename': file.filename,
@@ -3410,9 +3500,13 @@ def master_list_sync():
         from master_list_importer import sync_master_import
         stats = sync_master_import(save_path)
         stats['stats'] = db.get_quotation_registry_stats()
-        return resp(stats)
     except Exception as e:
         return resp(error=f'同步失敗: {str(e)}', status=500)
+    try:
+        audit_events.audit_import('master', file.filename, stats)
+    except Exception:
+        pass
+    return resp(stats)
 
 
 # ─── System API ───────────────────────────────────────────────────────────
@@ -3507,6 +3601,10 @@ def restore_database():
         return resp(error=f'無效的資料庫文件: {e}', status=400)
 
     projects = db.get_all_projects()
+    try:
+        audit_events.audit_system_restore('db', f'項目數 {len(projects)}')
+    except Exception:
+        pass
     return resp({
         'message': '資料庫已還原',
         'project_count': len(projects),
@@ -3564,11 +3662,14 @@ def restore_uploads():
     upload_count = 0
     for _root, _dirs, files in os.walk(UPLOAD_DIR):
         upload_count += len(files)
+    stats = {'synced': synced, 'skipped': skipped, 'upload_count': upload_count}
+    try:
+        audit_events.audit_system_restore('uploads', f'新增 {synced}、略過 {skipped}')
+    except Exception:
+        pass
     return resp({
         'message': 'uploads 已同步',
-        'synced': synced,
-        'skipped': skipped,
-        'upload_count': upload_count,
+        **stats,
     })
 
 
@@ -3594,13 +3695,19 @@ def sync_excel_api():
         from excel_importer import sync_excel_data
         pid = sync_excel_data(excel_path, project_id)
         ip = db.get_ip_period_summary(pid)
-        return resp({
+        result = {
             'project_id': pid,
             'message': 'Excel 同步完成',
             'ip_periods': len((ip or {}).get('items') or []),
-        })
+        }
     except Exception as e:
         return resp(error=f'同步失敗: {str(e)}', status=500)
+    try:
+        pcode = audit_events.project_code_for_id(pid) if pid else None
+        audit_events.audit_import('sync_excel', excel_name, result, project_code=pcode)
+    except Exception:
+        pass
+    return resp(result)
 
 
 # ─── Summary Import API ───────────────────────────────────────────────
@@ -3617,9 +3724,13 @@ def import_summary_api():
     try:
         from summary_importer import sync_summary_import
         stats = sync_summary_import(save_path, update_existing=True)
-        return resp(stats)
     except Exception as e:
         return resp(error=f'匯入失敗: {str(e)}', status=500)
+    try:
+        audit_events.audit_import('summary', file.filename, stats)
+    except Exception:
+        pass
+    return resp(stats)
 
 
 @app.route('/api/import/summary/sync', methods=['POST'])
@@ -3630,9 +3741,13 @@ def sync_summary_ref():
         return resp(error=f'找不到 {DEFAULT_SUMMARY_PATH}', status=404)
     try:
         stats = sync_summary_import(DEFAULT_SUMMARY_PATH, update_existing=True)
-        return resp(stats)
     except Exception as e:
         return resp(error=f'同步失敗: {str(e)}', status=500)
+    try:
+        audit_events.audit_import('summary', os.path.basename(DEFAULT_SUMMARY_PATH), stats)
+    except Exception:
+        pass
+    return resp(stats)
 
 
 # ─── Excel Import API ───────────────────────────────────────────────────
@@ -3649,9 +3764,17 @@ def import_excel_api():
     try:
         from excel_importer import import_excel
         project_id = import_excel(save_path)
-        return resp({'project_id': project_id, 'message': 'Excel匯入成功'})
     except Exception as e:
         return resp(error=f'匯入失敗: {str(e)}', status=500)
+    try:
+        audit_events.audit_import(
+            'payment_excel', file.filename,
+            {'project_id': project_id},
+            project_code=audit_events.project_code_for_id(project_id),
+        )
+    except Exception:
+        pass
+    return resp({'project_id': project_id, 'message': 'Excel匯入成功'})
 
 
 # ─── 啟動 ────────────────────────────────────────────────────────────────

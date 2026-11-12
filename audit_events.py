@@ -15,6 +15,13 @@ MODULE_LABELS = {
     'iso': 'ISO 文件',
     'sc_contract': 'MS/C 合約',
     'sc': '判項／分判商',
+    'project': '工程項目',
+    'vo': 'VO／扣款',
+    'fac': '最終結算',
+    'eng': '工程部會簽',
+    'import': '批次匯入',
+    'docs': '項目文件',
+    'system': '系統',
 }
 
 ACTION_LABELS = {
@@ -27,6 +34,8 @@ ACTION_LABELS = {
     'withdraw': '撤回計算書',
     'restore': '還原',
     'upload': '上傳',
+    'import': '匯入',
+    'sync': '同步',
 }
 
 STAFF_FIELDS = (
@@ -853,4 +862,356 @@ def audit_access_template_delete(before, detach=False):
         'access', 'delete', template_object_label(before),
         summary=f'刪除角色範本 {template_object_label(before)}'
         + ('（跟隨帳號改為自訂）' if detach else ''),
+    )
+
+
+PROJECT_FIELDS = (
+    'project_code', 'project_name_en', 'project_name_zh', 'client',
+    'main_contractor', 'contract_amount', 'status', 'person_in_charge',
+    'quotation_no', 'labour_allocation', 'project_manager', 'tender_sum',
+    'main_contract_commencement_date', 'project_completion_date', 'notes',
+)
+PROJECT_LABELS = {
+    'project_code': '項目編號',
+    'project_name_en': '項目名（英）',
+    'project_name_zh': '項目名（中）',
+    'client': '客戶',
+    'main_contractor': '總承建商',
+    'contract_amount': '承建額',
+    'status': '狀態',
+    'person_in_charge': '負責人',
+    'quotation_no': '報價編號',
+    'labour_allocation': '人工分攤',
+    'project_manager': '項目經理',
+    'tender_sum': '投標金額',
+    'main_contract_commencement_date': '開工日',
+    'project_completion_date': '完工日',
+    'notes': '備註',
+}
+
+VO_FIELDS = (
+    'record_type', 'scope', 'sc_no', 'ref_no', 'description', 'amount',
+    'invoice_no', 'quotation_no', 'remark', 'main_contract_vo_no',
+)
+VO_LABELS = {
+    'record_type': '類型',
+    'scope': '範圍',
+    'sc_no': '判項',
+    'ref_no': '編號',
+    'description': '描述',
+    'amount': '金額',
+    'invoice_no': '發票號',
+    'quotation_no': '報價編號',
+    'remark': '備註',
+    'main_contract_vo_no': '主合約 VO',
+}
+
+FAC_LABELS = {
+    'fac_remeasurement_b': 'Remeasurement (B)',
+    'fac_provisional_qty_e': 'Provisional Qty (E)',
+    'fac_provisional_sums_f': 'Provisional Sums (F)',
+    'fac_fluctuations_g': 'Fluctuations (G)',
+    'fac_variations_d_override': 'VO (D) 覆寫',
+    'fac_contra_charge_j_override': 'Contra (J) 覆寫',
+    'fac_total_paid_i_override': '已付 (I) 覆寫',
+    'fac_paid_as_at_date': '已付截至',
+    'fac_lad_rate': 'LAD 率',
+    'fac_lad_max': 'LAD 上限',
+    'fac_testing_commission_date': 'Testing 日期',
+    'fac_make_good_date': 'Make Good 日期',
+    'fac_dlp_days': 'DLP（日）',
+    'fac_dlp_expiry_date': 'DLP 到期',
+    'pc_cert_date': 'PC 證書日',
+    'mp_fac_signed_date': 'MP FAC 簽署日',
+}
+
+SETTING_LABELS = {
+    'ocr_mode': 'OCR 模式',
+    'company_name': '公司名稱',
+    'doc_library_url': '文件庫連結',
+    'gemini_api_key': 'Gemini 金鑰',
+    'quark_client_id': '夸克 Client ID',
+    'quark_client_key': '夸克 Client Key',
+    'quark_api_key': '夸克 API Key',
+}
+SENSITIVE_SETTINGS = frozenset({
+    'gemini_api_key', 'quark_client_id', 'quark_client_key', 'quark_api_key',
+})
+
+
+def vo_object_label(row):
+    rt = (row or {}).get('record_type') or 'vo'
+    name = '扣款' if rt == 'deduction' else 'VO'
+    ref = (row or {}).get('ref_no') or ''
+    sc = (row or {}).get('sc_no') or ''
+    parts = [name]
+    if ref:
+        parts.append(ref)
+    if sc and sc not in ('MC-VO',):
+        parts.append(f'判項 {sc}')
+    return ' · '.join(parts) if len(parts) > 1 else name
+
+
+def project_object_label(row):
+    code = (row or {}).get('project_code') or ''
+    name = (row or {}).get('project_name_zh') or (row or {}).get('project_name_en') or ''
+    if code and name:
+        return f'{code} · {name[:36]}'
+    return code or name or '工程項目'
+
+
+def _import_snapshot(stats):
+    if not stats or not isinstance(stats, dict):
+        return None
+    snap = {}
+    for key, label in (
+        ('inserted', '新增'), ('updated', '更新'), ('skipped', '略過'),
+        ('created', '新建'), ('linked', '配對'), ('rows', '列數'),
+        ('project_count', '項目數'), ('payment_count', '付款筆數'),
+    ):
+        if key in stats and stats[key] is not None:
+            snap[label] = str(stats[key])
+    return snap or None
+
+
+def audit_import(kind, filename, stats=None, project_code=None, extra=None):
+    kinds = {
+        'master': 'Master List',
+        'payment_excel': '地盤付款表',
+        'summary': '工程項目 Summary',
+        'portfolio_fa': '結算總表',
+        'portfolio_progress': '進行中項目表',
+        'scr_sync': 'MS/C 登記表',
+        'sync_excel': '付款狀態表同步',
+    }
+    label = kinds.get(kind, kind)
+    fname = (filename or '—').strip()
+    snap = _import_snapshot(stats) if stats else None
+    if snap is None and stats:
+        snap = {'結果': str(stats)[:200]}
+    summary = f'匯入 {label}：{fname}'
+    if extra:
+        summary += f' — {extra}'
+    record(
+        'import', 'import', label,
+        project_code=project_code,
+        summary=summary[:500],
+        snapshot=snap,
+    )
+
+
+def audit_project_create(project_id):
+    row = db.get_project(project_id)
+    if not row:
+        return
+    record(
+        'project', 'create', project_object_label(row),
+        project_code=row.get('project_code'),
+        summary=f'新增項目 {project_object_label(row)}',
+        snapshot={PROJECT_LABELS[k]: _display(k, row.get(k), PROJECT_LABELS)
+                  for k in PROJECT_FIELDS if row.get(k) not in (None, '', 0)},
+    )
+
+
+def audit_project_update(project_id, before, payload):
+    after = db.get_project(project_id)
+    if not after:
+        return
+    keys = [k for k in payload if k in PROJECT_LABELS]
+    changes = diff_dict(before, after, keys, PROJECT_LABELS)
+    if not changes:
+        return
+    record(
+        'project', 'update', project_object_label(after),
+        project_code=after.get('project_code'),
+        summary=summary_from_changes('update', project_object_label(after), changes),
+        changes=changes,
+    )
+
+
+def audit_project_delete(before):
+    if not before:
+        return
+    record(
+        'project', 'delete', project_object_label(before),
+        project_code=before.get('project_code'),
+        summary=f'刪除項目 {project_object_label(before)}',
+    )
+
+
+def audit_portfolio_sync(result):
+    summary = result if isinstance(result, str) else None
+    snap = _import_snapshot(result) if isinstance(result, dict) else None
+    if isinstance(result, dict) and not summary:
+        parts = []
+        for key in ('updated', 'created', 'projects'):
+            if result.get(key) is not None:
+                parts.append(f'{key}={result.get(key)}')
+        summary = '項目登記同步' + (f"（{', '.join(parts)}）" if parts else '')
+    record(
+        'portfolio', 'sync', '項目登記',
+        summary=summary or '從系統同步項目登記',
+        snapshot=snap,
+    )
+
+
+def audit_vo_create(record_id):
+    row = db.get_sc_vo_record(record_id)
+    if not row:
+        return
+    pcode = project_code_for_id(row.get('project_id'))
+    record(
+        'vo', 'create', vo_object_label(row),
+        project_code=pcode,
+        summary=f'新增 {vo_object_label(row)}' + (f'（{pcode}）' if pcode else ''),
+        snapshot={VO_LABELS[k]: _display(k, row.get(k), VO_LABELS) for k in VO_FIELDS
+                  if row.get(k) not in (None, '', 0)},
+    )
+
+
+def audit_vo_update(record_id, before, patch):
+    after = db.get_sc_vo_record(record_id)
+    if not after:
+        return
+    keys = [k for k in patch if k in VO_LABELS]
+    changes = diff_dict(before, after, keys, VO_LABELS)
+    if not changes:
+        return
+    pcode = project_code_for_id(after.get('project_id'))
+    record(
+        'vo', 'update', vo_object_label(after),
+        project_code=pcode,
+        summary=summary_from_changes('update', vo_object_label(after), changes),
+        changes=changes,
+    )
+
+
+def audit_vo_delete(before):
+    if not before:
+        return
+    pcode = project_code_for_id(before.get('project_id'))
+    record(
+        'vo', 'delete', vo_object_label(before),
+        project_code=pcode,
+        summary=f'刪除 {vo_object_label(before)}',
+    )
+
+
+def audit_vo_upload(record_id, att_type, filename):
+    row = db.get_sc_vo_record(record_id)
+    if not row:
+        return
+    pcode = project_code_for_id(row.get('project_id'))
+    record(
+        'vo', 'upload', vo_object_label(row),
+        project_code=pcode,
+        summary=f'上傳 {vo_object_label(row)} 附件（{att_type}）：{filename or "—"}',
+    )
+
+
+def audit_main_fac_update(project_id, before, patch):
+    after = db.get_project(project_id)
+    if not after:
+        return
+    keys = [k for k in patch if k in FAC_LABELS]
+    changes = diff_dict(before, after, keys, FAC_LABELS)
+    if not changes:
+        return
+    pcode = (after.get('project_code') or '').strip() or None
+    record(
+        'fac', 'update', f'主合約 FAC · {pcode or project_id}',
+        project_code=pcode,
+        summary=summary_from_changes('update', f'主合約 FAC（{pcode or project_id}）', changes),
+        changes=changes,
+    )
+
+
+def audit_main_fac_upload(project_id, att_type, filename):
+    pcode = project_code_for_id(project_id)
+    names = {'statement': '結算表', 'pc_cert': 'PC 證書', 'mg_cert': 'MG 證書'}
+    record(
+        'fac', 'upload', f'主合約 FAC · {pcode or project_id}',
+        project_code=pcode,
+        summary=f'上傳主合約 FAC {names.get(att_type, att_type)}：{filename or "—"}',
+    )
+
+
+def audit_eng_signoff(payload, fmt):
+    qno = (payload or {}).get('quotation_no') or (payload or {}).get('project_code') or '會簽表'
+    record(
+        'eng', 'create', str(qno)[:80],
+        summary=f'產出會簽出表（{fmt.upper()}）· {qno}',
+    )
+
+
+def audit_msc_auto_link(project_id, result):
+    if result.get('dry_run'):
+        return
+    summary = (result.get('summary') or {})
+    linked = summary.get('linked', 0)
+    pcode = project_code_for_id(project_id)
+    record(
+        'sc', 'sync', f'MS/C 自動配對 · {pcode or project_id}',
+        project_code=pcode,
+        summary=f'自動配對 MS/C：寫入 {linked} 個判項' + (f'（{pcode}）' if pcode else ''),
+        snapshot=_import_snapshot(summary),
+    )
+
+
+def audit_docs_add(row, project_id):
+    pcode = project_code_for_id(project_id)
+    cat = (row or {}).get('doc_category') or '文件'
+    name = (row or {}).get('original_filename') or (row or {}).get('file_path') or ''
+    record(
+        'docs', 'create', f'{cat} · {name[:60]}',
+        project_code=pcode,
+        summary=f'新增項目文件 {cat}：{name[:80]}',
+    )
+
+
+def audit_docs_delete(before):
+    if not before:
+        return
+    pcode = project_code_for_id(before.get('project_id'))
+    cat = before.get('doc_category') or '文件'
+    name = before.get('original_filename') or before.get('file_path') or ''
+    record(
+        'docs', 'delete', f'{cat} · {name[:60]}',
+        project_code=pcode,
+        summary=f'刪除項目文件 {cat}：{name[:80]}',
+    )
+
+
+def audit_settings_save(body):
+    changes = []
+    for key, val in (body or {}).items():
+        old = db.get_setting(key, '')
+        label = SETTING_LABELS.get(key, key)
+        if key in SENSITIVE_SETTINGS:
+            if str(val or '').strip() and str(val) != str(old or ''):
+                changes.append({
+                    'field': key, 'label': label,
+                    'old': '（已設定）' if old else '—',
+                    'new': '已更新（內容不記錄）',
+                })
+        elif _norm(old) != _norm(val):
+            changes.append({
+                'field': key, 'label': label,
+                'old': _norm(old) or '—',
+                'new': _norm(val) or '—',
+            })
+    if not changes:
+        return
+    record(
+        'system', 'update', '系統設定',
+        summary=summary_from_changes('update', '系統設定', changes),
+        changes=changes,
+    )
+
+
+def audit_system_restore(kind, detail=None):
+    kinds = {'db': '還原資料庫', 'uploads': '還原上傳檔'}
+    record(
+        'system', 'restore', kinds.get(kind, kind),
+        summary=kinds.get(kind, f'系統{kind}') + (f' — {detail}' if detail else ''),
     )

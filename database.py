@@ -851,7 +851,7 @@ def _audit_event_public(row):
     return d
 
 
-def list_audit_events(limit=200, username=None, module=None, q=None):
+def list_audit_events(limit=200, username=None, module=None, q=None, since_days=None):
     conn = get_conn()
     _migrate_audit_events(conn)
     limit = max(1, min(int(limit or 200), 500))
@@ -865,6 +865,13 @@ def list_audit_events(limit=200, username=None, module=None, q=None):
     if mod:
         clauses.append('module = ?')
         params.append(mod[:32])
+    if since_days is not None:
+        try:
+            days = max(1, min(int(since_days), 365))
+            clauses.append("created_at >= datetime('now', 'localtime', ?)")
+            params.append(f'-{days} days')
+        except (TypeError, ValueError):
+            pass
     query = (q or '').strip()
     if query:
         like = f'%{query}%'

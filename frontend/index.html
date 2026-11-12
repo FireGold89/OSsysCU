@@ -2032,7 +2032,7 @@
           <div class="card-header">
             <div>
               <div class="card-title">操作紀錄</div>
-              <div class="card-sub">業務紀錄含修改內容摘要；可篩選帳號（例 tiffany）。部署後的新操作才會有明細。</div>
+              <div class="card-sub">業務紀錄含欄位變更明細；可篩選帳號（例 tiffany）、模組與時間範圍。部署後的新操作才會有明細。</div>
             </div>
             <div class="audit-log-tabs" role="tablist">
               <button type="button" class="btn btn-secondary btn-sm audit-log-tab is-active" data-audit-mode="business" id="auditTabBusiness" onclick="ActivityLog.setMode('business')">業務紀錄</button>
@@ -2040,7 +2040,8 @@
             </div>
           </div>
           <div class="audit-log-filters" id="auditLogFilters">
-            <input type="text" class="form-input admin-input" id="auditFilterUser" placeholder="帳號" autocomplete="off" />
+            <input type="text" class="form-input admin-input" id="auditFilterUser" placeholder="帳號" autocomplete="off"
+              onkeydown="if(event.key==='Enter')ActivityLog.load()" />
             <select class="form-input admin-input" id="auditFilterModule">
               <option value="">全部模組</option>
               <option value="staff">項目負責人</option>
@@ -2052,10 +2053,30 @@
               <option value="iso">ISO 文件</option>
               <option value="sc_contract">MS/C 合約</option>
               <option value="sc">判項／分判商</option>
+              <option value="project">工程項目</option>
+              <option value="vo">VO／扣款</option>
+              <option value="fac">最終結算</option>
+              <option value="eng">工程部會簽</option>
+              <option value="import">批次匯入</option>
+              <option value="docs">項目文件</option>
+              <option value="system">系統</option>
             </select>
-            <input type="text" class="form-input admin-input" id="auditFilterQ" placeholder="搜尋摘要、對象、項目編號" autocomplete="off" />
+            <select class="form-input admin-input" id="auditFilterSince">
+              <option value="">全部時間</option>
+              <option value="7">近 7 日</option>
+              <option value="30">近 30 日</option>
+              <option value="90">近 90 日</option>
+            </select>
+            <input type="text" class="form-input admin-input" id="auditFilterQ" placeholder="搜尋摘要、對象、項目編號" autocomplete="off"
+              onkeydown="if(event.key==='Enter')ActivityLog.load()" />
             <button type="button" class="btn btn-primary btn-sm" onclick="ActivityLog.load()">搜尋</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="auditExpandAllBtn" style="display:none"
+              onclick="ActivityLog.expandAll()">展開全部明細</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="auditCollapseAllBtn" style="display:none"
+              onclick="ActivityLog.collapseAll()">收合全部</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="ActivityLog.exportCsv()">匯出 CSV</button>
           </div>
+          <div class="form-hint audit-log-meta" id="auditLogMeta" style="display:none;padding:0 4px 8px"></div>
           <div class="table-wrap">
             <table class="master-preview-table audit-log-table">
               <thead id="activityLogHead">
@@ -2064,13 +2085,14 @@
                   <th>帳號</th>
                   <th>模組</th>
                   <th>操作</th>
+                  <th>項目</th>
                   <th>對象</th>
                   <th>摘要</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="activityLogBody">
-                <tr><td colspan="7"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+                <tr><td colspan="8"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
               </tbody>
             </table>
           </div>
