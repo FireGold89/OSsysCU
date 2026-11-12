@@ -27,6 +27,7 @@ import access_control
 import database as db
 import portfolio
 import portfolio_importer
+import audit_events
 from ocr_processor import process_pdf
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='')
@@ -207,6 +208,23 @@ def admin_activity():
     except ValueError:
         limit = 200
     return resp(db.list_activity_log(limit))
+
+
+@app.route('/api/admin/audit-events', methods=['GET'])
+def admin_audit_events():
+    try:
+        limit = int(request.args.get('limit') or 200)
+    except ValueError:
+        limit = 200
+    username = (request.args.get('username') or '').strip() or None
+    module = (request.args.get('module') or '').strip() or None
+    q = (request.args.get('q') or '').strip() or None
+    rows = db.list_audit_events(limit=limit, username=username, module=module, q=q)
+    return resp({
+        'modules': audit_events.MODULE_LABELS,
+        'actions': audit_events.ACTION_LABELS,
+        'items': rows,
+    })
 
 
 def _access_user_payload(body, creating, existing=None):
@@ -716,14 +734,20 @@ def portfolio_sync_from_projects_api():
 
 @app.route('/api/portfolio/projects/<int:portfolio_id>', methods=['PUT'])
 def portfolio_update_project_api(portfolio_id):
+    payload = request.json or {}
+    before = portfolio.get_portfolio_item(portfolio_id)
     try:
         item = portfolio.update_portfolio(
-            portfolio_id, request.json or {}, actor=auth.actor_display_name(),
+            portfolio_id, payload, actor=auth.actor_display_name(),
         )
     except ValueError as e:
         msg = str(e)
         status = 404 if msg == '記錄不存在' else 400
         return resp(error=msg, status=status)
+    try:
+        audit_events.audit_portfolio_update(portfolio_id, before, payload, item)
+    except Exception:
+        pass
     return resp(item)
 
 
@@ -731,13 +755,18 @@ def portfolio_update_project_api(portfolio_id):
 def portfolio_update_sc_status_api(portfolio_id):
     try:
         body = request.json or {}
+        slots = body.get('slots') or []
         item = portfolio.update_sc_status(
-            portfolio_id, body.get('slots'), actor=auth.actor_display_name(),
+            portfolio_id, slots, actor=auth.actor_display_name(),
         )
     except ValueError as e:
         msg = str(e)
         status = 404 if msg == '記錄不存在' else 400
         return resp(error=msg, status=status)
+    try:
+        audit_events.audit_portfolio_sc_status(portfolio_id, len(slots) if isinstance(slots, list) else 0)
+    except Exception:
+        pass
     return resp(item)
 
 
@@ -1838,6 +1867,10 @@ def create_payment():
             ocr_id, project_id=data['project_id'], sc_id=data.get('sc_id'),
             payment_id=new_id, doc_type='invoice',
         )
+    try:
+        audit_events.audit_payment_create(new_id)
+    except Exception:
+        pass
     return resp({'id': new_id}, status=201)
 
 
@@ -1861,12 +1894,19 @@ def update_payment(payment_id):
         data.setdefault(f, 0)
     if not data.get('payment_type'):
         data['payment_type'] = 'normal'
+    before = db.get_payment(payment_id)
+    if not before:
+        return resp(error='記錄不存在', status=404)
     try:
         db.update_payment(payment_id, data)
     except ValueError as e:
         msg = str(e)
         status = 409 if '發票號' in msg and '已存在' in msg else 400
         return resp(error=msg, status=status)
+    try:
+        audit_events.audit_payment_update(payment_id, before, data)
+    except Exception:
+        pass
     return resp({'message': '已更新'})
 
 
@@ -1876,6 +1916,10 @@ def withdraw_interim_cert(payment_id):
         db.revoke_interim_cert(payment_id)
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_payment_message(payment_id, 'withdraw')
+    except Exception:
+        pass
     return resp({'message': '已還原至提交前'})
 
 
@@ -1885,15 +1929,26 @@ def restore_interim_cert(payment_id):
         db.restore_interim_cert(payment_id)
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_payment_message(payment_id, 'restore')
+    except Exception:
+        pass
     return resp({'message': '已還原計算書'})
 
 
 @app.route('/api/payments/<int:payment_id>', methods=['DELETE'])
 def delete_payment(payment_id):
+    before = db.get_payment(payment_id)
+    if not before:
+        return resp(error='記錄不存在', status=404)
     try:
         db.delete_payment(payment_id)
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_payment_delete(before)
+    except Exception:
+        pass
     return resp({'message': '已刪除'})
 
 
@@ -2708,32 +2763,47 @@ def create_staff():
     data = request.json or {}
     try:
         new_id = db.create_staff_member(data)
-        return resp({'id': new_id}, status=201)
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_staff_create(new_id)
+    except Exception:
+        pass
+    return resp({'id': new_id}, status=201)
 
 
 @app.route('/api/staff/<int:staff_id>', methods=['PUT'])
 def update_staff(staff_id):
     data = request.json or {}
-    if not db.get_staff_member(staff_id):
+    before = db.get_staff_member(staff_id)
+    if not before:
         return resp(error='找不到人員', status=404)
     try:
         db.update_staff_member(staff_id, data)
-        return resp(db.get_staff_member(staff_id))
     except ValueError as e:
         return resp(error=str(e), status=400)
+    after = db.get_staff_member(staff_id)
+    try:
+        audit_events.audit_staff_update(staff_id, before, after)
+    except Exception:
+        pass
+    return resp(after)
 
 
 @app.route('/api/staff/<int:staff_id>', methods=['DELETE'])
 def deactivate_staff(staff_id):
-    if not db.get_staff_member(staff_id):
+    before = db.get_staff_member(staff_id)
+    if not before:
         return resp(error='找不到人員', status=404)
     try:
         if not db.deactivate_staff_member(staff_id):
             return resp(error='找不到人員', status=404)
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_staff_deactivate(before)
+    except Exception:
+        pass
     return resp({'message': '已停用'})
 
 
@@ -2958,11 +3028,15 @@ def master_item_create():
         return resp(error='請填寫報價編號', status=400)
     try:
         row = db.create_quotation_registry(qno, data)
-        return resp(_master_quotation_row(row))
     except ValueError as e:
         return resp(error=str(e), status=400)
     except Exception as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_master_create(row)
+    except Exception:
+        pass
+    return resp(_master_quotation_row(row))
 
 
 @app.route('/api/master/item/finance', methods=['GET'])
@@ -3000,6 +3074,10 @@ def master_item_link():
         return resp(error='項目不存在', status=404)
     qno = row['quotation_no']
     db.link_quotation_to_project(qno, project_id, sync_project_code=True)
+    try:
+        audit_events.audit_master_link(row, project_id)
+    except Exception:
+        pass
     return resp({'message': '已配對項目', 'quotation_no': qno, 'project_id': project_id})
 
 
@@ -3010,6 +3088,10 @@ def master_item_unlink():
     if err:
         return err
     db.unlink_quotation_from_project(row['quotation_no'])
+    try:
+        audit_events.audit_master_unlink(row)
+    except Exception:
+        pass
     return resp({'message': '已解除項目配對'})
 
 
@@ -3021,11 +3103,16 @@ def master_item_update():
     if err:
         return err
     qno = row['quotation_no']
+    before = dict(row)
     try:
         db.update_quotation_registry(qno, data)
-        return resp(db.get_quotation_by_no(qno))
     except Exception as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_master_update(qno, before, data)
+    except Exception:
+        pass
+    return resp(db.get_quotation_by_no(qno))
 
 
 def _master_quotation_row(row):
@@ -3063,6 +3150,10 @@ def master_list_link_project_by_id(row_id):
         return resp(error='項目不存在', status=404)
     qno = row['quotation_no']
     db.link_quotation_to_project(qno, project_id, sync_project_code=True)
+    try:
+        audit_events.audit_master_link(row, project_id)
+    except Exception:
+        pass
     return resp({'message': '已配對項目', 'quotation_no': qno, 'project_id': project_id})
 
 
@@ -3072,6 +3163,10 @@ def master_list_unlink_project_by_id(row_id):
     if not row:
         return resp(error='找不到報價記錄', status=404)
     db.unlink_quotation_from_project(row['quotation_no'])
+    try:
+        audit_events.audit_master_unlink(row)
+    except Exception:
+        pass
     return resp({'message': '已解除項目配對'})
 
 
@@ -3082,11 +3177,16 @@ def master_list_update_quotation_by_id(row_id):
     if not row:
         return resp(error='找不到報價記錄', status=404)
     qno = row['quotation_no']
+    before = dict(row)
     try:
         db.update_quotation_registry(qno, data)
-        return resp(db.get_quotation_by_no(qno))
     except Exception as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_master_update(qno, before, data)
+    except Exception:
+        pass
+    return resp(db.get_quotation_by_no(qno))
 
 
 @app.route('/api/master/quotations/<path:quotation_no>', methods=['GET'])
@@ -3114,28 +3214,43 @@ def master_list_link_project(quotation_no):
         return resp(error='找不到報價記錄', status=404)
     if not db.get_project(project_id):
         return resp(error='項目不存在', status=404)
+    row = db.get_quotation_by_no(quotation_no)
     db.link_quotation_to_project(quotation_no, project_id, sync_project_code=True)
+    try:
+        audit_events.audit_master_link(row, project_id)
+    except Exception:
+        pass
     return resp({'message': '已配對項目', 'quotation_no': quotation_no, 'project_id': project_id})
 
 
 @app.route('/api/master/quotations/<path:quotation_no>/unlink', methods=['POST'])
 def master_list_unlink_project(quotation_no):
-    if not db.get_quotation_by_no(quotation_no):
+    row = db.get_quotation_by_no(quotation_no)
+    if not row:
         return resp(error='找不到報價記錄', status=404)
     db.unlink_quotation_from_project(quotation_no)
+    try:
+        audit_events.audit_master_unlink(row)
+    except Exception:
+        pass
     return resp({'message': '已解除項目配對'})
 
 
 @app.route('/api/master/quotations/<path:quotation_no>', methods=['PUT'])
 def master_list_update_quotation(quotation_no):
     data = request.json or {}
-    if not db.get_quotation_by_no(quotation_no):
+    before = db.get_quotation_by_no(quotation_no)
+    if not before:
         return resp(error='找不到報價記錄', status=404)
     try:
         db.update_quotation_registry(quotation_no, data)
-        return resp(db.get_quotation_by_no(quotation_no))
     except Exception as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_master_update(quotation_no, before, data)
+    except Exception:
+        pass
+    return resp(db.get_quotation_by_no(quotation_no))
 
 
 @app.route('/api/master/preview', methods=['POST'])

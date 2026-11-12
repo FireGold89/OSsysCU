@@ -1964,30 +1964,137 @@ const VaultEntry = {
 };
 
 const ActivityLog = {
+  mode: 'business',
+  modules: {},
+  actions: {},
+  expandedId: null,
+
+  setMode(mode) {
+    this.mode = mode === 'api' ? 'api' : 'business';
+    document.querySelectorAll('.audit-log-tab').forEach((el) => {
+      el.classList.toggle('is-active', el.dataset.auditMode === this.mode);
+    });
+    const filters = document.getElementById('auditLogFilters');
+    if (filters) filters.style.display = this.mode === 'business' ? '' : 'none';
+    this.renderHead();
+    this.load();
+  },
+
+  renderHead() {
+    const head = document.getElementById('activityLogHead');
+    if (!head) return;
+    if (this.mode === 'api') {
+      head.innerHTML = `<tr>
+        <th>時間</th><th>帳號</th><th>角色</th><th>動作</th><th>路徑</th><th>結果</th><th></th>
+      </tr>`;
+    } else {
+      head.innerHTML = `<tr>
+        <th>時間</th><th>帳號</th><th>模組</th><th>操作</th><th>對象</th><th>摘要</th><th></th>
+      </tr>`;
+    }
+  },
+
+  renderDetail(detail) {
+    if (!detail) return '<div class="form-hint">無進一步明細</div>';
+    const changes = detail.changes || [];
+    const snap = detail.snapshot || null;
+    let html = '';
+    if (changes.length) {
+      html += '<table class="audit-diff-table"><thead><tr><th>欄位</th><th>舊值</th><th>新值</th></tr></thead><tbody>';
+      html += changes.map((c) => `<tr>
+        <td>${escHtml(c.label || c.field || '')}</td>
+        <td>${escHtml(c.old ?? '—')}</td>
+        <td>${escHtml(c.new ?? '—')}</td>
+      </tr>`).join('');
+      html += '</tbody></table>';
+    }
+    if (snap && typeof snap === 'object' && Object.keys(snap).length) {
+      html += '<div class="audit-snapshot-title">記錄內容</div><dl class="audit-snapshot-dl">';
+      html += Object.entries(snap).map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${escHtml(String(v ?? '—'))}</dd>`).join('');
+      html += '</dl>';
+    }
+    return html || '<div class="form-hint">無進一步明細</div>';
+  },
+
+  toggleDetail(id) {
+    this.expandedId = this.expandedId === id ? null : id;
+    document.querySelectorAll('[data-audit-detail]').forEach((el) => {
+      const show = String(el.dataset.auditDetail) === String(this.expandedId);
+      el.style.display = show ? '' : 'none';
+    });
+  },
+
   async load() {
     const body = document.getElementById('activityLogBody');
     if (!body) return;
     if (typeof Auth !== 'undefined' && Auth.authRequired && !Auth.isAdmin()) {
-      body.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:32px">需要管理員帳號</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="padding:32px">需要管理員帳號</div></td></tr>';
       return;
     }
-    body.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>';
+    this.renderHead();
+    const colSpan = 7;
+    body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>`;
     try {
-      const rows = await api('GET', '/admin/activity?limit=200') || [];
-      if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:32px">尚無紀錄。此功能上線之後的新增、修改、刪除與上傳才會列在這裡。</div></td></tr>';
+      if (this.mode === 'api') {
+        const rows = await api('GET', '/admin/activity?limit=200') || [];
+        if (!rows.length) {
+          body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">尚無 API 紀錄。</div></td></tr>`;
+          return;
+        }
+        body.innerHTML = rows.map((r) => `<tr>
+          <td class="td-muted">${escHtml(r.created_at || '')}</td>
+          <td>${escHtml(r.username || '')}</td>
+          <td>${escHtml(Auth.roleLabel(r.role))}</td>
+          <td class="td-mono">${escHtml(r.method || '')}</td>
+          <td class="td-mono">${escHtml(r.path || '')}</td>
+          <td>${escHtml(String(r.status_code ?? ''))}</td>
+          <td></td>
+        </tr>`).join('');
         return;
       }
-      body.innerHTML = rows.map((r) => `<tr>
-        <td class="td-muted">${escHtml(r.created_at || '')}</td>
-        <td>${escHtml(r.username || '')}</td>
-        <td>${escHtml(Auth.roleLabel(r.role))}</td>
-        <td class="td-mono">${escHtml(r.method || '')}</td>
-        <td class="td-mono">${escHtml(r.path || '')}</td>
-        <td>${escHtml(String(r.status_code ?? ''))}</td>
-      </tr>`).join('');
+      const user = (document.getElementById('auditFilterUser')?.value || '').trim();
+      const mod = (document.getElementById('auditFilterModule')?.value || '').trim();
+      const q = (document.getElementById('auditFilterQ')?.value || '').trim();
+      const qs = new URLSearchParams({ limit: '200' });
+      if (user) qs.set('username', user);
+      if (mod) qs.set('module', mod);
+      if (q) qs.set('q', q);
+      const payload = await api('GET', `/admin/audit-events?${qs.toString()}`) || {};
+      this.modules = payload.modules || {};
+      this.actions = payload.actions || {};
+      const rows = payload.items || [];
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">尚無業務紀錄。部署後對負責人、付款、Master、項目登記的修改才會顯示欄位明細。</div></td></tr>`;
+        return;
+      }
+      this.expandedId = null;
+      body.innerHTML = rows.map((r) => {
+        const who = r.display_name && r.display_name !== r.username
+          ? `${r.display_name}（${r.username}）`
+          : (r.username || '');
+        const modLabel = this.modules[r.module] || r.module || '—';
+        const actLabel = this.actions[r.action] || r.action || '—';
+        const proj = r.project_code ? `<div class="form-hint">${escHtml(r.project_code)}</div>` : '';
+        const hasDetail = r.detail && ((r.detail.changes && r.detail.changes.length)
+          || (r.detail.snapshot && Object.keys(r.detail.snapshot).length));
+        const btn = hasDetail
+          ? `<button type="button" class="btn btn-secondary btn-sm" onclick="ActivityLog.toggleDetail(${r.id})">明細</button>`
+          : '';
+        const detailRow = hasDetail
+          ? `<tr data-audit-detail="${r.id}" style="display:none"><td colspan="${colSpan}"><div class="audit-detail-panel">${ActivityLog.renderDetail(r.detail)}</div></td></tr>`
+          : '';
+        return `<tr>
+          <td class="td-muted">${escHtml(r.created_at || '')}</td>
+          <td>${escHtml(who)}</td>
+          <td>${escHtml(modLabel)}</td>
+          <td>${escHtml(actLabel)}</td>
+          <td>${escHtml(r.object_label || '—')}${proj}</td>
+          <td>${escHtml(r.summary || '—')}</td>
+          <td>${btn}</td>
+        </tr>${detailRow}`;
+      }).join('');
     } catch (e) {
-      body.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:32px">${escHtml(e?.message || '載入失敗')}</div></td></tr>`;
+      body.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state" style="padding:32px">${escHtml(e?.message || '載入失敗')}</div></td></tr>`;
     }
   },
 };
@@ -2545,7 +2652,7 @@ const App = {
       'sc-contract-registry': ['分判合約編號', 'MS/C 分判工程合約編號表 · P1 PDF'],
       staff: ['項目負責人管理', 'Master List 項目負責人 · 工程項目選人'],
       settings: ['系統設定', 'OCR與系統配置'],
-      'activity-log': ['操作紀錄', '管理員查閱已登入帳號的寫入'],
+      'activity-log': ['操作紀錄', '業務修改明細與 API 寫入紀錄（可篩選帳號）'],
       'access-admin': ['帳號與權限', '新增人員並設定可看／可編輯範圍'],
       'portfolio-fac': ['N 項目結算總表', '全公司主合約及分判 FAC 狀態'],
       'portfolio-progress': ['進行中項目', 'On Progress Projects 快照'],

@@ -682,6 +682,7 @@ def _migrate_db(conn):
     _migrate_quotation_saved_flags(conn)
     _migrate_portfolio_tables(conn)
     _migrate_activity_log(conn)
+    _migrate_audit_events(conn)
     _migrate_app_users(conn)
 
 
@@ -776,6 +777,114 @@ def list_activity_log(limit=200):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def _migrate_audit_events(conn):
+    """業務操作稽核（模組、摘要、欄位 diff）。"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_events (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT,
+            display_name  TEXT,
+            role          TEXT,
+            module        TEXT,
+            action        TEXT,
+            object_label  TEXT,
+            project_code  TEXT,
+            summary       TEXT,
+            detail_json   TEXT,
+            created_at    TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audit_events_created
+        ON audit_events(created_at)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audit_events_username
+        ON audit_events(username)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audit_events_module
+        ON audit_events(module)
+    """)
+    conn.commit()
+
+
+def insert_audit_event(username, display_name, role, module, action, object_label,
+                       project_code=None, summary=None, detail_json=None):
+    conn = get_conn()
+    conn.execute(
+        """
+        INSERT INTO audit_events (
+            username, display_name, role, module, action,
+            object_label, project_code, summary, detail_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (username or '')[:80],
+            (display_name or '')[:80],
+            (role or '')[:40],
+            (module or '')[:32],
+            (action or '')[:24],
+            (object_label or '')[:200],
+            (project_code or '')[:64] or None,
+            (summary or '')[:500] or None,
+            detail_json,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _audit_event_public(row):
+    d = dict(row)
+    detail = None
+    raw = d.get('detail_json')
+    if raw:
+        try:
+            detail = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            detail = None
+    d['detail'] = detail
+    d.pop('detail_json', None)
+    return d
+
+
+def list_audit_events(limit=200, username=None, module=None, q=None):
+    conn = get_conn()
+    _migrate_audit_events(conn)
+    limit = max(1, min(int(limit or 200), 500))
+    clauses = ['1=1']
+    params = []
+    user = (username or '').strip()
+    if user:
+        clauses.append('lower(username) = lower(?)')
+        params.append(user[:80])
+    mod = (module or '').strip()
+    if mod:
+        clauses.append('module = ?')
+        params.append(mod[:32])
+    query = (q or '').strip()
+    if query:
+        like = f'%{query}%'
+        clauses.append(
+            '(summary LIKE ? OR object_label LIKE ? OR project_code LIKE ?'
+            ' OR display_name LIKE ? OR detail_json LIKE ?)'
+        )
+        params.extend([like, like, like, like, like])
+    sql = f"""
+        SELECT id, username, display_name, role, module, action,
+               object_label, project_code, summary, detail_json, created_at
+        FROM audit_events
+        WHERE {' AND '.join(clauses)}
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [_audit_event_public(r) for r in rows]
 
 
 def _migrate_app_users(conn):

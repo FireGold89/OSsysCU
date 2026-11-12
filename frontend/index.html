@@ -2030,23 +2030,42 @@
       <div class="page" id="page-activity-log">
         <div class="card">
           <div class="card-header">
-            <div class="card-title">操作紀錄</div>
-            <div class="card-sub">已登入帳號的新增／修改／刪除／上傳（此功能上線後才有紀錄）</div>
+            <div>
+              <div class="card-title">操作紀錄</div>
+              <div class="card-sub">業務紀錄含修改內容摘要；可篩選帳號（例 tiffany）。部署後的新操作才會有明細。</div>
+            </div>
+            <div class="audit-log-tabs" role="tablist">
+              <button type="button" class="btn btn-secondary btn-sm audit-log-tab is-active" data-audit-mode="business" id="auditTabBusiness" onclick="ActivityLog.setMode('business')">業務紀錄</button>
+              <button type="button" class="btn btn-secondary btn-sm audit-log-tab" data-audit-mode="api" id="auditTabApi" onclick="ActivityLog.setMode('api')">API 紀錄</button>
+            </div>
+          </div>
+          <div class="audit-log-filters" id="auditLogFilters">
+            <input type="text" class="form-input admin-input" id="auditFilterUser" placeholder="帳號" autocomplete="off" />
+            <select class="form-input admin-input" id="auditFilterModule">
+              <option value="">全部模組</option>
+              <option value="staff">項目負責人</option>
+              <option value="payment">地盤付款</option>
+              <option value="master">Master List</option>
+              <option value="portfolio">項目登記</option>
+            </select>
+            <input type="text" class="form-input admin-input" id="auditFilterQ" placeholder="搜尋摘要、對象、項目編號" autocomplete="off" />
+            <button type="button" class="btn btn-primary btn-sm" onclick="ActivityLog.load()">搜尋</button>
           </div>
           <div class="table-wrap">
-            <table class="master-preview-table">
-              <thead>
+            <table class="master-preview-table audit-log-table">
+              <thead id="activityLogHead">
                 <tr>
                   <th>時間</th>
                   <th>帳號</th>
-                  <th>角色</th>
-                  <th>動作</th>
-                  <th>路徑</th>
-                  <th>結果</th>
+                  <th>模組</th>
+                  <th>操作</th>
+                  <th>對象</th>
+                  <th>摘要</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="activityLogBody">
-                <tr><td colspan="6"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
+                <tr><td colspan="7"><div class="empty-state" style="padding:32px">載入中…</div></td></tr>
               </tbody>
             </table>
           </div>

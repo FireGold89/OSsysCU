@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261112-audit-events` · 分支 `v2/portfolio`
+
+### 變更
+- **操作紀錄**：新增業務稽核（負責人、地盤付款、Master List、項目登記），含摘要與欄位舊→新明細；可篩選帳號／模組。原 API 路徑紀錄保留在「API 紀錄」分頁。
+
 `APP_VERSION`: `v2-20261112-role-templates` · 分支 `v2/portfolio`
 
 ### 變更
