@@ -118,36 +118,36 @@
       <div class="nav-sortable" id="navSortableMain" data-nav-section="main">
         <div class="nav-item active" data-page="dashboard" draggable="false" title="項目概覽">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
-          <span class="nav-icon">📊</span><span class="nav-label">項目概覽</span>
-        </div>
+        <span class="nav-icon">📊</span><span class="nav-label">項目概覽</span>
+      </div>
         <div class="nav-item" data-page="iso-docs" draggable="false" title="ISO 文件">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
-          <span class="nav-icon">📑</span><span class="nav-label">ISO 文件</span>
-        </div>
+        <span class="nav-icon">📑</span><span class="nav-label">ISO 文件</span>
+      </div>
         <div class="nav-item" data-page="payments" draggable="false" title="分判付款登記">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
-          <span class="nav-icon">💰</span><span class="nav-label">分判付款登記</span>
-          <span class="nav-badge" id="payBadge">0</span>
-        </div>
+        <span class="nav-icon">💰</span><span class="nav-label">分判付款登記</span>
+        <span class="nav-badge" id="payBadge">0</span>
+      </div>
         <div class="nav-item" data-page="sc-vo-reg" draggable="false" title="變更以及扣款登記">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
           <span class="nav-icon">📋</span><span class="nav-label">變更以及扣款登記</span>
-        </div>
+      </div>
         <div class="nav-item" data-page="ip-period" draggable="false" title="糧期狀況">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
-          <span class="nav-icon">🏗️</span><span class="nav-label">糧期狀況</span>
-        </div>
+        <span class="nav-icon">🏗️</span><span class="nav-label">糧期狀況</span>
+      </div>
         <div class="nav-item" data-page="main-con-fac" draggable="false" title="主合約最終結算">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
           <span class="nav-icon">📑</span><span class="nav-label">主合約最終結算</span>
-        </div>
+      </div>
         <div class="nav-item" data-page="sc-fac" draggable="false" title="分判最終結算">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
-          <span class="nav-icon">📋</span><span class="nav-label">分判最終結算</span>
-        </div>
+        <span class="nav-icon">📋</span><span class="nav-label">分判最終結算</span>
+      </div>
         <div class="nav-item" data-page="reports" draggable="false" title="財務報表">
           <span class="nav-drag-handle sidebar-expand-only" aria-hidden="true">⠿</span>
-          <span class="nav-icon">📈</span><span class="nav-label">財務報表</span>
+        <span class="nav-icon">📈</span><span class="nav-label">財務報表</span>
         </div>
       </div>
 
@@ -222,10 +222,10 @@
           <span class="badge badge-warning" id="deploymentTierLabel">V2 試用環境</span>
         </div>
         <div class="topbar-display-tools">
-          <div class="theme-toggle" role="group" aria-label="主題模式">
-            <button type="button" class="theme-toggle-btn" data-theme-pick="light" title="淺色模式" aria-label="淺色模式">☀️</button>
-            <button type="button" class="theme-toggle-btn" data-theme-pick="dark" title="深色模式" aria-label="深色模式">🌙</button>
-          </div>
+        <div class="theme-toggle" role="group" aria-label="主題模式">
+          <button type="button" class="theme-toggle-btn" data-theme-pick="light" title="淺色模式" aria-label="淺色模式">☀️</button>
+          <button type="button" class="theme-toggle-btn" data-theme-pick="dark" title="深色模式" aria-label="深色模式">🌙</button>
+        </div>
           <div class="text-scale-toggle" role="group" aria-label="文字大小">
             <button type="button" class="text-scale-btn" id="textScaleDown" title="縮小文字" aria-label="縮小文字">A−</button>
             <span class="text-scale-label" id="textScaleLabel" aria-live="polite">100%</span>
@@ -1491,12 +1491,12 @@
       <div class="page" id="page-project-settlement">
         <div class="settle-page-head">
           <div class="settle-page-head__actions">
-            <button type="button" class="btn btn-secondary" onclick="Projects.backToList()">← 返回工程項目</button>
+          <button type="button" class="btn btn-secondary" onclick="Projects.backToList()">← 返回工程項目</button>
             <div class="settle-page-head__btns">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(Projects._settleProjectId, 'cover')">✏️ 編輯 Cover Page</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToMainConFac()">📑 主合約最終結算</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToScFac()">📋 分判最終結算</button>
-              <button type="button" class="btn btn-primary" onclick="Projects.saveSettlement()">💾 儲存</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.openEdit(Projects._settleProjectId, 'cover')">✏️ 編輯 Cover Page</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToMainConFac()">📑 主合約最終結算</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.goToScFac()">📋 分判最終結算</button>
+          <button type="button" class="btn btn-primary" onclick="Projects.saveSettlement()">💾 儲存</button>
             </div>
           </div>
           <div class="settle-page-head__project">
@@ -2047,6 +2047,11 @@
               <option value="payment">地盤付款</option>
               <option value="master">Master List</option>
               <option value="portfolio">項目登記</option>
+              <option value="ip">糧期</option>
+              <option value="access">帳號與權限</option>
+              <option value="iso">ISO 文件</option>
+              <option value="sc_contract">MS/C 合約</option>
+              <option value="sc">判項／分判商</option>
             </select>
             <input type="text" class="form-input admin-input" id="auditFilterQ" placeholder="搜尋摘要、對象、項目編號" autocomplete="off" />
             <button type="button" class="btn btn-primary btn-sm" onclick="ActivityLog.load()">搜尋</button>
@@ -2407,8 +2412,8 @@
             </select>
             <input type="text" class="form-input" id="fIcPreparedByCustom" placeholder="自填姓名"
               style="display:none;margin-top:6px" oninput="Payments.onIcPreparedByCustomInput()">
-          </div>
-          <div class="form-group">
+      </div>
+      <div class="form-group">
             <label for="fIcSignatureDate" class="form-label">日期</label>
             <input type="date" class="form-input" id="fIcSignatureDate">
             <div class="form-hint">預設當日；可留空，計算書內部使用列日期留空</div>
@@ -2784,7 +2789,7 @@
             <div class="proj-amt-sot-row">
               <input type="number" class="form-input proj-amt-sot-input" id="pAmt" placeholder="0" step="0.01">
               <div class="proj-amt-sot-docs proj-doc-filelist proj-iso-readonly" id="projDoc_sot_sor"></div>
-            </div>
+          </div>
           </div>
           <div class="form-group">
             <label for="pAnticipatedProfitPct" class="form-label">預計利潤率 (%)</label>
@@ -3248,14 +3253,14 @@
         </div>
         <div class="form-group">
           <label for="ipCertFileInput" class="form-label">IP Cert. 附件</label>
-          <div class="ip-receipt-attach-row">
-            <input type="file" id="ipCertFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
-              onchange="IpPeriod.onIpCertFileSelected(event)">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickIpCertFile()">📄 上傳 IP Cert.</button>
-          </div>
-          <div id="ipCertAttachList" class="ip-receipt-attach-list"></div>
-          <div class="form-hint" id="ipCertAttachHint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</div>
+        <div class="ip-receipt-attach-row">
+          <input type="file" id="ipCertFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+            onchange="IpPeriod.onIpCertFileSelected(event)">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="IpPeriod.pickIpCertFile()">📄 上傳 IP Cert.</button>
         </div>
+        <div id="ipCertAttachList" class="ip-receipt-attach-list"></div>
+          <div class="form-hint" id="ipCertAttachHint">PDF / PNG / JPG · 新增記錄需先儲存再上傳</div>
+      </div>
       </div>
       <div class="form-row">
         <div class="form-group ip-col-frozen-hidden">
@@ -3273,15 +3278,15 @@
           <div class="form-label">收款記錄（支票／過數）</div>
           <button type="button" class="btn-ip-receipt-add" onclick="IpPeriod.addReceiptRow()"
             title="新增一張支票／過數" aria-label="新增收款記錄">+</button>
-        </div>
+          </div>
         <div id="ipReceiptRowsList"></div>
         <div class="ip-bank-dropdown ip-bank-dropdown-shared" id="ipReceiptBankDropdown" hidden>
-          <input type="text" class="form-input ip-bank-search" id="ipReceiptBankSearch"
-            placeholder="搜尋代碼或銀行名稱…" oninput="IpPeriod.filterBankSelect()" autocomplete="off">
-          <ul class="ip-bank-list" id="ipReceiptBankList" role="listbox"></ul>
-        </div>
-        <input type="file" id="ipReceiptFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
-          onchange="IpPeriod.onReceiptFileSelected(event)">
+                <input type="text" class="form-input ip-bank-search" id="ipReceiptBankSearch"
+                  placeholder="搜尋代碼或銀行名稱…" oninput="IpPeriod.filterBankSelect()" autocomplete="off">
+                <ul class="ip-bank-list" id="ipReceiptBankList" role="listbox"></ul>
+              </div>
+          <input type="file" id="ipReceiptFileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none"
+            onchange="IpPeriod.onReceiptFileSelected(event)">
       </div>
       <div id="ipPctHint" class="form-hint" style="margin-top:4px"></div>
     </div>

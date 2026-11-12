@@ -296,6 +296,10 @@ def admin_role_templates_create():
         row, _updated = db.save_role_template(data)
     except ValueError as exc:
         return resp(error=str(exc), status=400)
+    try:
+        audit_events.audit_access_template_create(row)
+    except Exception:
+        pass
     return resp(row)
 
 
@@ -304,6 +308,7 @@ def admin_role_templates_update(template_id):
     data, err = _role_template_payload(request.json or {})
     if err:
         return resp(error=err, status=400)
+    before = db.get_role_template(template_id)
     try:
         row, updated = db.save_role_template(data, template_id=template_id)
     except ValueError as exc:
@@ -311,6 +316,10 @@ def admin_role_templates_update(template_id):
     if not row:
         return resp(error='找不到範本', status=404)
     row['updated_users'] = updated
+    try:
+        audit_events.audit_access_template_update(before, row, followers=updated)
+    except Exception:
+        pass
     return resp(row)
 
 
@@ -323,18 +332,27 @@ def admin_role_templates_restore(template_id):
     if not row:
         return resp(error='找不到可還原的內建範本', status=404)
     row['updated_users'] = updated
+    try:
+        audit_events.audit_access_template_restore(row, followers=updated)
+    except Exception:
+        pass
     return resp(row)
 
 
 @app.route('/api/admin/role-templates/<template_id>', methods=['DELETE'])
 def admin_role_templates_delete(template_id):
     detach = (request.args.get('detach') or '').strip().lower() in ('1', 'true', 'yes')
+    before = db.get_role_template(template_id)
     try:
         row = db.delete_role_template(template_id, detach=detach)
     except ValueError as exc:
         return resp(error=str(exc), status=400)
     if not row:
         return resp(error='找不到範本', status=404)
+    try:
+        audit_events.audit_access_template_delete(before, detach=detach)
+    except Exception:
+        pass
     return resp({'deleted': template_id})
 
 
@@ -345,10 +363,15 @@ def admin_users_list():
 
 @app.route('/api/admin/users', methods=['POST'])
 def admin_users_create():
-    data, err = _access_user_payload(request.json or {}, creating=True)
+    body = request.json or {}
+    data, err = _access_user_payload(body, creating=True)
     if err:
         return resp(error=err, status=400)
     row = db.save_app_user(data)
+    try:
+        audit_events.audit_access_user_create(row, bool((body.get('password') or '').strip()))
+    except Exception:
+        pass
     return resp(row)
 
 
@@ -357,7 +380,8 @@ def admin_users_update(user_id):
     existing = db.get_app_user(user_id)
     if not existing:
         return resp(error='找不到帳號', status=404)
-    data, err = _access_user_payload(request.json or {}, creating=False, existing=existing)
+    body = request.json or {}
+    data, err = _access_user_payload(body, creating=False, existing=existing)
     if err:
         return resp(error=err, status=400)
     actor = auth.actor_for_session() or {}
@@ -366,7 +390,12 @@ def admin_users_update(user_id):
     )
     if demote and db.count_active_admins() <= 1:
         return resp(error='請先建立另一位啟用中的管理員，再調整這位管理員', status=400)
+    pwd_changed = bool((body.get('password') or '').strip())
     row = db.save_app_user(data, user_id=user_id)
+    try:
+        audit_events.audit_access_user_update(existing, row, pwd_changed)
+    except Exception:
+        pass
     return resp(row)
 
 
@@ -381,6 +410,10 @@ def admin_users_delete(user_id):
     if existing.get('role') == 'admin' and existing.get('is_active') and db.count_active_admins() <= 1:
         return resp(error='請先建立另一位啟用中的管理員', status=400)
     db.delete_app_user(user_id)
+    try:
+        audit_events.audit_access_user_delete(existing)
+    except Exception:
+        pass
     return resp({'deleted': user_id})
 
 
@@ -1205,6 +1238,8 @@ def sc_contract_registry_options_api():
 def create_sc_contract_registry_api():
     from sc_contract_ref import invalidate_cache
     data = request.json or {}
+    sub_no = (data.get('sub_contract_no') or '').strip()
+    before = db.get_sc_contract_registry_row(sub_no) if sub_no else None
     try:
         row = db.save_sc_contract_registry_row(data)
     except ValueError as e:
@@ -1212,6 +1247,10 @@ def create_sc_contract_registry_api():
     except Exception as e:
         return resp(error=f'儲存失敗: {e}', status=500)
     invalidate_cache()
+    try:
+        audit_events.audit_scr_save(before, row, created=not before)
+    except Exception:
+        pass
     return resp(row, status=201)
 
 
@@ -1219,19 +1258,29 @@ def create_sc_contract_registry_api():
 def update_sc_contract_registry_api(sub_contract_no):
     data = request.json or {}
     data['sub_contract_no'] = sub_contract_no
+    before = db.get_sc_contract_registry_row(sub_contract_no)
     try:
         row = db.save_sc_contract_registry_row(data)
     except ValueError as e:
         return resp(error=str(e), status=400)
     except Exception as e:
         return resp(error=f'更新失敗: {e}', status=500)
+    try:
+        audit_events.audit_scr_save(before, row, created=not before)
+    except Exception:
+        pass
     return resp(row)
 
 
 @app.route('/api/sc-contract-registry/<path:sub_contract_no>', methods=['DELETE'])
 def delete_sc_contract_registry_api(sub_contract_no):
+    before = db.get_sc_contract_registry_row(sub_contract_no)
     if not db.delete_sc_contract_registry_row(sub_contract_no):
         return resp(error='記錄不存在', status=404)
+    try:
+        audit_events.audit_scr_delete(before)
+    except Exception:
+        pass
     return resp({'deleted': sub_contract_no})
 
 
@@ -1606,6 +1655,12 @@ def upsert_iso_document(project_id):
         )
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_iso_upload(
+            row, project_id, data.get('original_filename') or file_path,
+        )
+    except Exception:
+        pass
     return resp(row, status=201)
 
 
@@ -1643,6 +1698,10 @@ def upload_iso_document(project_id):
             pass
         return resp(error=str(e), status=400)
 
+    try:
+        audit_events.audit_iso_upload(row, project_id, file.filename)
+    except Exception:
+        pass
     return resp(row)
 
 
@@ -1670,6 +1729,10 @@ def iso_document_link(project_id):
         )
     except ValueError as e:
         return resp(error=str(e), status=400)
+    try:
+        audit_events.audit_iso_link(row, project_id, external_url)
+    except Exception:
+        pass
     return resp(row, status=201)
 
 
@@ -1700,16 +1763,27 @@ def delete_iso_document(doc_id):
         and file_path
         and _remove_iso_upload_file(file_path)
     )
+    try:
+        audit_events.audit_iso_delete(existing, existing.get('project_id'))
+    except Exception:
+        pass
     return resp({'message': '已刪除', 'file_removed': file_removed})
 
 
 @app.route('/api/projects/<int:project_id>/iso-meta', methods=['PATCH'])
 def patch_iso_meta(project_id):
-    if not db.get_project(project_id):
+    proj = db.get_project(project_id)
+    if not proj:
         return resp(error='項目不存在', status=404)
     data = request.json or {}
     if 'supplemental_contract_amount' in data:
-        db.update_iso_supplemental_amount(project_id, data.get('supplemental_contract_amount'))
+        old_amt = proj.get('supplemental_contract_amount')
+        new_amt = data.get('supplemental_contract_amount')
+        db.update_iso_supplemental_amount(project_id, new_amt)
+        try:
+            audit_events.audit_iso_meta_amount(project_id, old_amt, new_amt)
+        except Exception:
+            pass
     board = db.get_iso_documents_board(project_id)
     return resp(board)
 
@@ -1764,10 +1838,16 @@ def create_subcontractor():
     data.setdefault('parent_sc_no', derive_parent_sc_no(data.get('sc_no')))
     ocr_id = data.pop('ocr_id', None)
     data['ocr_id'] = ocr_id
+    sc_before = db.get_subcontractor_by_sc_no(data['project_id'], data['sc_no'])
     sc_id = db.upsert_subcontractor(data)
     db.merge_registry_from_subcontractor(data['project_id'], data)
     if ocr_id:
         db.link_ocr_extraction(ocr_id, project_id=data['project_id'], sc_id=sc_id, doc_type='quotation')
+    try:
+        sc_after = db.get_subcontractor(sc_id)
+        audit_events.audit_sc_upsert(sc_id, sc_before, sc_after, created=not sc_before)
+    except Exception:
+        pass
     return resp({
         'id': sc_id,
         'sub_contract_no': data.get('sub_contract_no'),
@@ -1825,7 +1905,14 @@ def upload_sc_quotation_pdf(sc_id):
 
 @app.route('/api/subcontractors/<int:sc_id>', methods=['DELETE'])
 def delete_subcontractor(sc_id):
+    before = db.get_subcontractor(sc_id)
+    if not before:
+        return resp(error='合同項目不存在', status=404)
     db.delete_subcontractor(sc_id)
+    try:
+        audit_events.audit_sc_delete(before)
+    except Exception:
+        pass
     return resp({'message': '已刪除'})
 
 
@@ -2427,9 +2514,14 @@ def ip_sc_drilldown(project_id):
 @app.route('/api/projects/<int:project_id>/interim-payments/meta', methods=['PUT'])
 def update_ip_meta(project_id):
     data = request.json or {}
-    if not db.get_project(project_id):
+    proj = db.get_project(project_id)
+    if not proj:
         return resp(error='項目不存在', status=404)
     db.update_ip_period_meta(project_id, data)
+    try:
+        audit_events.audit_ip_meta_update(project_id, proj, data)
+    except Exception:
+        pass
     return resp(db.get_ip_period_summary(project_id))
 
 
@@ -2448,6 +2540,10 @@ def create_interim_payment():
         data['receipt_records'] = None
     data.setdefault('seq_no', 0)
     ip_id = db.upsert_interim_payment(data)
+    try:
+        audit_events.audit_ip_create(ip_id)
+    except Exception:
+        pass
     return resp({'id': ip_id, 'summary': db.get_ip_period_summary(data['project_id'])}, status=201)
 
 
@@ -2478,7 +2574,12 @@ def update_interim_payment(ip_id):
             data[f] = existing.get(f)
     if 'receipt_records' not in data:
         data['receipt_records'] = existing.get('receipt_records')
+    before = dict(existing)
     db.upsert_interim_payment(data)
+    try:
+        audit_events.audit_ip_update(ip_id, before, data)
+    except Exception:
+        pass
     return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
 
 
@@ -2506,6 +2607,10 @@ def upload_ip_receipt_attachment(ip_id):
     except (TypeError, ValueError):
         record_index = 0
     db.set_ip_receipt_attachment(ip_id, rel, file.filename, record_index=record_index)
+    try:
+        audit_events.audit_ip_attachment(ip_id, 'receipt', file.filename)
+    except Exception:
+        pass
     row = db.get_interim_payment(ip_id)
     rec = (row.get('receipt_records') or [{}])[record_index] if row else {}
     return resp({
@@ -2534,6 +2639,10 @@ def delete_ip_receipt_attachment(ip_id):
                 os.remove(full)
             except OSError:
                 pass
+    try:
+        audit_events.audit_ip_attachment_removed(ip_id, '收款')
+    except Exception:
+        pass
     return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
 
 
@@ -2564,6 +2673,10 @@ def upload_ip_application_attachment(ip_id):
             except OSError:
                 pass
     db.set_ip_application_attachment(ip_id, rel, file.filename)
+    try:
+        audit_events.audit_ip_attachment(ip_id, 'application', file.filename)
+    except Exception:
+        pass
     return resp({
         'ip_application_attachment': rel,
         'ip_application_attachment_name': file.filename,
@@ -2584,6 +2697,10 @@ def delete_ip_application_attachment(ip_id):
                 os.remove(full)
             except OSError:
                 pass
+    try:
+        audit_events.audit_ip_attachment_removed(ip_id, 'IP Application')
+    except Exception:
+        pass
     return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
 
 
@@ -2606,6 +2723,10 @@ def upload_ip_cert_attachment(ip_id):
         'ip', file, project_code=code, detail_slug=f'IP{ip_no}_cert',
     )
     db.set_ip_cert_attachment(ip_id, rel, file.filename)
+    try:
+        audit_events.audit_ip_attachment(ip_id, 'cert', file.filename)
+    except Exception:
+        pass
     return resp({
         'ip_cert_attachment': rel,
         'ip_cert_attachment_name': file.filename,
@@ -2626,14 +2747,23 @@ def delete_ip_cert_attachment(ip_id):
                 os.remove(full)
             except OSError:
                 pass
+    try:
+        audit_events.audit_ip_attachment_removed(ip_id, 'IP Cert.')
+    except Exception:
+        pass
     return resp({'summary': db.get_ip_period_summary(existing['project_id'])})
 
 
 @app.route('/api/interim-payments/<int:ip_id>', methods=['DELETE'])
 def delete_interim_payment_api(ip_id):
+    before = db.get_interim_payment(ip_id)
     project_id = db.delete_interim_payment(ip_id)
     if not project_id:
         return resp(error='糧期記錄不存在', status=404)
+    try:
+        audit_events.audit_ip_delete(before)
+    except Exception:
+        pass
     return resp({'summary': db.get_ip_period_summary(project_id)})
 
 

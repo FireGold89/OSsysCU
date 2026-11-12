@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261112-audit-phase2` · 分支 `v2/portfolio`
+
+### 變更
+- **操作紀錄（第二階段）**：業務稽核擴至糧期、帳號與角色範本、ISO 上傳／刪除、MS/C 合約登記、判項／分判商；權限矩陣與欄位變更可展開明細。
+
 `APP_VERSION`: `v2-20261112-audit-events` · 分支 `v2/portfolio`
 
 ### 變更
