@@ -136,6 +136,14 @@ def _build_registry_row(
         return None
     if not project_code and not _is_legacy_contract_no(sub_contract_no):
         return None
+    parsed_amount, margin_note = _parse_registry_amount(amount)
+    remark_final = _cell_str(remark)
+    if margin_note:
+        if remark_final:
+            if margin_note not in remark_final:
+                remark_final = f'{margin_note}\n{remark_final}'
+        else:
+            remark_final = margin_note
     return {
         'sub_contract_no': sub_contract_no,
         'legacy_contract_no': _cell_str(legacy_contract_no),
@@ -145,14 +153,14 @@ def _build_registry_row(
         'project_core': _project_core(project_code) if project_code else None,
         'person_in_charge': _cell_str(person_in_charge),
         'person_code': extract_person_code_from_ms_c(sub_contract_no),
-        'amount': _parse_amount(amount),
+        'amount': parsed_amount,
         'countersign': _cell_str(countersign),
         'partner': _cell_str(partner),
         'tender_minutes': _cell_str(tender_minutes),
         'final_account': _cell_str(final_account),
         'final_account_statement': _cell_str(final_account_statement),
         'iso_flag': _cell_str(iso_flag),
-        'remark': _cell_str(remark),
+        'remark': remark_final,
         'sheet': _cell_str(sheet),
         'source_file': _cell_str(source_file),
     }
@@ -208,19 +216,49 @@ def _find_ref_workbook() -> str | None:
     return candidates[0]
 
 
-def _parse_amount(val) -> float:
+_MARGIN_AMOUNT_RE = re.compile(
+    r'[%％]|[ABC類][單单]\s*[:：]|預計.{0,6}總額|柯打總額',
+    re.IGNORECASE,
+)
+_SCHEME_AMOUNT_RE = re.compile(r'方案\s*[一二三四五六七八九十0-9]', re.IGNORECASE)
+
+
+def _parse_registry_amount(val) -> tuple[float, str | None]:
+    """
+    分判合約合額欄：港元承判額 vs 利潤率／B單、CB單／多方案備註。
+    回傳 (港元金額, 備註)；備註寫入 sc_contract_registry.remark。
+    含「方案一／二…」時不擇一入帳，避免誤用未中標方案金額。
+    """
     if val is None or val == '':
-        return 0.0
+        return 0.0, None
     if isinstance(val, (int, float)):
-        return float(val)
-    s = str(val).strip().replace(',', '')
-    m = re.search(r'[\d.]+', s)
-    if not m:
-        return 0.0
-    try:
-        return float(m.group(0))
-    except ValueError:
-        return 0.0
+        f = float(val)
+        if f != 0 and -1.0 <= f <= 1.0:
+            pct = f * 100.0
+            note = f'{pct:.4g}%（合額欄為比例，非港元承判額）'
+            return 0.0, note
+        return f, None
+    s = str(val).strip()
+    if not s:
+        return 0.0, None
+    if _SCHEME_AMOUNT_RE.search(s):
+        return 0.0, s
+    if _MARGIN_AMOUNT_RE.search(s):
+        return 0.0, s
+    s_num = s.replace(',', '')
+    if re.fullmatch(r'-?[\d.]+', s_num):
+        try:
+            return float(s_num), None
+        except ValueError:
+            return 0.0, None
+    if re.search(r'[\d.]+', s):
+        return 0.0, s
+    return 0.0, None
+
+
+def _parse_amount(val) -> float:
+    amount, _note = _parse_registry_amount(val)
+    return amount
 
 
 def _parse_legacy_row(row, sheet) -> dict | None:

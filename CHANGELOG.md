@@ -4,11 +4,14 @@
 
 ## [未發布]
 
-`APP_VERSION`: `v2-20261118-master-link-guard` · 分支 `v2/portfolio`
+`APP_VERSION`: `v2-20261118-scr-amount-guard` · 分支 `v2/portfolio`
 
 ### 變更
+- **MS/C 登記冊合額**：Ref 同步辨識 B／CB 單 %、比例小數、**方案一／二** 等備註，不當港元；全文進備註。項目概覽 B 項金額為 0 時顯示備註；登記冊列表合額欄同步。頁面說明：G 欄填已定標港元，多方案／% 放 Remark。
 - **Master 自動配對**：預覽全表／略過表、匯出預覽 CSV、UI「預覽→寫入資料庫」；核心編號須屋苑與項目名相符且不覆寫 `project_code`；寫入後記業務操作紀錄。
 - **備份**：`backup_release` 優先 `_data`、可 `-IncludeProduction` 拉 mossys 庫與 uploads。
+
+`APP_VERSION`: `v2-20261118-master-link-guard` · 分支 `v2/portfolio`
 
 `APP_VERSION`: `v2-20261112-audit-phase3` · 分支 `v2/portfolio`
 

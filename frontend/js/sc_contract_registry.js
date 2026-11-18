@@ -84,6 +84,15 @@ const ScContractRegistry = {
     </button>`;
   },
 
+  _fmtAmount(r) {
+    const a = parseFloat(r.amount);
+    const hasAmt = r.amount != null && r.amount !== '' && !Number.isNaN(a) && a !== 0;
+    if (hasAmt) return fmt(r.amount);
+    const rm = (r.remark || '').trim();
+    if (rm) return this._shortText(rm, 36);
+    return '—';
+  },
+
   _shortText(v, max = 48) {
     const s = (v || '').trim();
     if (!s) return '<span class="text-muted">—</span>';
@@ -377,7 +386,7 @@ const ScContractRegistry = {
         <td class="td-muted scr-col-works" data-col="works"><div class="cell-ellipsis" title="${this._esc(r.works || '')}">${this._esc(r.works || '—')}</div></td>
         <td class="td-mono scr-col-proj" data-col="proj"><div class="cell-clip" title="${this._esc(r.project_code || '')}">${this._esc(r.project_code || '—')}</div></td>
         <td class="scr-col-person" data-col="person"><div class="cell-clip" title="${this._esc(person + personHint)}">${this._esc(person || personHint || '—')}${person && personHint ? `<span class="td-muted">${this._esc(personHint)}</span>` : ''}</div></td>
-        <td class="td-amount scr-col-amt" data-col="amt">${fmt(r.amount)}</td>
+        <td class="td-amount scr-col-amt scr-amt-maybe-note" data-col="amt">${this._fmtAmount(r)}</td>
         <td class="scr-col-flag" data-col="countersign">${this._flagCell(r.countersign)}</td>
         <td class="scr-col-flag" data-col="partner">${this._flagCell(r.partner)}</td>
         <td class="scr-col-flag" data-col="tender">${this._flagCell(r.tender_minutes)}</td>

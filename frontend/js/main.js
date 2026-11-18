@@ -849,9 +849,14 @@ function updateDashIpTotals(ip) {
 
 function _calcDetailLine(label, amount, opts = {}) {
   const muted = opts.muted !== false;
-  const amt = amount != null && amount !== ''
-    ? `<span class="calc-inline-amt ${muted ? 'calc-inline-amt-muted' : ''}">${fmtAcct(amount)}</span>`
-    : '';
+  let amt = '';
+  if (opts.margin_note) {
+    const note = String(opts.margin_note);
+    const short = note.length > 72 ? `${note.slice(0, 72)}…` : note;
+    amt = `<span class="calc-inline-amt calc-margin-note" title="${escHtml(note)}">${escHtml(short)}</span>`;
+  } else if (amount != null && amount !== '') {
+    amt = `<span class="calc-inline-amt ${muted ? 'calc-inline-amt-muted' : ''}">${fmtAcct(amount)}</span>`;
+  }
   return `<div class="calc-detail-line ${opts.vo ? 'calc-vo-line' : ''}"><span class="calc-detail-text">${label}</span>${amt}</div>`;
 }
 
@@ -879,7 +884,11 @@ function contractCalcTableHtml(calc) {
         : '';
       const headLabel = `<strong>(${g.seq}) ${escHtml(g.label || '—')}</strong> ${ms}`;
       const headAmt = (g.vo_lines || []).length ? g.base_amount : g.amount;
-      let block = _calcDetailLine(headLabel, headAmt, { muted: false, vo: false });
+      let block = _calcDetailLine(headLabel, headAmt, {
+        muted: false,
+        vo: false,
+        margin_note: g.margin_note && !headAmt ? g.margin_note : null,
+      });
       (g.vo_lines || []).forEach((vo) => {
         block += _calcDetailLine(escHtml(vo.label || 'VO'), vo.amount || 0, { vo: true });
       });
@@ -897,7 +906,10 @@ function contractCalcTableHtml(calc) {
     if (lines.length) {
       const detailBlocks = lines.map((ln) => {
         const prefix = ln.kind === 'vo' ? '' : `(${ln.seq}) `;
-        return _calcDetailLine(`${prefix}${escHtml(ln.label || '—')}`, ln.amount, { vo: ln.kind === 'vo' });
+        return _calcDetailLine(`${prefix}${escHtml(ln.label || '—')}`, ln.amount, {
+          vo: ln.kind === 'vo',
+          margin_note: ln.kind === 'sc' ? ln.margin_note : null,
+        });
       }).join('');
       subDetail = `
         <tr class="calc-sub-block-row">

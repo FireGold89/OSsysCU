@@ -6806,7 +6806,7 @@ def build_contract_calc(conn, project_id, proj):
     if keys:
         ph = ','.join('?' * len(keys))
         reg_rows = conn.execute(
-            f"""SELECT sub_contract_no, company, works, amount
+            f"""SELECT sub_contract_no, company, works, amount, remark
                 FROM sc_contract_registry
                 WHERE project_core IN ({ph})
                 ORDER BY sub_contract_no""",
@@ -6902,6 +6902,11 @@ def build_contract_calc(conn, project_id, proj):
         else:
             label = ms or '—'
         amt = float(reg['amount'] or 0)
+        margin_note = None
+        if amt == 0:
+            rm = (reg.get('remark') or '').strip()
+            if rm:
+                margin_note = rm
         sub_total_b += amt
         subcontract_groups.append({
             'seq': seq,
@@ -6911,6 +6916,7 @@ def build_contract_calc(conn, project_id, proj):
             'base_amount': amt,
             'vo_lines': [],
             'amount': amt,
+            'margin_note': margin_note,
         })
 
     subcontract_lines = []
@@ -6921,6 +6927,7 @@ def build_contract_calc(conn, project_id, proj):
             'sub_contract_no': g.get('sub_contract_no') or '',
             'amount': g['amount'],
             'kind': 'sc',
+            'margin_note': g.get('margin_note'),
         })
         for vo in g.get('vo_lines') or []:
             subcontract_lines.append({
