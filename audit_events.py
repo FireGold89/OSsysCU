@@ -403,6 +403,35 @@ def audit_master_unlink(row):
     )
 
 
+def audit_master_auto_link(result):
+    if not result or result.get('dry_run'):
+        return
+    year = result.get('source_year')
+    scope = f'{year} 年' if year else '全部年份'
+    linked = int(result.get('linked') or 0)
+    scanned = result.get('scanned')
+    skipped = result.get('skipped_count')
+    samples = []
+    for item in (result.get('matched') or [])[:12]:
+        samples.append(
+            f"{item.get('quotation_no')} → {item.get('project_code') or item.get('project_id')}"
+            f"（{item.get('reason_label') or item.get('reason')}）"
+        )
+    record(
+        'master', 'sync', 'Master 自動配對',
+        summary=f'自動配對 {linked} 筆（{scope}；掃描 {scanned}、略過 {skipped}）',
+        detail={
+            'snapshot': {
+                'linked': linked,
+                'scanned': scanned,
+                'skipped_count': skipped,
+                'source_year': year,
+                '範例': '；'.join(samples) if samples else '—',
+            },
+        },
+    )
+
+
 def audit_portfolio_update(portfolio_id, before, payload, after):
     fields = [k for k in payload if k in PORTFOLIO_LABELS]
     changes = diff_dict(before, after, fields, PORTFOLIO_LABELS)

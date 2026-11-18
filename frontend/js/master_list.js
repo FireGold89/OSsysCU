@@ -569,15 +569,15 @@ const MasterList = {
     scopeEl.textContent = data.source_year
       ? `範圍：${data.source_year} 年未配對報價／標書`
       : '範圍：全部年份未配對報價／標書';
-    const rows = data.matched_sample || [];
+    const rows = (data.matched && data.matched.length)
+      ? data.matched
+      : (data.matched_sample || []);
     const tableEl = document.getElementById('masterAutoLinkTable');
     if (!rows.length) {
       tableEl.innerHTML = '<p class="form-hint" style="padding:12px">找不到可自動配對的項目。</p>';
     } else {
-      const more = (data.matched_count || 0) > rows.length
-        ? `<p class="form-hint" style="margin-top:8px">僅顯示前 ${rows.length} 筆，共 ${data.matched_count} 筆可配對。</p>`
-        : '';
-      tableEl.innerHTML = `${more}<div class="table-wrap" style="max-height:320px;overflow:auto"><table class="master-preview-table"><thead><tr>
+      tableEl.innerHTML = `<div class="form-hint" style="margin-bottom:8px">可配對 ${data.matched_count ?? rows.length} 筆（預覽，尚未寫入）</div>
+      <div class="table-wrap" style="max-height:320px;overflow:auto"><table class="master-preview-table"><thead><tr>
         <th>報價編號</th><th>屋苑</th><th>配對項目</th><th>比對方式</th>
       </tr></thead><tbody>${rows.map(r => `<tr>
         <td>${escHtml(r.quotation_no)}</td>
@@ -587,22 +587,69 @@ const MasterList = {
       </tr>`).join('')}</tbody></table></div>`;
     }
     const skipHint = document.getElementById('masterAutoLinkSkippedHint');
+    const skipTable = document.getElementById('masterAutoLinkSkippedTable');
+    const skipped = (data.skipped && data.skipped.length)
+      ? data.skipped
+      : (data.skipped_sample || []);
     if (data.skipped_count > 0) {
       skipHint.style.display = '';
-      const samples = (data.skipped_sample || []).slice(0, 5).map(s =>
-        `${s.quotation_no}（${s.reason_label || s.reason}）`,
-      ).join('、');
-      skipHint.textContent = samples
-        ? `略過 ${data.skipped_count} 筆，例如：${samples}${data.skipped_count > 5 ? '…' : ''}`
-        : `略過 ${data.skipped_count} 筆（找不到唯一相符項目）`;
+      skipHint.textContent = `略過 ${data.skipped_count} 筆（見下表）`;
+      if (skipTable && skipped.length) {
+        skipTable.style.display = '';
+        skipTable.innerHTML = `<div class="section-title" style="margin-top:12px;font-size:13px">略過明細</div>
+          <div class="table-wrap" style="max-height:200px;overflow:auto"><table class="master-preview-table"><thead><tr>
+            <th>報價編號</th><th>屋苑</th><th>原因</th>
+          </tr></thead><tbody>${skipped.map(s => `<tr>
+            <td>${escHtml(s.quotation_no)}</td>
+            <td>${escHtml(s.site_name || '—')}</td>
+            <td>${escHtml(s.reason_label || s.reason || '—')}</td>
+          </tr>`).join('')}</tbody></table></div>`;
+      } else if (skipTable) skipTable.style.display = 'none';
     } else {
       skipHint.style.display = 'none';
+      if (skipTable) {
+        skipTable.style.display = 'none';
+        skipTable.innerHTML = '';
+      }
     }
+    const exportBtn = document.getElementById('masterAutoLinkExportBtn');
+    if (exportBtn) exportBtn.disabled = !(rows.length || skipped.length);
     const btn = document.getElementById('masterAutoLinkConfirmBtn');
     btn.disabled = !(data.matched_count > 0);
     btn.textContent = data.matched_count > 0
-      ? `確認配對 ${data.matched_count} 筆`
+      ? `寫入資料庫（${data.matched_count} 筆）`
       : '無可配對項目';
+  },
+
+  exportAutoLinkPreview() {
+    const data = this._autoLinkPreview;
+    if (!data) {
+      toast('請先開啟預覽', 'info');
+      return;
+    }
+    const esc = (v) => {
+      const s = String(v ?? '').replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = [['類型', '報價編號', '屋苑', '項目', '項目名稱', '比對方式'].join(',')];
+    (data.matched || []).forEach((r) => {
+      lines.push(['可配對', r.quotation_no, r.site_name, r.project_code, r.project_name,
+        r.reason_label || r.reason].map(esc).join(','));
+    });
+    (data.skipped || []).forEach((r) => {
+      lines.push(['略過', r.quotation_no, r.site_name, r.hint_project || '',
+        '', r.reason_label || r.reason].map(esc).join(','));
+    });
+    if (lines.length < 2) {
+      toast('沒有可匯出的預覽列', 'info');
+      return;
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `master-auto-link-preview-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   },
 
   closeAutoLinkModal() {
@@ -616,7 +663,7 @@ const MasterList = {
       toast('沒有可配對的項目', 'warning');
       return;
     }
-    if (!confirm(`確定自動配對 ${preview.matched_count} 筆 Master List 至工程項目？`)) return;
+    if (!confirm(`確定將 ${preview.matched_count} 筆 Master List 寫入配對？（請先核對預覽表）`)) return;
     const btn = document.getElementById('masterAutoLinkConfirmBtn');
     btn.disabled = true;
     btn.textContent = '配對中…';
@@ -630,7 +677,7 @@ const MasterList = {
     } catch (e) {
       toast(e?.message || '配對失敗', 'error');
       btn.disabled = false;
-      btn.textContent = `確認配對 ${preview.matched_count} 筆`;
+      btn.textContent = `寫入資料庫（${preview.matched_count} 筆）`;
     }
   },
 

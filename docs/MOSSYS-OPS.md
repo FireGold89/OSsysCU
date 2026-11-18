@@ -46,8 +46,19 @@ sudo docker run -d --name ossys --restart unless-stopped \
 
 ## 备份
 
-```bash
-# 本机 PowerShell
+**完整發版備份（建議）** — 原始碼 zip、本機最大 `qs_system.db`（預設 `_data`）→ `qs_system_local.db`、`uploads_local`：
+
+```powershell
+# 僅本機（輸出至 ..\OSsysCU_releases\）
+.\scripts\backup_release.ps1
+
+# 本機 + mossys.xyz DB／uploads（需 ~/.ssh/aliyun-ossys）
+.\scripts\backup_release.ps1 -IncludeProduction
+```
+
+僅拉生產庫檔：
+
+```powershell
 scp -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4:/data/qs_system.db .\Backup\
 ```
 

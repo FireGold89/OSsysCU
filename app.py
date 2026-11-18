@@ -3134,7 +3134,12 @@ def master_auto_link_run():
             return resp(error='year 格式不正確', status=400)
     else:
         year = None
-    return resp(db.run_auto_link_quotations(source_year=year))
+    result = db.run_auto_link_quotations(source_year=year)
+    try:
+        audit_events.audit_master_auto_link(result)
+    except Exception:
+        pass
+    return resp(result)
 
 
 @app.route('/api/master/item/suggest', methods=['GET'])

@@ -10,6 +10,8 @@ master_link.py — Master List 報價 ↔ 工程項目自動配對
 """
 from __future__ import annotations
 
+import re
+
 from project_cover import derive_mp_contract_code_variants
 from sc_contract_ref import _project_core
 
@@ -123,6 +125,31 @@ def find_project_for_quotation(quotation_no, conn) -> tuple[int | None, str]:
     return None, 'no_match'
 
 
+def _compact_site_text(val) -> str:
+    s = (val or '').strip()
+    if not s:
+        return ''
+    s = re.sub(r'\s+', '', s)
+    return s.casefold()
+
+
+def _site_matches_project(site_name, project_name) -> bool:
+    """核心編號命中時：有屋苑名則須與項目名稱有明顯重疊，否則略過。"""
+    site = _compact_site_text(site_name)
+    proj = _compact_site_text(project_name)
+    if not site:
+        return True
+    if not proj:
+        return False
+    if site in proj or proj in site:
+        return True
+    if len(site) >= 4 and site[:4] in proj:
+        return True
+    if len(proj) >= 4 and proj[:4] in site:
+        return True
+    return False
+
+
 REASON_LABELS = {
     'project_code': '項目代碼一致',
     'quotation_no': '報價編號一致',
@@ -133,6 +160,7 @@ REASON_LABELS = {
     'ambiguous_quotation': '多個報價編號相符',
     'ambiguous_mp': '多個 MP 編號相符',
     'ambiguous_core': '多個核心編號相符',
+    'core_site_mismatch': '核心編號相符但屋苑與項目名不符',
     'no_match': '找不到相符項目',
     'already_linked': '已配對',
 }
@@ -166,6 +194,20 @@ def auto_link_quotations(conn, *, source_year=None, dry_run=True, limit=5000):
     for row in rows:
         qno = row['quotation_no']
         pid, reason = find_project_for_quotation(qno, conn)
+        site = row['site_name'] if 'site_name' in row.keys() else None
+        if pid and reason == 'project_core':
+            proj = projects.get(pid, {})
+            pname = proj.get('project_name_zh') or proj.get('project_name')
+            if not _site_matches_project(site, pname):
+                skipped.append({
+                    'quotation_no': qno,
+                    'quotation_id': row['id'],
+                    'site_name': site,
+                    'reason': 'core_site_mismatch',
+                    'reason_label': REASON_LABELS.get('core_site_mismatch', 'core_site_mismatch'),
+                    'hint_project': proj.get('project_code'),
+                })
+                continue
         if pid:
             proj = projects.get(pid, {})
             item = {
@@ -174,14 +216,15 @@ def auto_link_quotations(conn, *, source_year=None, dry_run=True, limit=5000):
                 'project_id': pid,
                 'project_code': proj.get('project_code'),
                 'project_name': proj.get('project_name_zh') or proj.get('project_name'),
-                'site_name': row['site_name'] if 'site_name' in row.keys() else None,
+                'site_name': site,
                 'reason': reason,
                 'reason_label': REASON_LABELS.get(reason, reason),
             }
             matched.append(item)
             if not dry_run:
                 from database import link_quotation_to_project
-                link_quotation_to_project(qno, pid, sync_project_code=True)
+                sync_code = reason != 'project_core'
+                link_quotation_to_project(qno, pid, sync_project_code=sync_code)
                 linked += 1
         else:
             skipped.append({

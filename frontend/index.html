@@ -1759,7 +1759,7 @@
           <div class="toolbar-right master-toolbar-actions">
             <button class="btn btn-primary btn-sm" onclick="MasterList.openAdd()">➕ 新增報價／標書</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.openPreview()">📤 上傳預覽</button>
-            <button class="btn btn-secondary btn-sm" onclick="MasterList.openAutoLink()">🔗 自動配對</button>
+            <button class="btn btn-secondary btn-sm" onclick="MasterList.openAutoLink()">🔗 預覽自動配對</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterTradeCats.openManage()">📂 工作範疇</button>
             <button class="btn btn-primary btn-sm" onclick="MasterList.openSync()">🔄 同步 Master List</button>
             <button class="btn btn-secondary btn-sm" onclick="MasterList.exportExcel()">📥 匯出 Excel</button>
@@ -3412,12 +3412,13 @@
 <div class="modal-backdrop" id="masterAutoLinkModal">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <div class="modal-title">自動配對工程項目</div>
+      <div class="modal-title">預覽自動配對工程項目</div>
       <button class="modal-close" onclick="MasterList.closeAutoLinkModal()">✕</button>
     </div>
     <div class="modal-body">
       <p class="form-hint" style="margin-bottom:12px">
-        依報價編號比對工程項目。MP 合約編號會將 Q 序號<strong>補零至 4 位</strong>（如 MS/Q178/25 → Q0178_25）。同一會計項目可含多個 MP 合約。只處理尚未配對的報價／標書。
+        依報價編號比對工程項目。MP 合約編號會將 Q 序號<strong>補零至 4 位</strong>（如 MS/Q178/25 → Q0178_25）。只處理尚未配對的報價／標書。
+        <strong>此步驟僅預覽</strong>，須按「寫入資料庫」才會配對。以「項目核心編號」命中時，屋苑須與項目名稱相符，且不會自動改寫工程 <code>project_code</code>。
       </p>
       <div id="masterAutoLinkLoading" class="empty-state" style="padding:24px">分析中…</div>
       <div id="masterAutoLinkResult" style="display:none">
@@ -3429,11 +3430,13 @@
         <div id="masterAutoLinkScope" class="form-hint" style="margin-bottom:12px"></div>
         <div id="masterAutoLinkTable"></div>
         <div id="masterAutoLinkSkippedHint" class="form-hint" style="margin-top:12px;display:none"></div>
+        <div id="masterAutoLinkSkippedTable" style="margin-top:8px;display:none"></div>
       </div>
     </div>
     <div class="modal-footer" id="masterAutoLinkFooter" style="display:none">
       <button class="btn btn-secondary" onclick="MasterList.closeAutoLinkModal()">取消</button>
-      <button class="btn btn-primary" id="masterAutoLinkConfirmBtn" onclick="MasterList.confirmAutoLink()">確認配對</button>
+      <button type="button" class="btn btn-secondary" id="masterAutoLinkExportBtn" onclick="MasterList.exportAutoLinkPreview()">匯出預覽 CSV</button>
+      <button class="btn btn-primary" id="masterAutoLinkConfirmBtn" onclick="MasterList.confirmAutoLink()">寫入資料庫</button>
     </div>
   </div>
 </div>

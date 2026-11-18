@@ -4,6 +4,12 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261118-master-link-guard` · 分支 `v2/portfolio`
+
+### 變更
+- **Master 自動配對**：預覽全表／略過表、匯出預覽 CSV、UI「預覽→寫入資料庫」；核心編號須屋苑與項目名相符且不覆寫 `project_code`；寫入後記業務操作紀錄。
+- **備份**：`backup_release` 優先 `_data`、可 `-IncludeProduction` 拉 mossys 庫與 uploads。
+
 `APP_VERSION`: `v2-20261112-audit-phase3` · 分支 `v2/portfolio`
 
 ### 變更
