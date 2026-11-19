@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261119-scr-ref-data` · 分支 `v2/portfolio`
+
+### 變更
+- **MS/C Ref 同步**：生產環境自 Volume **`/data/Ref/`** 讀取分判工程合約編號 xlsx（與本機 `Ref/` 並列）；`MOSSYS-OPS` 補上傳步驟。
+
 `APP_VERSION`: `v2-20261118-scr-amount-guard` · 分支 `v2/portfolio`
 
 ### 變更

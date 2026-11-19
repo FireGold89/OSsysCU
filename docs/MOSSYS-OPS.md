@@ -44,6 +44,28 @@ sudo docker run -d --name ossys --restart unless-stopped \
 - HTTPS 生产：`SESSION_COOKIE_SECURE=1`
 - 改 env 后必须 `docker rm` + `docker run`（不要只 restart）
 
+## MS/C Ref Excel（生產同步）
+
+Docker 映像**不含** `Ref/`。同步按鈕讀取：
+
+| 路徑 | 用途 |
+|------|------|
+| 本機開發 | 專案根 `Ref/分判工程合約編號 YYYY.xlsx` |
+| **mossys.xyz** | **`/data/Ref/分判工程合約編號 YYYY.xlsx`**（Volume，部署不丟失） |
+
+**本機上傳（PowerShell）：**
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\aliyun-ossys admin@43.103.44.4 "mkdir -p /data/Ref"
+scp -i $env:USERPROFILE\.ssh\aliyun-ossys "C:\Users\hiufung_lau\Documents\Pro\OSsysCU\Ref\分判工程合約編號 2026.xlsx" admin@43.103.44.4:/data/Ref/
+```
+
+上傳後於 mossys **分判合約編號 → 同步 Ref Excel**，或伺服器：
+
+```bash
+sudo docker exec ossys python sc_contract_importer.py sync
+```
+
 ## 备份
 
 **完整發版備份（建議）** — 原始碼 zip、本機最大 `qs_system.db`（預設 `_data`）→ `qs_system_local.db`、`uploads_local`：

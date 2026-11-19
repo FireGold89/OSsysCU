@@ -17,7 +17,7 @@ from openpyxl.styles import Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 import database as db
-from config import BASE_DIR
+from config import BASE_DIR, DATA_DIR
 from sc_ref import company_matches_sc, derive_parent_sc_no
 
 _MS_C_RE = re.compile(r'^MS/C[\d\-A-Za-z/]+$', re.IGNORECASE)
@@ -195,16 +195,23 @@ def _project_keys(project: dict) -> set[str]:
     return keys
 
 
+def _ref_workbook_dirs() -> list[str]:
+    """本機 repo Ref/；Docker 生產用 Volume /data/Ref/（持久，勿 rely 映像內 /app/Ref）。"""
+    out = []
+    for ref_dir in (os.path.join(BASE_DIR, 'Ref'), os.path.join(DATA_DIR, 'Ref')):
+        if os.path.isdir(ref_dir):
+            out.append(ref_dir)
+    return out
+
+
 def _find_ref_workbook() -> str | None:
-    ref_dir = os.path.join(BASE_DIR, 'Ref')
-    if not os.path.isdir(ref_dir):
-        return None
     candidates = []
-    for name in os.listdir(ref_dir):
-        if not name.lower().endswith('.xlsx') or name.startswith('~$'):
-            continue
-        if any(h in name for h in _REF_NAME_HINTS):
-            candidates.append(os.path.join(ref_dir, name))
+    for ref_dir in _ref_workbook_dirs():
+        for name in os.listdir(ref_dir):
+            if not name.lower().endswith('.xlsx') or name.startswith('~$'):
+                continue
+            if any(h in name for h in _REF_NAME_HINTS):
+                candidates.append(os.path.join(ref_dir, name))
     if not candidates:
         return None
 
