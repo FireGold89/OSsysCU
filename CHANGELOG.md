@@ -4,6 +4,11 @@
 
 ## [未發布]
 
+`APP_VERSION`: `v2-20261119-project-switch-fix` · 分支 `v2/portfolio`
+
+### 變更
+- **修 Q525 等項目無法切換**：`build_contract_calc` 登記冊 `sqlite3.Row` 誤用 `.get()` 令 summary API 失敗；改為 dict。項目視角先更新 hero、摘要失敗提示；下拉重選同一項目可強制刷新。
+
 `APP_VERSION`: `v2-20261119-scr-ref-data` · 分支 `v2/portfolio`
 
 ### 變更

@@ -2413,7 +2413,7 @@ const App = {
     this._migrateAutoRestorePref();
     this._initAutoRestorePrefUi();
     document.getElementById('projectSelect').addEventListener('change', (e) => {
-      this.selectProject(e.target.value);
+      this.selectProject(e.target.value, { force: true });
     });
     this._updateProjectSettlementNav();
     this.navigate('dashboard', { skipLoad: true });
@@ -2509,8 +2509,9 @@ const App = {
     }
   },
 
-  async selectProject(id) {
-    if (id && String(id) === String(this.currentProject?.id)) {
+  async selectProject(id, opts = null) {
+    const force = opts?.force === true;
+    if (!force && id && String(id) === String(this.currentProject?.id)) {
       return;
     }
     const prevProjectId = this.currentProject?.id;
@@ -2556,6 +2557,9 @@ const App = {
       if (idx >= 0) this.projects[idx] = fresh;
       else this.projects.push(fresh);
       this._applyProjectUiFromRow(fresh, id);
+      if (usedCache) {
+        void this._refreshProjectViews(switchSeq);
+      }
       if (!usedCache) hideProjectSwitchLoading();
 
       void (async () => {
@@ -2999,13 +3003,21 @@ const Dashboard = {
     document.getElementById('projectLensNoProject').style.display = 'none';
     document.getElementById('projectLensContent').style.display = '';
     if (typeof NavLayout !== 'undefined') NavLayout.renderDashboardLauncher();
+    updateDashProjectHero(p, null);
 
     const statsP = this.loadCompanyFacStats();
     const summaryP = LoadPerf.fetchProjectSummary(projectId, { silent: true });
     const facP = this.loadProjectFac(projectId, switchSeq);
 
     const summary = await summaryP;
-    if (!this._applySummary(summary, p, switchSeq, projectId)) return;
+    if (switchSeq != null && switchSeq !== App._projectSwitchSeq) return;
+    if (!this._applySummary(summary, p, switchSeq, projectId)) {
+      updateDashProjectHero(App.currentProject || p, null);
+      if (!summary && App.currentProject?.id == projectId) {
+        toast('項目摘要載入失敗，請再選一次或稍後重試', 'warning');
+      }
+      return;
+    }
 
     await Promise.all([statsP, facP]);
   },

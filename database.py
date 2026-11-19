@@ -6805,14 +6805,17 @@ def build_contract_calc(conn, project_id, proj):
     registry_by_ms = {}
     if keys:
         ph = ','.join('?' * len(keys))
-        reg_rows = conn.execute(
-            f"""SELECT sub_contract_no, company, works, amount, remark
-                FROM sc_contract_registry
-                WHERE project_core IN ({ph})
-                ORDER BY sub_contract_no""",
-            list(keys),
-        ).fetchall()
-        registry_by_ms = {r['sub_contract_no']: dict(r) for r in reg_rows}
+        reg_rows = [
+            dict(r)
+            for r in conn.execute(
+                f"""SELECT sub_contract_no, company, works, amount, remark
+                    FROM sc_contract_registry
+                    WHERE project_core IN ({ph})
+                    ORDER BY sub_contract_no""",
+                list(keys),
+            ).fetchall()
+        ]
+        registry_by_ms = {r['sub_contract_no']: r for r in reg_rows}
 
     vo_records = get_sc_vo_records(project_id, scope=SVR_SCOPE_SUBCONTRACTOR)
 
